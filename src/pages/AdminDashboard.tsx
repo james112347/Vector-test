@@ -305,8 +305,8 @@ export default function AdminDashboard() {
                                 <span>{profile.workType}</span>
                               </>
                             )}
-                            <span className="text-muted-foreground">Ore/settimana</span>
-                            <span>{profile.weeklyWorkHours}h</span>
+                            <span className="text-muted-foreground">Ore/giorno</span>
+                            <span>{profile.dailyWorkHours ?? profile.weeklyWorkHours ?? '-'}h</span>
                             <span className="text-muted-foreground">Orario</span>
                             <span>{scheduleLabels[profile.workSchedule] || profile.workSchedule}</span>
                             <span className="text-muted-foreground">Attivita</span>
@@ -319,31 +319,47 @@ export default function AdminDashboard() {
                             <span>{alcoholLabels[profile.alcoholFrequency] || '-'}</span>
                             <span className="text-muted-foreground">Caffeina</span>
                             <span>{profile.caffeineDaily} tazzine/gg</span>
-                            <span className="text-muted-foreground">Stress</span>
-                            <span>{stressLabels[profile.stressLevel] || '-'}</span>
-                            <span className="text-muted-foreground">Pattern energia</span>
-                            <span>{energyPatternLabels[profile.energyPattern] || '-'}</span>
+                            {profile.stressLevel && (
+                              <>
+                                <span className="text-muted-foreground">Stress</span>
+                                <span>{stressLabels[profile.stressLevel] || '-'}</span>
+                              </>
+                            )}
+                            {profile.energyPattern && (
+                              <>
+                                <span className="text-muted-foreground">Pattern energia</span>
+                                <span>{energyPatternLabels[profile.energyPattern] || '-'}</span>
+                              </>
+                            )}
                             <span className="text-muted-foreground">Obiettivo</span>
                             <span>{goalLabels[profile.goal]}</span>
                           </div>
                         </div>
-                        <div>
-                          <h4 className="text-sm font-medium mb-2">Energia di base</h4>
-                          <div className="flex gap-4">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                              <span className="text-sm">Fisica: {profile.baselinePhysical}/10</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                              <span className="text-sm">Mentale: {profile.baselineMental}/10</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                              <span className="text-sm">Emotiva: {profile.baselineEmotional}/10</span>
+                        {(profile.baselinePhysical || profile.baselineMental || profile.baselineEmotional) && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Energia di base</h4>
+                            <div className="flex gap-4">
+                              {profile.baselinePhysical && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                  <span className="text-sm">Fisica: {profile.baselinePhysical}/10</span>
+                                </div>
+                              )}
+                              {profile.baselineMental && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                  <span className="text-sm">Mentale: {profile.baselineMental}/10</span>
+                                </div>
+                              )}
+                              {profile.baselineEmotional && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                  <span className="text-sm">Emotiva: {profile.baselineEmotional}/10</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </div>
+                        )}
                         {profile.notes && (
                           <div>
                             <h4 className="text-sm font-medium mb-1">Note</h4>
