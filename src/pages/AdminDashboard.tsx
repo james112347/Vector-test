@@ -258,32 +258,35 @@ export default function AdminDashboard() {
                 </div>
               </CardHeader>
 
-              <CardContent>
+              <CardContent className="space-y-2">
                 {/* Quick summary row */}
-                <div className="flex gap-4 text-sm">
-                  {profile && (
-                    <span className="text-muted-foreground">
-                      {new Date().getFullYear() - profile.birthYear}a, {genderLabels[profile.gender]}, {profile.heightCm}cm, {profile.weightKg}kg
-                    </span>
-                  )}
-                </div>
+                {profile && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{new Date().getFullYear() - profile.birthYear}a</span>
+                    <span>{genderLabels[profile.gender]}</span>
+                    <span>{profile.heightCm}cm</span>
+                    <span>{profile.weightKg}kg</span>
+                    <span>{occupationLabels[profile.occupation] || profile.occupation}</span>
+                    <span>{goalLabels[profile.goal]}</span>
+                  </div>
+                )}
 
                 {/* Energy averages */}
                 {recentLogs.length > 0 && (
-                  <div className="flex gap-4 mt-2">
+                  <div className="flex items-center gap-4 rounded-lg bg-muted/40 px-3 py-2">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      <span className="text-sm">{avgPhysical}</span>
+                      <span className="text-sm font-medium">{avgPhysical}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      <span className="text-sm">{avgMental}</span>
+                      <span className="text-sm font-medium">{avgMental}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                      <span className="text-sm">{avgEmotional}</span>
+                      <span className="text-sm font-medium">{avgEmotional}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground ml-auto">{recentLogs.length} log/7gg</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">{recentLogs.length} log/7gg</span>
                   </div>
                 )}
 
