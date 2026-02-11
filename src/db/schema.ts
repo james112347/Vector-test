@@ -77,6 +77,22 @@ export interface UserProfile {
 }
 
 // ---------------------------------------------------------------------------
+// Quick Check-ins (micro-feedback durante la giornata)
+// ---------------------------------------------------------------------------
+
+export type CheckinType = 'water' | 'meal' | 'caffeine' | 'stress' | 'movement' | 'mood';
+
+export interface QuickCheckin {
+  id?: number;
+  userId: number;
+  date: string;   // YYYY-MM-DD
+  time: string;   // HH:MM
+  type: CheckinType;
+  value: number;   // water: conta bicchieri, meal: 1-5 qualita, caffeine: conta, stress: 1-5, movement: 1-5, mood: 1-5
+  createdAt: Date;
+}
+
+// ---------------------------------------------------------------------------
 // Sahha Health Data (local cache)
 // ---------------------------------------------------------------------------
 

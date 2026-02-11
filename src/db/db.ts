@@ -5,6 +5,7 @@ import type {
   UserPreferences,
   EnergyLog,
   UserProfile,
+  QuickCheckin,
   SahhaProfile,
   SahhaScoreLog,
   SahhaBiomarkerLog,
@@ -16,6 +17,7 @@ export class VectorDB extends Dexie {
   userPreferences!: Table<UserPreferences>;
   energyLogs!: Table<EnergyLog>;
   userProfiles!: Table<UserProfile>;
+  quickCheckins!: Table<QuickCheckin>;
   sahhaProfiles!: Table<SahhaProfile>;
   sahhaScores!: Table<SahhaScoreLog>;
   sahhaBiomarkers!: Table<SahhaBiomarkerLog>;
@@ -77,6 +79,17 @@ export class VectorDB extends Dexie {
           profile.dailyWorkHours = Math.round((profile.weeklyWorkHours / 5) * 10) / 10;
         }
       });
+    });
+    this.version(7).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+      energyLogs: '++id, userId, date, [userId+date]',
+      userProfiles: '++id, &userId',
+      quickCheckins: '++id, userId, date, type, [userId+date], [userId+date+type]',
+      sahhaProfiles: '++id, &userId, externalId',
+      sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
+      sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
     });
   }
 }

@@ -4,10 +4,14 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { getTodayLog, getRecentLogs } from '../lib/energy';
+import { getCheckinSummaries } from '../lib/checkins';
 import { usePendingUsers } from '../lib/usePendingUsers';
 import { useUserProfile } from '../lib/useUserProfile';
-import { isAIAvailable, generateInsights, getCachedInsights, cacheInsights, type AIAnalysis } from '../lib/ai';
-import type { EnergyLog } from '../db/schema';
+import { isAIAvailable, generateInsights, getCachedInsights, cacheInsights, type AIAnalysis, type AIContext } from '../lib/ai';
+import { getCachedScores, getCachedBiomarkers, getSahhaProfile } from '../lib/sahha-data';
+import QuickCheckins from '../components/QuickCheckins';
+import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
+import type { DailyCheckinSummary } from '../lib/checkins';
 import {
   ResponsiveContainer,
   LineChart,
@@ -53,26 +57,63 @@ export default function Dashboard() {
   const { profile } = useUserProfile(user?.id);
   const [todayLog, setTodayLog] = useState<EnergyLog | null>(null);
   const [weekLogs, setWeekLogs] = useState<EnergyLog[]>([]);
+  const [checkinSummaries, setCheckinSummaries] = useState<DailyCheckinSummary[]>([]);
+  const [sahhaScores, setSahhaScores] = useState<SahhaScoreLog[]>([]);
+  const [sahhaBiomarkers, setSahhaBiomarkers] = useState<SahhaBiomarkerLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
 
   useEffect(() => {
-    if (!user?.id) return;
-    Promise.all([
-      getTodayLog(user.id),
-      getRecentLogs(user.id, 7),
-    ]).then(([today, week]) => {
+    const uid = user?.id;
+    if (!uid) return;
+    (async () => {
+      const [today, week, summaries] = await Promise.all([
+        getTodayLog(uid),
+        getRecentLogs(uid, 7),
+        getCheckinSummaries(uid, 7),
+      ]);
       setTodayLog(today || null);
       setWeekLogs(week);
+      setCheckinSummaries(summaries);
+
+      // Load Sahha data if connected
+      try {
+        const sahhaProfile = await getSahhaProfile(uid);
+        if (sahhaProfile) {
+          const [scores, biomarkers] = await Promise.all([
+            getCachedScores(uid),
+            getCachedBiomarkers(uid),
+          ]);
+          setSahhaScores(scores);
+          setSahhaBiomarkers(biomarkers);
+        }
+      } catch {
+        // Sahha not connected, ignore
+      }
+
       setLoading(false);
-    });
+    })();
   }, [user?.id]);
 
+  const buildAIContext = useCallback((): AIContext | null => {
+    if (!profile || weekLogs.length < 2) return null;
+    return {
+      profile,
+      energyLogs: weekLogs,
+      checkinSummaries: checkinSummaries.length > 0 ? checkinSummaries : undefined,
+      sahhaScores: sahhaScores.length > 0 ? sahhaScores : undefined,
+      sahhaBiomarkers: sahhaBiomarkers.length > 0 ? sahhaBiomarkers : undefined,
+    };
+  }, [profile, weekLogs, checkinSummaries, sahhaScores, sahhaBiomarkers]);
+
   const loadInsights = useCallback(async () => {
-    if (!profile || weekLogs.length < 2 || !isAIAvailable()) return;
-    const cached = getCachedInsights(weekLogs.length);
+    if (!isAIAvailable()) return;
+    const ctx = buildAIContext();
+    if (!ctx) return;
+
+    const cached = getCachedInsights(ctx);
     if (cached) {
       setAiInsights(cached);
       return;
@@ -80,15 +121,15 @@ export default function Dashboard() {
     setAiLoading(true);
     setAiError('');
     try {
-      const result = await generateInsights(profile, weekLogs);
+      const result = await generateInsights(ctx);
       setAiInsights(result);
-      cacheInsights(result, weekLogs.length);
+      cacheInsights(result, ctx);
     } catch (e) {
       setAiError((e as Error).message);
     } finally {
       setAiLoading(false);
     }
-  }, [profile, weekLogs]);
+  }, [buildAIContext]);
 
   useEffect(() => {
     if (!loading && weekLogs.length >= 2 && profile && isAIAvailable()) {
@@ -186,6 +227,63 @@ export default function Dashboard() {
             <Button size="sm" onClick={() => navigate('/log')}>
               Registra ora
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick Check-ins */}
+      {user?.id && <QuickCheckins userId={user.id} />}
+
+      {/* AI Insights */}
+      {isAIAvailable() && weekLogs.length >= 2 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Insight IA</CardTitle>
+              {!aiLoading && (
+                <button
+                  onClick={loadInsights}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Aggiorna
+                </button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {aiLoading && (
+              <div className="py-4 text-center">
+                <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-xs text-muted-foreground mt-2">Analisi in corso...</p>
+              </div>
+            )}
+            {aiError && (
+              <p className="text-xs text-red-600 dark:text-red-400 py-2">{aiError}</p>
+            )}
+            {aiInsights && !aiLoading && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium">{aiInsights.summary}</p>
+                {aiInsights.insights.map((insight, i) => (
+                  <div key={i} className="flex gap-2.5">
+                    <span className="text-lg shrink-0">{insight.emoji}</span>
+                    <div>
+                      <p className="text-sm font-medium">{insight.title}</p>
+                      <p className="text-xs text-muted-foreground">{insight.body}</p>
+                    </div>
+                  </div>
+                ))}
+                {aiInsights.energyForecast && (
+                  <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+                    <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Previsione energia</p>
+                    <p className="text-xs mt-1">{aiInsights.energyForecast}</p>
+                  </div>
+                )}
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
+                  <p className="text-sm font-medium text-primary">Consiglio per adesso</p>
+                  <p className="text-xs mt-1">{aiInsights.suggestion}</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -327,54 +425,6 @@ export default function Dashboard() {
           </Card>
         );
       })()}
-
-      {/* AI Insights */}
-      {isAIAvailable() && weekLogs.length >= 2 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Insight IA</CardTitle>
-              {!aiLoading && (
-                <button
-                  onClick={loadInsights}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Aggiorna
-                </button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {aiLoading && (
-              <div className="py-4 text-center">
-                <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <p className="text-xs text-muted-foreground mt-2">Analisi in corso...</p>
-              </div>
-            )}
-            {aiError && (
-              <p className="text-xs text-red-600 dark:text-red-400 py-2">{aiError}</p>
-            )}
-            {aiInsights && !aiLoading && (
-              <div className="space-y-3">
-                <p className="text-sm font-medium">{aiInsights.summary}</p>
-                {aiInsights.insights.map((insight, i) => (
-                  <div key={i} className="flex gap-2.5">
-                    <span className="text-lg shrink-0">{insight.emoji}</span>
-                    <div>
-                      <p className="text-sm font-medium">{insight.title}</p>
-                      <p className="text-xs text-muted-foreground">{insight.body}</p>
-                    </div>
-                  </div>
-                ))}
-                <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 mt-2">
-                  <p className="text-sm font-medium text-primary">Consiglio per oggi</p>
-                  <p className="text-xs mt-1">{aiInsights.suggestion}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
