@@ -28,8 +28,8 @@ jobs:
           VITE_SUPABASE_URL: https://gbxktmvuuwwhmzygzrzg.supabase.co
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdieGt0bXZ1dXd3aG16eWd6cnpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MjY0NjAsImV4cCI6MjA4NjQwMjQ2MH0.VJH92FP7zMiuo7EESB4A1JTT3QbYZIOCNX0OZcmVzcg
           VITE_SAHHA_API_URL: https://sandbox-api.sahha.ai
-          VITE_SAHHA_CLIENT_ID: ABCxhtcHOObqCVtqP9EHTsKAleFjYg7c
-          VITE_SAHHA_CLIENT_SECRET: KXSBG3cEMvfzN7ZlSAO9YHRTu9B3ffeCKBoWkSwb5w7oDr4IK9v2Bw2mkAKuOnCM
+          VITE_SAHHA_CLIENT_ID: ABCxhtcHO0bqCVtqP9EHTsKAleFjYg7c
+          VITE_SAHHA_CLIENT_SECRET: KXSBG3cEMvfzN7ZiSA09YHRTu9B3ffeCKBoWkSwb5w7oDr41K9v2Bw2mkAKuOnCM
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
