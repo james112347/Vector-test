@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -9,6 +9,7 @@ import { usePendingUsers } from '../lib/usePendingUsers';
 import { useUserProfile } from '../lib/useUserProfile';
 import { isAIAvailable, generateInsights, getCachedInsights, cacheInsights, type AIAnalysis, type AIContext } from '../lib/ai';
 import { getCachedScores, getCachedBiomarkers, getSahhaProfile } from '../lib/sahha-data';
+import { getAppSettings } from '../lib/useAppSettings';
 import QuickCheckins from '../components/QuickCheckins';
 import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
@@ -65,10 +66,14 @@ export default function Dashboard() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
 
-  useEffect(() => {
+  const refreshing = useRef(false);
+
+  const loadData = useCallback(async (showLoader = true) => {
     const uid = user?.id;
-    if (!uid) return;
-    (async () => {
+    if (!uid || refreshing.current) return;
+    refreshing.current = true;
+    if (showLoader) setLoading(true);
+    try {
       const [today, week, summaries] = await Promise.all([
         getTodayLog(uid),
         getRecentLogs(uid, 7),
@@ -92,10 +97,25 @@ export default function Dashboard() {
       } catch {
         // Sahha not connected, ignore
       }
-
+    } finally {
+      refreshing.current = false;
       setLoading(false);
-    })();
+    }
   }, [user?.id]);
+
+  // Initial load
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Auto-refresh when app comes back to foreground
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && getAppSettings().autoRefresh) {
+        loadData(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadData]);
 
   const buildAIContext = useCallback((): AIContext | null => {
     if (!profile || weekLogs.length < 2) return null;

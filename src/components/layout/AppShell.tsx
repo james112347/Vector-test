@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import InstallPrompt from '../InstallPrompt';
 
 export function AppShell() {
   return (
@@ -10,6 +11,7 @@ export function AppShell() {
         <Outlet />
       </main>
       <BottomNav />
+      <InstallPrompt />
     </div>
   );
 }

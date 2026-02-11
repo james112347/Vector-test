@@ -5,12 +5,15 @@ import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
 import { useAuthState } from '../contexts/AuthContext';
 import { useDarkMode } from '../lib/useDarkMode';
+import { useAppSettings } from '../lib/useAppSettings';
 import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail } from '../lib/auth';
 import type { User } from '../db/schema';
 
 export default function Settings() {
   const { user: currentUser } = useAuthState();
   const { isDark, toggleDark } = useDarkMode();
+  const { settings, update: updateSettings } = useAppSettings();
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -100,8 +103,40 @@ export default function Settings() {
               {isDark ? 'Passa a Chiaro' : 'Passa a Scuro'}
             </Button>
           </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Aggiornamento automatico</p>
+              <p className="text-sm text-muted-foreground">Ricarica i dati quando torni nell'app</p>
+            </div>
+            <button
+              onClick={() => updateSettings({ autoRefresh: !settings.autoRefresh })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                settings.autoRefresh ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.autoRefresh ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Installa App</p>
+              <p className="text-sm text-muted-foreground">Aggiungi alla schermata Home</p>
+            </div>
+            <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={() => setShowInstallHelp(true)}>
+              Istruzioni
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Install Help Modal */}
+      {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}
 
       {/* Admin Dashboard Link */}
       {currentUser?.isAdmin && (
@@ -289,5 +324,139 @@ export default function Settings() {
         </div>
       )}
     </div>
+  );
+}
+
+function getPlatform(): 'ios' | 'android' | 'desktop' {
+  const ua = navigator.userAgent.toLowerCase();
+  if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+  if (/android/.test(ua)) return 'android';
+  return 'desktop';
+}
+
+function InstallHelpModal({ onClose }: { onClose: () => void }) {
+  const platform = getPlatform();
+  const isInstalled =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <h3 className="text-lg font-bold">Installa Vector</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1" aria-label="Chiudi">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {isInstalled ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium">Vector e gia installata!</p>
+            <p className="text-xs text-muted-foreground mt-1">Stai usando l'app dalla schermata Home.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Segui questi passaggi per aggiungere Vector alla schermata Home:
+            </p>
+
+            {platform === 'ios' && (
+              <div className="space-y-3">
+                <Step n={1}>
+                  Tocca il pulsante <strong>Condividi</strong>{' '}
+                  <ShareIcon />{' '}
+                  in basso nella barra di Safari
+                </Step>
+                <Step n={2}>
+                  Scorri e tocca <strong>"Aggiungi alla schermata Home"</strong>
+                </Step>
+                <Step n={3}>
+                  Tocca <strong>"Aggiungi"</strong> in alto a destra
+                </Step>
+              </div>
+            )}
+
+            {platform === 'android' && (
+              <div className="space-y-3">
+                <Step n={1}>
+                  Tocca il menu{' '}
+                  <DotsIcon />{' '}
+                  (tre puntini) in alto a destra in Chrome
+                </Step>
+                <Step n={2}>
+                  Tocca <strong>"Aggiungi a schermata Home"</strong> o <strong>"Installa app"</strong>
+                </Step>
+                <Step n={3}>
+                  Conferma toccando <strong>"Installa"</strong>
+                </Step>
+              </div>
+            )}
+
+            {platform === 'desktop' && (
+              <div className="space-y-3">
+                <Step n={1}>
+                  In Chrome, clicca l'icona di installazione{' '}
+                  <DownloadIcon />{' '}
+                  nella barra degli indirizzi
+                </Step>
+                <Step n={2}>
+                  Clicca <strong>"Installa"</strong> nel popup
+                </Step>
+              </div>
+            )}
+          </>
+        )}
+
+        <button
+          onClick={onClose}
+          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          {isInstalled ? 'Chiudi' : 'Ho capito'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Step({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">{n}</span>
+      <p className="text-sm">{children}</p>
+    </div>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg className="inline w-4 h-4 -mt-0.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+    </svg>
+  );
+}
+
+function DotsIcon() {
+  return (
+    <svg className="inline w-4 h-4 -mt-0.5 text-primary" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="5" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="19" r="2" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg className="inline w-4 h-4 -mt-0.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
   );
 }
