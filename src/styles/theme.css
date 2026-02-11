@@ -1,0 +1,86 @@
+/*
+ * Vector Neuroscience Color System
+ *
+ * Based on color psychology research:
+ * - Blues: Trust, focus, calm (reduces cortisol) -- used for rest/recovery states
+ * - Greens: Restorative, reduces anxiety -- used for balance/health indicators
+ * - Teals: Balance, peace -- used for neutral/positive states
+ * - Oranges: Energy, motivation, dopamine-associated -- used for energy/alert states
+ * - Yellows: Attention, optimism -- used for warnings/highlights
+ * - Pinks: Sedative effect, reduces aggression (Baker-Miller pink) -- used for stress indicators
+ *
+ * Sources: mockflow.com/blog/color-psychology-in-ui-design, neurodesign research
+ */
+
+@layer base {
+  :root {
+    /* Calm palette -- rest, recovery, trust, focus */
+    --color-calm-blue: 217 91% 60%;
+    --color-calm-green: 142 71% 45%;
+    --color-calm-teal: 174 62% 47%;
+
+    /* Energy palette -- alerts, productivity, motivation */
+    --color-energy-orange: 24 100% 50%;
+    --color-energy-yellow: 45 100% 51%;
+
+    /* Stress reduction */
+    --color-stress-pink: 350 100% 88%;
+
+    /* UI Base - light mode */
+    --color-background: 0 0% 100%;
+    --color-foreground: 222 47% 11%;
+    --color-card: 210 40% 98%;
+    --color-card-foreground: 222 47% 11%;
+    --color-popover: 0 0% 100%;
+    --color-popover-foreground: 222 47% 11%;
+    --color-primary: 217 91% 60%;
+    --color-primary-foreground: 0 0% 100%;
+    --color-secondary: 210 40% 96%;
+    --color-secondary-foreground: 222 47% 11%;
+    --color-muted: 210 40% 96%;
+    --color-muted-foreground: 215 16% 47%;
+    --color-accent: 174 62% 47%;
+    --color-accent-foreground: 0 0% 100%;
+    --color-destructive: 0 84% 60%;
+    --color-destructive-foreground: 0 0% 100%;
+    --color-border: 214 32% 91%;
+    --color-input: 214 32% 91%;
+    --color-ring: 217 91% 60%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Calm palette -- reduced luminance for dark mode */
+    --color-calm-blue: 217 91% 45%;
+    --color-calm-green: 142 71% 35%;
+    --color-calm-teal: 174 62% 37%;
+
+    /* Energy palette -- reduced luminance */
+    --color-energy-orange: 24 100% 40%;
+    --color-energy-yellow: 45 100% 41%;
+
+    /* Stress reduction -- reduced luminance */
+    --color-stress-pink: 350 100% 78%;
+
+    /* UI Base - dark mode */
+    --color-background: 222 47% 8%;
+    --color-foreground: 210 40% 98%;
+    --color-card: 222 47% 11%;
+    --color-card-foreground: 210 40% 98%;
+    --color-popover: 222 47% 11%;
+    --color-popover-foreground: 210 40% 98%;
+    --color-primary: 217 91% 55%;
+    --color-primary-foreground: 0 0% 100%;
+    --color-secondary: 217 33% 17%;
+    --color-secondary-foreground: 210 40% 98%;
+    --color-muted: 217 33% 17%;
+    --color-muted-foreground: 215 20% 65%;
+    --color-accent: 174 62% 37%;
+    --color-accent-foreground: 0 0% 100%;
+    --color-destructive: 0 63% 31%;
+    --color-destructive-foreground: 0 0% 100%;
+    --color-border: 217 33% 22%;
+    --color-input: 217 33% 22%;
+    --color-ring: 217 91% 55%;
+  }
+}
