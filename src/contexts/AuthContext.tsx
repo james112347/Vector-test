@@ -75,8 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       register: async (email: string, password: string, acceptedTerms: boolean) => {
         const newUser = await registerUser(email, password, acceptedTerms);
-        await createSession(newUser.id!);
-        setUser(newUser);
+        // Only create session if user is approved (first user / admin)
+        if (newUser.isApproved) {
+          await createSession(newUser.id!);
+          setUser(newUser);
+        }
+        // If not approved, don't create session - user stays on register page
       },
     }),
     []

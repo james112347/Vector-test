@@ -5,6 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
+import { Separator } from '../components/ui/separator';
 import { useAuthActions } from '../contexts/AuthContext';
 
 export default function Register() {
@@ -12,8 +13,10 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const { register } = useAuthActions();
   const navigate = useNavigate();
 
@@ -21,19 +24,18 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    // Validation
     if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
+      setError('La password deve essere di almeno 8 caratteri');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Le password non corrispondono');
       return;
     }
 
     if (!hasAcceptedTerms) {
-      setError('You must accept the Terms and Conditions to register');
+      setError('Devi accettare i Termini e Condizioni per registrarti');
       return;
     }
 
@@ -41,20 +43,55 @@ export default function Register() {
 
     try {
       await register(email, password, hasAcceptedTerms);
-      navigate('/');
+      setRegistered(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError(err instanceof Error ? err.message : 'Registrazione fallita');
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (registered) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4 py-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <CardTitle className="text-xl">Registrazione completata!</CardTitle>
+            <CardDescription className="text-base mt-2">
+              Il tuo account è in attesa di approvazione da parte dell'amministratore.
+              Riceverai accesso non appena il tuo account sarà verificato.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-sm text-muted-foreground">
+              Puoi provare ad accedere più tardi per verificare lo stato.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              className="w-full h-12 text-base"
+              onClick={() => navigate('/login')}
+            >
+              Torna al Login
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Create your account</CardTitle>
-          <CardDescription>Start tracking your energy journey</CardDescription>
+          <CardTitle className="text-xl">Crea il tuo account</CardTitle>
+          <CardDescription>Inizia il tuo percorso di monitoraggio energetico</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -63,11 +100,12 @@ export default function Register() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="tu@esempio.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-12 text-base"
               />
             </div>
             <div className="space-y-2">
@@ -75,45 +113,106 @@ export default function Register() {
               <Input
                 id="password"
                 type="password"
-                placeholder="At least 8 characters"
+                placeholder="Almeno 8 caratteri"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
                 disabled={isLoading}
+                className="h-12 text-base"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Label htmlFor="confirmPassword">Conferma Password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Re-enter your password"
+                placeholder="Reinserisci la password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-12 text-base"
               />
             </div>
-            <div className="flex items-start space-x-2">
+
+            <div className="flex items-start space-x-3">
               <Checkbox
                 id="terms"
                 checked={hasAcceptedTerms}
                 onCheckedChange={(checked) => setHasAcceptedTerms(checked === true)}
                 disabled={isLoading}
+                className="mt-0.5 w-5 h-5"
               />
               <Label htmlFor="terms" className="text-sm font-normal leading-relaxed cursor-pointer">
-                I accept the{' '}
-                <a
-                  href="/terms"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
+                Accetto i{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowTerms(!showTerms)}
+                  className="text-primary hover:underline font-medium"
                 >
-                  Terms and Conditions
-                </a>
+                  Termini e Condizioni
+                </button>
               </Label>
             </div>
+
+            {showTerms && (
+              <div className="rounded-lg border border-border bg-muted/50 max-h-60 overflow-y-auto p-4 space-y-4 text-sm">
+                <h3 className="font-semibold text-base">Termini di Servizio</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Utilizzando Vector, accetti di monitorare i tuoi livelli di energia
+                  e fornire informazioni sulle tue attività quotidiane, stile di vita e benessere.
+                  Questo servizio è progettato per aiutarti a comprendere i tuoi pattern energetici
+                  e ricevere raccomandazioni personalizzate.
+                </p>
+
+                <Separator />
+
+                <h3 className="font-semibold text-base">Privacy</h3>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>Tutti i dati sono conservati localmente sul tuo dispositivo</li>
+                  <li>Nessun dato viene inviato a server esterni senza il tuo consenso</li>
+                  <li>Mantieni la piena proprietà dei tuoi dati</li>
+                  <li>Puoi esportare o eliminare i tuoi dati in qualsiasi momento</li>
+                </ul>
+
+                <Separator />
+
+                <h3 className="font-semibold text-base">Raccolta Dati</h3>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>Livelli di energia: fisica, mentale ed emotiva</li>
+                  <li>Profilo stile di vita: sonno, esercizio, alimentazione</li>
+                  <li>Attività quotidiane: lavoro, riposo e recupero</li>
+                  <li>Obiettivi e preferenze personali</li>
+                </ul>
+
+                <Separator />
+
+                <h3 className="font-semibold text-base">I Tuoi Diritti</h3>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li><strong>Accesso:</strong> Puoi visualizzare tutti i dati memorizzati</li>
+                  <li><strong>Esportazione:</strong> Puoi esportare i tuoi dati</li>
+                  <li><strong>Cancellazione:</strong> Puoi eliminare account e dati</li>
+                  <li><strong>Revoca consenso:</strong> Puoi smettere di usare il servizio</li>
+                </ul>
+
+                <Separator />
+
+                <h3 className="font-semibold text-base">Funzionalità AI</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Vector include funzionalità AI opzionali che analizzano i tuoi pattern energetici.
+                  Nessuna informazione personale viene inclusa nelle richieste.
+                  Puoi disabilitare le funzionalità AI in qualsiasi momento.
+                </p>
+
+                <div className="mt-4 p-3 bg-muted rounded-md">
+                  <p className="text-xs text-center text-muted-foreground">
+                    Cliccando "Registrati" confermi di aver letto e accettato questi Termini e Condizioni.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {error && (
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             )}
@@ -121,15 +220,15 @@ export default function Register() {
           <CardFooter className="flex flex-col space-y-4">
             <Button
               type="submit"
-              className="w-full"
+              className="w-full h-12 text-base"
               disabled={isLoading || !hasAcceptedTerms}
             >
-              {isLoading ? 'Creating account...' : 'Register'}
+              {isLoading ? 'Creazione account...' : 'Registrati'}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
-              Already have an account?{' '}
+              Hai già un account?{' '}
               <Link to="/login" className="text-primary hover:underline">
-                Sign in
+                Accedi
               </Link>
             </p>
           </CardFooter>

@@ -83,6 +83,7 @@ export async function cleanExpiredSessions(): Promise<void> {
 
 /**
  * Register a new user.
+ * New users are NOT approved by default - admin must approve.
  * Returns the created user or throws if email already exists.
  */
 export async function registerUser(
@@ -91,23 +92,29 @@ export async function registerUser(
   acceptedTerms: boolean
 ): Promise<User> {
   if (!acceptedTerms) {
-    throw new Error('You must accept the Terms and Conditions to register.');
+    throw new Error('Devi accettare i Termini e Condizioni per registrarti.');
   }
 
   // Check for existing user
   const existing = await db.users.where('email').equals(email).first();
   if (existing) {
-    throw new Error('An account with this email already exists.');
+    throw new Error('Un account con questa email esiste già.');
   }
 
   const passwordHash = await hashPassword(password);
   const now = new Date();
+
+  // First user ever becomes admin and is auto-approved
+  const userCount = await db.users.count();
+  const isFirstUser = userCount === 0;
 
   const user: User = {
     email,
     passwordHash,
     hasAcceptedTerms: true,
     termsAcceptedAt: now,
+    isApproved: isFirstUser,
+    isAdmin: isFirstUser,
     createdAt: now,
     updatedAt: now,
   };
@@ -119,17 +126,43 @@ export async function registerUser(
 /**
  * Authenticate a user by email and password.
  * Returns the user or throws on invalid credentials.
+ * Throws specific error if user is not approved.
  */
 export async function authenticateUser(email: string, password: string): Promise<User> {
   const user = await db.users.where('email').equals(email).first();
   if (!user) {
-    throw new Error('Invalid email or password.');
+    throw new Error('Email o password non validi.');
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
-    throw new Error('Invalid email or password.');
+    throw new Error('Email o password non validi.');
+  }
+
+  if (!user.isApproved) {
+    throw new Error('PENDING_APPROVAL');
   }
 
   return user;
+}
+
+/**
+ * Approve a user (admin only).
+ */
+export async function approveUser(userId: number): Promise<void> {
+  await db.users.update(userId, { isApproved: true, updatedAt: new Date() });
+}
+
+/**
+ * Get all pending (unapproved) users.
+ */
+export async function getPendingUsers(): Promise<User[]> {
+  return db.users.filter(u => !u.isApproved).toArray();
+}
+
+/**
+ * Get all users (admin view).
+ */
+export async function getAllUsers(): Promise<User[]> {
+  return db.users.toArray();
 }

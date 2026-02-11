@@ -10,6 +10,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [pendingApproval, setPendingApproval] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuthActions();
   const navigate = useNavigate();
@@ -17,24 +18,30 @@ export default function Login() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setPendingApproval(false);
     setIsLoading(true);
 
     try {
       await signIn(email, password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid email or password');
+      const message = err instanceof Error ? err.message : 'Email o password non validi';
+      if (message === 'PENDING_APPROVAL') {
+        setPendingApproval(true);
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Welcome to Vector</CardTitle>
-          <CardDescription>Sign in to track your energy</CardDescription>
+          <CardTitle className="text-xl">Benvenuto su Vector</CardTitle>
+          <CardDescription>Accedi per monitorare la tua energia</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -43,11 +50,12 @@ export default function Login() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="tu@esempio.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-12 text-base"
               />
             </div>
             <div className="space-y-2">
@@ -55,25 +63,45 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Inserisci la password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-12 text-base"
               />
             </div>
+
+            {pendingApproval && (
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      Account in attesa di approvazione
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Il tuo account è stato registrato ma non è ancora stato approvato dall'amministratore. Riprova più tardi.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {error && (
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
+            <Button type="submit" className="w-full h-12 text-base" disabled={isLoading}>
+              {isLoading ? 'Accesso in corso...' : 'Accedi'}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
-              Don't have an account?{' '}
+              Non hai un account?{' '}
               <Link to="/register" className="text-primary hover:underline">
-                Register
+                Registrati
               </Link>
             </p>
           </CardFooter>

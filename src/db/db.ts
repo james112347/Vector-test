@@ -13,6 +13,16 @@ export class VectorDB extends Dexie {
       sessions: '++id, userId, expiresAt',
       userPreferences: '++id, userId',
     });
+    this.version(2).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+    }).upgrade(tx => {
+      return tx.table('users').toCollection().modify(user => {
+        if (user.isApproved === undefined) user.isApproved = true;
+        if (user.isAdmin === undefined) user.isAdmin = false;
+      });
+    });
   }
 }
 

@@ -1,12 +1,13 @@
-import { Moon, Sun, LogOut } from 'lucide-react';
+import { Moon, Sun, LogOut, Users } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useDarkMode } from '../../lib/useDarkMode';
-import { useAuthActions } from '../../contexts/AuthContext';
+import { useAuthActions, useAuthState } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export function Header() {
   const { isDark, toggleDark } = useDarkMode();
   const { signOut } = useAuthActions();
+  const { user } = useAuthState();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -15,11 +16,28 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
+    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border safe-area-top">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-primary">Vector</h1>
+        <h1
+          className="text-lg font-bold text-primary cursor-pointer"
+          onClick={() => navigate('/')}
+        >
+          Vector
+        </h1>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {user?.isAdmin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/admin/users')}
+              aria-label="Gestione utenti"
+              className="w-10 h-10"
+            >
+              <Users className="h-5 w-5" />
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -38,7 +56,7 @@ export function Header() {
             variant="ghost"
             size="icon"
             onClick={handleLogout}
-            aria-label="Log out"
+            aria-label="Esci"
             className="w-10 h-10"
           >
             <LogOut className="h-5 w-5" />

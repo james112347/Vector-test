@@ -4,6 +4,8 @@ export interface User {
   passwordHash: string;
   hasAcceptedTerms: boolean;
   termsAcceptedAt?: Date;
+  isApproved: boolean;
+  isAdmin: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
