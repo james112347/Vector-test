@@ -23,26 +23,41 @@ export default function Settings() {
 
   useEffect(() => { loadUsers(); }, []);
 
-  const handleApprove = async (userId: number) => {
+  const handleApprove = async (userId: number, email: string) => {
     setActionLoading(userId);
-    await approveUser(userId);
-    await loadUsers();
-    setActionLoading(null);
+    try {
+      await approveUser(userId, email);
+      await loadUsers();
+    } catch (e) {
+      console.error('Approve failed:', e);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleRevoke = async (userId: number) => {
+  const handleRevoke = async (userId: number, email: string) => {
     setActionLoading(userId);
-    await revokeUser(userId);
-    await loadUsers();
-    setActionLoading(null);
+    try {
+      await revokeUser(userId, email);
+      await loadUsers();
+    } catch (e) {
+      console.error('Revoke failed:', e);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleDelete = async (userId: number) => {
+  const handleDelete = async (userId: number, email: string) => {
     setActionLoading(userId);
-    await deleteUser(userId);
-    setConfirmDelete(null);
-    await loadUsers();
-    setActionLoading(null);
+    try {
+      await deleteUser(userId, email);
+      setConfirmDelete(null);
+      await loadUsers();
+    } catch (e) {
+      console.error('Delete failed:', e);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const pendingUsers = users.filter(u => !u.isApproved);
@@ -123,7 +138,7 @@ export default function Settings() {
                         <Button
                           size="sm"
                           className="h-9 flex-1"
-                          onClick={() => handleApprove(u.id!)}
+                          onClick={() => handleApprove(u.id!, u.email)}
                           disabled={actionLoading === u.id}
                         >
                           Approva
@@ -132,7 +147,7 @@ export default function Settings() {
                           size="sm"
                           variant="destructive"
                           className="h-9 flex-1"
-                          onClick={() => handleDelete(u.id!)}
+                          onClick={() => handleDelete(u.id!, u.email)}
                           disabled={actionLoading === u.id}
                         >
                           Rifiuta
@@ -203,7 +218,7 @@ export default function Settings() {
                               size="sm"
                               variant="destructive"
                               className="h-9 flex-1"
-                              onClick={() => handleDelete(u.id!)}
+                              onClick={() => handleDelete(u.id!, u.email)}
                               disabled={actionLoading === u.id}
                             >
                               Conferma eliminazione
@@ -223,7 +238,7 @@ export default function Settings() {
                               size="sm"
                               variant="outline"
                               className="h-9 flex-1"
-                              onClick={() => handleRevoke(u.id!)}
+                              onClick={() => handleRevoke(u.id!, u.email)}
                               disabled={actionLoading === u.id}
                             >
                               Sospendi
@@ -232,7 +247,7 @@ export default function Settings() {
                               size="sm"
                               variant="destructive"
                               className="h-9 flex-1"
-                              onClick={() => setConfirmDelete(u.id!)}
+                              onClick={() => setConfirmDelete(u.id ?? null)}
                               disabled={actionLoading === u.id}
                             >
                               Elimina

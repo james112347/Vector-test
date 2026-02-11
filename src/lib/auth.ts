@@ -203,53 +203,73 @@ export async function authenticateUser(email: string, password: string): Promise
 /**
  * Approve a user (admin only).
  * Updates both local DB and Supabase.
+ * Handles remote-only users (registered on another device) by email.
  */
-export async function approveUser(userId: number): Promise<void> {
+export async function approveUser(userId: number, email?: string): Promise<void> {
   const user = await db.users.get(userId);
-  await db.users.update(userId, { isApproved: true, updatedAt: new Date() });
 
-  if (supabase && user) {
-    await supabase
+  if (user) {
+    await db.users.update(userId, { isApproved: true, updatedAt: new Date() });
+  }
+
+  const userEmail = user?.email ?? email;
+  if (supabase && userEmail) {
+    const { error } = await supabase
       .from('app_users')
       .update({ is_approved: true, updated_at: new Date().toISOString() })
-      .eq('email', user.email);
+      .eq('email', userEmail);
+    if (error) throw new Error(`Errore approvazione: ${error.message}`);
   }
 }
 
 /**
  * Revoke a user's access (admin only).
  * Cannot revoke admin.
+ * Handles remote-only users by email.
  */
-export async function revokeUser(userId: number): Promise<void> {
+export async function revokeUser(userId: number, email?: string): Promise<void> {
   const user = await db.users.get(userId);
-  if (user && isAdminEmail(user.email)) {
+  const userEmail = user?.email ?? email;
+
+  if (userEmail && isAdminEmail(userEmail)) {
     throw new Error('Non puoi revocare l\'accesso all\'amministratore.');
   }
-  await db.users.update(userId, { isApproved: false, updatedAt: new Date() });
-  await db.sessions.where('userId').equals(userId).delete();
 
-  if (supabase && user) {
-    await supabase
+  if (user) {
+    await db.users.update(userId, { isApproved: false, updatedAt: new Date() });
+    await db.sessions.where('userId').equals(userId).delete();
+  }
+
+  if (supabase && userEmail) {
+    const { error } = await supabase
       .from('app_users')
       .update({ is_approved: false, updated_at: new Date().toISOString() })
-      .eq('email', user.email);
+      .eq('email', userEmail);
+    if (error) throw new Error(`Errore revoca: ${error.message}`);
   }
 }
 
 /**
  * Delete a user (admin only).
  * Cannot delete admin.
+ * Handles remote-only users by email.
  */
-export async function deleteUser(userId: number): Promise<void> {
+export async function deleteUser(userId: number, email?: string): Promise<void> {
   const user = await db.users.get(userId);
-  if (user && isAdminEmail(user.email)) {
+  const userEmail = user?.email ?? email;
+
+  if (userEmail && isAdminEmail(userEmail)) {
     throw new Error('Non puoi eliminare l\'account amministratore.');
   }
-  await db.sessions.where('userId').equals(userId).delete();
-  await db.users.delete(userId);
 
-  if (supabase && user) {
-    await supabase.from('app_users').delete().eq('email', user.email);
+  if (user) {
+    await db.sessions.where('userId').equals(userId).delete();
+    await db.users.delete(userId);
+  }
+
+  if (supabase && userEmail) {
+    const { error } = await supabase.from('app_users').delete().eq('email', userEmail);
+    if (error) throw new Error(`Errore eliminazione: ${error.message}`);
   }
 }
 
