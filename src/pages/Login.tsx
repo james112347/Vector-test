@@ -104,7 +104,7 @@ export default function Login() {
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
+          <CardFooter className="flex flex-col space-y-4 px-6 pt-6 pb-6">
             <Button type="submit" className="w-full h-12 text-base" disabled={isLoading}>
               {isLoading ? 'Accesso in corso...' : 'Accedi'}
             </Button>
