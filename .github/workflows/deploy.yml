@@ -30,6 +30,7 @@ jobs:
           VITE_SAHHA_API_URL: https://sandbox-api.sahha.ai
           VITE_SAHHA_CLIENT_ID: ABCxhtcHO0bqCVtqP9EHTsKAleFjYg7c
           VITE_SAHHA_CLIENT_SECRET: KXSBG3cEMvfzN7ZiSA09YHRTu9B3ffeCKBoWkSwb5w7oDr41K9v2Bw2mkAKuOnCM
+          VITE_GROQ_API_KEY: ${{ secrets.VITE_GROQ_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
