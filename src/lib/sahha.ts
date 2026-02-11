@@ -83,7 +83,12 @@ export async function getAccountToken(): Promise<string> {
     }),
   });
   if (!res.ok) {
-    throw new Error(`Sahha account token ${res.status}: ${await res.text()}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(
+      `Impossibile autenticarsi con Sahha (${res.status}). ` +
+      `Verifica che VITE_SAHHA_CLIENT_ID e VITE_SAHHA_CLIENT_SECRET siano corretti.` +
+      (body ? ` Dettagli: ${body.slice(0, 200)}` : ''),
+    );
   }
   const data = await res.json();
   cachedAccountToken = {
@@ -112,7 +117,11 @@ export async function registerProfileDirect(
     if (res.status === 400) {
       return getProfileTokenDirect(externalId);
     }
-    throw new Error(`Sahha register ${res.status}: ${await res.text()}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(
+      `Errore durante la registrazione del profilo Sahha (${res.status}).` +
+      (body ? ` Dettagli: ${body.slice(0, 200)}` : ''),
+    );
   }
   return res.json() as Promise<SahhaProfileToken>;
 }
@@ -131,7 +140,11 @@ export async function getProfileTokenDirect(
     body: JSON.stringify({ externalId }),
   });
   if (!res.ok) {
-    throw new Error(`Sahha profile token ${res.status}: ${await res.text()}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(
+      `Impossibile ottenere il token del profilo (${res.status}).` +
+      (body ? ` Dettagli: ${body.slice(0, 200)}` : ''),
+    );
   }
   return res.json() as Promise<SahhaProfileToken>;
 }
@@ -228,7 +241,12 @@ export async function registerProfile(
   const { data, error } = await supabase.functions.invoke('sahha-auth', {
     body: { action: 'register', externalId },
   });
-  if (error) throw new Error(`Sahha register failed: ${error.message}`);
+  if (error) {
+    throw new Error(
+      'Connessione al server non riuscita. Le Edge Functions di Supabase non sono ancora configurate. ' +
+      'Configura VITE_SAHHA_CLIENT_ID e VITE_SAHHA_CLIENT_SECRET per usare la modalita sandbox diretta.',
+    );
+  }
   return data as SahhaProfileToken;
 }
 
@@ -242,7 +260,11 @@ export async function getProfileToken(
   const { data, error } = await supabase.functions.invoke('sahha-auth', {
     body: { action: 'token', externalId },
   });
-  if (error) throw new Error(`Sahha token failed: ${error.message}`);
+  if (error) {
+    throw new Error(
+      'Impossibile ottenere il token dal server. Verifica che le Edge Functions siano configurate.',
+    );
+  }
   return data as SahhaProfileToken;
 }
 

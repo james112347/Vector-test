@@ -35,6 +35,7 @@ import {
   Circle,
   Apple,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 
 const SAHHA_IOS_URL = 'https://apps.apple.com/app/sahha/id1592241897';
@@ -386,6 +387,65 @@ function StepIndicator({ step, total, current }: { step: number; total: number; 
 }
 
 // ---------------------------------------------------------------------------
+// Error display
+// ---------------------------------------------------------------------------
+
+function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  // Determine user-friendly title and suggestion based on error content
+  let title = 'Si e verificato un errore';
+  let suggestion = 'Riprova tra qualche momento. Se il problema persiste, verifica la tua connessione internet.';
+
+  if (message.includes('Edge Function') || message.includes('server non riuscita')) {
+    title = 'Server non configurato';
+    suggestion =
+      'Il servizio di autenticazione non e ancora attivo. ' +
+      'Assicurati che le credenziali Sahha siano configurate correttamente nel deploy.';
+  } else if (message.includes('autenticarsi') || message.includes('CLIENT_ID') || message.includes('CLIENT_SECRET')) {
+    title = 'Credenziali non valide';
+    suggestion =
+      'Le credenziali Sahha non sono corrette. ' +
+      'Controlla che VITE_SAHHA_CLIENT_ID e VITE_SAHHA_CLIENT_SECRET siano configurati.';
+  } else if (message.includes('token') || message.includes('Token')) {
+    title = 'Errore di autenticazione';
+    suggestion =
+      'Non e stato possibile autenticare il tuo profilo. ' +
+      'Prova a disconnettere e ricollegare il dispositivo.';
+  } else if (message.includes('fetch') || message.includes('network') || message.includes('Failed to fetch')) {
+    title = 'Errore di connessione';
+    suggestion = 'Controlla la tua connessione internet e riprova.';
+  }
+
+  return (
+    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 space-y-2">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">{title}</p>
+          <p className="text-xs text-red-600 dark:text-red-400 mt-1">{suggestion}</p>
+          <details className="mt-2">
+            <summary className="text-xs text-red-400 dark:text-red-500 cursor-pointer hover:text-red-500 dark:hover:text-red-400">
+              Dettagli tecnici
+            </summary>
+            <p className="text-xs text-red-400 dark:text-red-500 mt-1 break-words">{message}</p>
+          </details>
+        </div>
+      </div>
+      {onRetry && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+          className="w-full mt-2 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Riprova
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Setup wizard
 // ---------------------------------------------------------------------------
 
@@ -525,11 +585,7 @@ function SetupWizard({
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        )}
+        {error && <ErrorCard message={error} />}
 
         <Button className="w-full" onClick={onConnect} disabled={connecting}>
           {connecting ? (
@@ -623,11 +679,7 @@ function SetupWizard({
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        )}
+        {error && <ErrorCard message={error} />}
 
         <Button className="w-full" onClick={onConnect} disabled={connecting}>
           {connecting ? (
@@ -926,11 +978,7 @@ export default function Health() {
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        )}
+        {error && <ErrorCard message={error} onRetry={() => { setError(null); loadData(); }} />}
 
         <Card>
           <CardContent className="py-8 text-center space-y-4">
@@ -1026,11 +1074,7 @@ export default function Health() {
         )}
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        </div>
-      )}
+      {error && <ErrorCard message={error} onRetry={handleSync} />}
 
       {demo && (
         <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 flex items-center gap-3">
