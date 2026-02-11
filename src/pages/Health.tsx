@@ -1119,18 +1119,26 @@ export default function Health() {
         </div>
       ) : (
         <Card>
-          <CardContent className="py-6 text-center space-y-2">
+          <CardContent className="py-6 text-center space-y-3">
+            <Watch className="h-8 w-8 mx-auto text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               Nessuno score disponibile ancora.
             </p>
             <p className="text-xs text-muted-foreground">
               I dati appariranno dopo la prima sincronizzazione dall'app Sahha sul tuo telefono.
+              Assicurati di aver installato l'app Sahha e autorizzato l'accesso ai dati salute.
             </p>
             {!demo && (
-              <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                Controlla adesso
-              </Button>
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  Controlla adesso
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleDemo}>
+                  <FlaskConical className="h-4 w-4 mr-2" />
+                  Visualizza dati demo
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
