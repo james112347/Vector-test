@@ -265,7 +265,9 @@ export default function Dashboard() {
                 <p className="text-sm font-medium">{aiInsights.summary}</p>
                 {aiInsights.insights.map((insight, i) => (
                   <div key={i} className="flex gap-2.5">
-                    <span className="text-lg shrink-0">{insight.emoji}</span>
+                    <span className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary">
+                      {insight.tag}
+                    </span>
                     <div>
                       <p className="text-sm font-medium">{insight.title}</p>
                       <p className="text-xs text-muted-foreground">{insight.body}</p>

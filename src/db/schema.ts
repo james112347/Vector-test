@@ -80,7 +80,7 @@ export interface UserProfile {
 // Quick Check-ins (micro-feedback durante la giornata)
 // ---------------------------------------------------------------------------
 
-export type CheckinType = 'water' | 'meal' | 'caffeine' | 'stress' | 'movement' | 'mood';
+export type CheckinType = 'sleep_quality' | 'water' | 'caffeine' | 'meal_time' | 'focus' | 'activity_done';
 
 export interface QuickCheckin {
   id?: number;

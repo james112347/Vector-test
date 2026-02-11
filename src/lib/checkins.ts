@@ -55,42 +55,6 @@ export async function getRecentCheckins(userId: number, days = 7): Promise<Quick
 }
 
 /**
- * Get today's total for a specific check-in type (e.g., total water glasses).
- */
-export async function getTodayTotal(userId: number, type: CheckinType): Promise<number> {
-  const items = await db.quickCheckins
-    .where('[userId+date+type]')
-    .equals([userId, todayString(), type])
-    .toArray();
-  return items.reduce((sum, c) => sum + c.value, 0);
-}
-
-/**
- * Get today's totals for all check-in types.
- */
-export async function getTodayTotals(userId: number): Promise<Record<CheckinType, number>> {
-  const items = await getTodayCheckins(userId);
-  const totals: Record<string, number> = {
-    water: 0,
-    meal: 0,
-    caffeine: 0,
-    stress: 0,
-    movement: 0,
-    mood: 0,
-  };
-  for (const c of items) {
-    if (c.type === 'meal' || c.type === 'stress' || c.type === 'mood' || c.type === 'movement') {
-      // For rated types, keep last value (most recent)
-      totals[c.type] = c.value;
-    } else {
-      // For countable types (water, caffeine), sum up
-      totals[c.type] += c.value;
-    }
-  }
-  return totals as Record<CheckinType, number>;
-}
-
-/**
  * Delete a check-in entry.
  */
 export async function deleteCheckin(id: number): Promise<void> {
@@ -98,16 +62,17 @@ export async function deleteCheckin(id: number): Promise<void> {
 }
 
 /**
- * Aggregate check-in data for AI: returns daily summaries for recent days.
+ * Daily summary for AI consumption — structured data the algorithm uses
+ * to correlate lifestyle factors with energy levels.
  */
 export interface DailyCheckinSummary {
   date: string;
-  water: number;
-  caffeine: number;
-  mealQuality: number | null; // average of meals that day
-  stressLevel: number | null; // last stress entry
-  movementLevel: number | null;
-  moodLevel: number | null;
+  sleepQuality: number | null;    // 1-5 soggettivo
+  water: number;                   // bicchieri
+  caffeine: number;                // tazzine
+  mealQuality: number | null;      // 1-5 ultimo pasto
+  focusLevel: number | null;       // 1-5 focus percepito
+  activityDone: number | null;     // 1-5 livello attivita
 }
 
 export async function getCheckinSummaries(userId: number, days = 7): Promise<DailyCheckinSummary[]> {
@@ -122,23 +87,21 @@ export async function getCheckinSummaries(userId: number, days = 7): Promise<Dai
 
   const summaries: DailyCheckinSummary[] = [];
   for (const [date, items] of byDate) {
-    const waters = items.filter(i => i.type === 'water');
-    const caffeines = items.filter(i => i.type === 'caffeine');
-    const meals = items.filter(i => i.type === 'meal');
-    const stresses = items.filter(i => i.type === 'stress');
-    const movements = items.filter(i => i.type === 'movement');
-    const moods = items.filter(i => i.type === 'mood');
+    const last = (type: CheckinType) => {
+      const filtered = items.filter(i => i.type === type);
+      return filtered.length > 0 ? filtered[filtered.length - 1].value : null;
+    };
+    const sum = (type: CheckinType) =>
+      items.filter(i => i.type === type).reduce((s, c) => s + c.value, 0);
 
     summaries.push({
       date,
-      water: waters.reduce((s, c) => s + c.value, 0),
-      caffeine: caffeines.reduce((s, c) => s + c.value, 0),
-      mealQuality: meals.length > 0
-        ? Math.round((meals.reduce((s, c) => s + c.value, 0) / meals.length) * 10) / 10
-        : null,
-      stressLevel: stresses.length > 0 ? stresses[stresses.length - 1].value : null,
-      movementLevel: movements.length > 0 ? movements[movements.length - 1].value : null,
-      moodLevel: moods.length > 0 ? moods[moods.length - 1].value : null,
+      sleepQuality: last('sleep_quality'),
+      water: sum('water'),
+      caffeine: sum('caffeine'),
+      mealQuality: last('meal_time'),
+      focusLevel: last('focus'),
+      activityDone: last('activity_done'),
     });
   }
 

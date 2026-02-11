@@ -13,7 +13,7 @@ export function isAIAvailable(): boolean {
 }
 
 interface AIInsight {
-  emoji: string;
+  tag: string;  // es. "Trend", "Idratazione", "Sonno", "Stress"
   title: string;
   body: string;
 }
@@ -113,19 +113,43 @@ function detectPatterns(logs: EnergyLog[], checkins?: DailyCheckinSummary[]): De
       }
     }
 
-    // Stress-energy correlation
-    const stressDays = checkins.filter(c => c.stressLevel !== null);
-    if (stressDays.length >= 2) {
-      const highStress = stressDays.filter(c => (c.stressLevel ?? 0) >= 4);
-      if (highStress.length > 0) {
-        const hsEnergy = highStress.map(c => {
+    // Sleep quality - energy correlation
+    const sleepDays = checkins.filter(c => c.sleepQuality !== null);
+    if (sleepDays.length >= 2) {
+      const goodSleep = sleepDays.filter(c => (c.sleepQuality ?? 0) >= 4);
+      const badSleep = sleepDays.filter(c => (c.sleepQuality ?? 0) <= 2);
+      if (goodSleep.length > 0 && badSleep.length > 0) {
+        const gsEnergy = goodSleep.map(c => {
           const log = logs.find(l => l.date === c.date);
           return log ? (log.physical + log.mental + log.emotional) / 3 : null;
         }).filter(Boolean) as number[];
-        if (hsEnergy.length > 0) {
-          const hsAvg = hsEnergy.reduce((s, v) => s + v, 0) / hsEnergy.length;
-          if (hsAvg < 5) {
-            patterns.push({ type: 'stress_drain', description: 'Lo stress alto coincide con cali energetici' });
+        const bsEnergy = badSleep.map(c => {
+          const log = logs.find(l => l.date === c.date);
+          return log ? (log.physical + log.mental + log.emotional) / 3 : null;
+        }).filter(Boolean) as number[];
+        if (gsEnergy.length > 0 && bsEnergy.length > 0) {
+          const gsAvg = gsEnergy.reduce((s, v) => s + v, 0) / gsEnergy.length;
+          const bsAvg = bsEnergy.reduce((s, v) => s + v, 0) / bsEnergy.length;
+          if (gsAvg - bsAvg > 1) {
+            patterns.push({ type: 'sleep_impact', description: 'Sonno di qualita = energia piu alta: forte correlazione' });
+          }
+        }
+      }
+    }
+
+    // Focus - energy correlation
+    const focusDays = checkins.filter(c => c.focusLevel !== null);
+    if (focusDays.length >= 2) {
+      const lowFocus = focusDays.filter(c => (c.focusLevel ?? 0) <= 2);
+      if (lowFocus.length > 0) {
+        const lfEnergy = lowFocus.map(c => {
+          const log = logs.find(l => l.date === c.date);
+          return log ? log.mental : null;
+        }).filter(Boolean) as number[];
+        if (lfEnergy.length > 0) {
+          const lfAvg = lfEnergy.reduce((s, v) => s + v, 0) / lfEnergy.length;
+          if (lfAvg < 5) {
+            patterns.push({ type: 'focus_drain', description: 'Focus basso nei giorni con energia mentale bassa' });
           }
         }
       }
@@ -170,14 +194,14 @@ function buildPrompt(ctx: AIContext): string {
   // Check-in data
   let checkinStr = '';
   if (checkinSummaries && checkinSummaries.length > 0) {
-    checkinStr = '\n\nMICRO CHECK-IN GIORNALIERI:\n' + checkinSummaries.map(c => {
+    checkinStr = '\n\nCHECK-IN GIORNALIERI (fattori che influenzano energia):\n' + checkinSummaries.map(c => {
       const parts = [`${c.date}:`];
+      if (c.sleepQuality !== null) parts.push(`qualita_sonno=${c.sleepQuality}/5`);
       if (c.water > 0) parts.push(`acqua=${c.water}bicchieri`);
-      if (c.caffeine > 0) parts.push(`caffeina=${c.caffeine}`);
-      if (c.mealQuality !== null) parts.push(`pasto=${c.mealQuality}/5`);
-      if (c.stressLevel !== null) parts.push(`stress=${c.stressLevel}/5`);
-      if (c.movementLevel !== null) parts.push(`movimento=${c.movementLevel}/5`);
-      if (c.moodLevel !== null) parts.push(`umore=${c.moodLevel}/5`);
+      if (c.caffeine > 0) parts.push(`caffeina=${c.caffeine}tazzine`);
+      if (c.mealQuality !== null) parts.push(`qualita_pasto=${c.mealQuality}/5`);
+      if (c.focusLevel !== null) parts.push(`livello_focus=${c.focusLevel}/5`);
+      if (c.activityDone !== null) parts.push(`attivita_fisica=${c.activityDone}/5`);
       return parts.join(' ');
     }).join('\n');
   }
@@ -229,9 +253,9 @@ Rispondi in formato JSON valido con questa struttura esatta:
 {
   "summary": "Una frase che riassume lo stato energetico attuale, personale e basata sui dati",
   "insights": [
-    {"emoji": "emoji", "title": "titolo breve", "body": "spiegazione in 1-2 frasi con correlazione tra dati"},
-    {"emoji": "emoji", "title": "titolo breve", "body": "spiegazione basata su pattern rilevati"},
-    {"emoji": "emoji", "title": "titolo breve", "body": "insight che collega dati biometrici/check-in con energia"}
+    {"tag": "Categoria", "title": "titolo breve", "body": "spiegazione in 1-2 frasi con correlazione tra dati"},
+    {"tag": "Categoria", "title": "titolo breve", "body": "spiegazione basata su pattern rilevati"},
+    {"tag": "Categoria", "title": "titolo breve", "body": "insight che collega dati biometrici/check-in con energia"}
   ],
   "suggestion": "Un consiglio pratico, specifico e azionabile per ADESSO (${timeOfDay}), basato su tutti i dati",
   "energyForecast": "Previsione breve di come sara l'energia nelle prossime ore, basata sui pattern"
@@ -240,12 +264,13 @@ Rispondi in formato JSON valido con questa struttura esatta:
 REGOLE CRITICHE:
 - Rispondi SOLO con JSON valido, nessun testo prima o dopo
 - Massimo 3 insight, ognuno DEVE basarsi su dati reali presenti
+- Il campo "tag" deve essere una parola chiave breve come: Trend, Idratazione, Sonno, Stress, Attivita, Equilibrio, Recupero, Focus
+- NON usare emoji in nessun campo, solo testo
 - Correla attivamente idratazione, stress, sonno e movimento con i livelli energetici
 - Se ci sono check-in, usali per dare consigli specifici (es. "hai bevuto poco oggi")
 - Se ci sono dati biometrici, confrontali con l'energia percepita
 - Usa il nome dell'utente
-- Scrivi in italiano colloquiale ma informativo
-- Gli emoji devono essere singoli emoji unicode
+- Scrivi in italiano professionale ma accessibile
 - Il consiglio deve essere per ADESSO, non generico
 - La previsione energetica deve essere concreta e breve (1 frase)`;
 }

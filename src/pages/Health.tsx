@@ -533,34 +533,34 @@ function EnergyHealthCorrelation({
   const sleepScore = scores.find(s => s.type === 'sleep');
   const activityScore = scores.find(s => s.type === 'activity');
 
-  const insights: { icon: string; text: string }[] = [];
+  const insights: { tag: string; text: string }[] = [];
 
   if (sleepScore) {
     const sleepPct = Math.round(sleepScore.score * 100);
     if (sleepPct < 50 && avgEnergy < 5) {
-      insights.push({ icon: '😴', text: 'Il tuo sonno basso potrebbe influire sull\'energia. Prova a migliorare la routine serale.' });
+      insights.push({ tag: 'Sonno', text: 'Il tuo sonno basso potrebbe influire sull\'energia. Prova a migliorare la routine serale.' });
     } else if (sleepPct >= 70 && avgEnergy >= 7) {
-      insights.push({ icon: '✨', text: 'Ottimo sonno e ottima energia! Stai mantenendo un buon equilibrio.' });
+      insights.push({ tag: 'Equilibrio', text: 'Ottimo sonno e ottima energia! Stai mantenendo un buon equilibrio.' });
     } else if (sleepPct >= 70 && avgEnergy < 5) {
-      insights.push({ icon: '🤔', text: 'Dormi bene ma l\'energia e bassa. Potrebbe dipendere da stress o alimentazione.' });
+      insights.push({ tag: 'Attenzione', text: 'Dormi bene ma l\'energia e bassa. Potrebbe dipendere da stress o alimentazione.' });
     }
   }
 
   if (activityScore) {
     const actPct = Math.round(activityScore.score * 100);
     if (actPct >= 60 && avgEnergy >= 6) {
-      insights.push({ icon: '💪', text: 'L\'attivita fisica regolare sta supportando i tuoi livelli di energia.' });
+      insights.push({ tag: 'Attivita', text: 'L\'attivita fisica regolare sta supportando i tuoi livelli di energia.' });
     } else if (actPct < 40) {
-      insights.push({ icon: '🚶', text: 'Piu movimento potrebbe aiutare ad aumentare i tuoi livelli energetici.' });
+      insights.push({ tag: 'Movimento', text: 'Piu movimento potrebbe aiutare ad aumentare i tuoi livelli energetici.' });
     }
   }
 
   const diff = avgEnergy - avgHealth;
   if (Math.abs(diff) > 2) {
     if (diff > 0) {
-      insights.push({ icon: '📊', text: 'La tua percezione energetica e superiore ai dati biometrici. Ascolta il tuo corpo.' });
+      insights.push({ tag: 'Percezione', text: 'La tua percezione energetica e superiore ai dati biometrici. Ascolta il tuo corpo.' });
     } else {
-      insights.push({ icon: '📈', text: 'I tuoi dati biometrici sono buoni! La percezione energetica potrebbe migliorare con piccoli cambiamenti.' });
+      insights.push({ tag: 'Biometrica', text: 'I tuoi dati biometrici sono buoni! La percezione energetica potrebbe migliorare con piccoli cambiamenti.' });
     }
   }
 
@@ -585,7 +585,9 @@ function EnergyHealthCorrelation({
         </div>
         {insights.map((ins, i) => (
           <div key={i} className="flex gap-2.5">
-            <span className="text-base shrink-0">{ins.icon}</span>
+            <span className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary">
+              {ins.tag}
+            </span>
             <p className="text-xs text-muted-foreground leading-relaxed">{ins.text}</p>
           </div>
         ))}
