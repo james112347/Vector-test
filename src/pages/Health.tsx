@@ -34,7 +34,11 @@ import {
   CheckCircle2,
   Circle,
   Apple,
+  ExternalLink,
 } from 'lucide-react';
+
+const SAHHA_IOS_URL = 'https://apps.apple.com/app/sahha/id1592241897';
+const SAHHA_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.sahha.android';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -484,9 +488,18 @@ function SetupWizard({
               <div>
                 <p className="text-sm font-medium">Installa l'app Sahha</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Cerca "Sahha" nell'App Store e installala. L'app legge i dati da Apple Health
-                  in background e li sincronizza automaticamente.
+                  L'app legge i dati da Apple Health in background e li sincronizza automaticamente.
                 </p>
+                <a
+                  href={SAHHA_IOS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors"
+                >
+                  <Apple className="h-3.5 w-3.5" />
+                  Scarica dall'App Store
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             </div>
 
@@ -573,9 +586,19 @@ function SetupWizard({
               <div>
                 <p className="text-sm font-medium">Installa l'app Sahha</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Cerca "Sahha" nel Play Store e installala. L'app legge i dati da Health Connect
-                  in background e li sincronizza con Vector automaticamente.
+                  L'app legge i dati da Health Connect in background e li sincronizza
+                  con Vector automaticamente.
                 </p>
+                <a
+                  href={SAHHA_ANDROID_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors"
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                  Scarica dal Play Store
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             </div>
 
