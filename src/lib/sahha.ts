@@ -150,6 +150,37 @@ export async function getProfileTokenDirect(
 }
 
 // ---------------------------------------------------------------------------
+// Profile search (find device-linked profiles on the account)
+// ---------------------------------------------------------------------------
+
+export interface SahhaAccountProfile {
+  profileId: string;
+  accountId: string;
+  externalId: string;
+  sdkId: string | null;
+  deviceType: string | null;
+  dataLastReceivedAtUtc: string | null;
+  createdAtUtc: string;
+  isSampleProfile: boolean;
+}
+
+/** Search for profiles on the account that have a linked device with data. */
+export async function findDeviceProfileDirect(): Promise<SahhaAccountProfile | null> {
+  const accountToken = await getAccountToken();
+  const res = await fetch(`${SAHHA_API_URL}/api/v1/account/profile/search`, {
+    headers: { Authorization: `account ${accountToken}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const items: SahhaAccountProfile[] = data.items || [];
+  // Prefer a non-sample profile that has received data from a real device
+  const deviceProfile = items.find(
+    (p) => !p.isSampleProfile && p.deviceType && p.dataLastReceivedAtUtc,
+  );
+  return deviceProfile || null;
+}
+
+// ---------------------------------------------------------------------------
 // Profile-level API calls (use profile token — safe for client)
 // ---------------------------------------------------------------------------
 

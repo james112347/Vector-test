@@ -311,6 +311,15 @@ function BiomarkerRow({ biomarker }: { biomarker: SahhaBiomarkerLog }) {
     heart_rate_resting: 'FC a riposo',
     heart_rate_variability_sdnn: 'HRV (SDNN)',
     sleep_duration: 'Durata sonno',
+    sleep_in_bed_duration: 'Tempo a letto',
+    sleep_debt: 'Debito di sonno',
+    sleep_regularity: 'Regolarita sonno',
+    sleep_start_time: 'Inizio sonno',
+    sleep_end_time: 'Fine sonno',
+    sleep_mid_time: 'Meta sonno',
+    sleep_rem_duration: 'Sonno REM',
+    sleep_deep_duration: 'Sonno profondo',
+    sleep_light_duration: 'Sonno leggero',
     active_energy_burned: 'Calorie attive',
     total_energy_burned: 'Calorie totali',
     floors_climbed: 'Piani saliti',
@@ -318,9 +327,6 @@ function BiomarkerRow({ biomarker }: { biomarker: SahhaBiomarkerLog }) {
     oxygen_saturation: 'SpO2',
     respiratory_rate: 'Freq. respiratoria',
     vo2_max: 'VO2 Max',
-    sleep_rem_duration: 'Sonno REM',
-    sleep_deep_duration: 'Sonno profondo',
-    sleep_light_duration: 'Sonno leggero',
     weight: 'Peso',
     body_mass_index: 'BMI',
   };
@@ -330,12 +336,32 @@ function BiomarkerRow({ biomarker }: { biomarker: SahhaBiomarkerLog }) {
     bpm: 'bpm',
     ms: 'ms',
     min: 'min',
+    minute: 'min',
+    hour: 'h',
     kcal: 'kcal',
     '%': '%',
+    percentage: '%',
     'mL/kg/min': 'mL/kg/min',
     kg: 'kg',
     'kg/m2': '',
+    datetime: '',
   };
+
+  // Format datetime values nicely
+  if (biomarker.unit === 'datetime') {
+    const dateVal = new Date(biomarker.value);
+    if (!isNaN(dateVal.getTime())) {
+      const displayName = labelMap[biomarker.type] || biomarker.type.replaceAll('_', ' ');
+      return (
+        <div className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
+          <span className="text-sm text-foreground">{displayName}</span>
+          <span className="text-sm font-medium tabular-nums">
+            {dateVal.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      );
+    }
+  }
 
   const displayName = labelMap[biomarker.type] || biomarker.type.replaceAll('_', ' ');
   const displayUnit = unitMap[biomarker.unit] ?? biomarker.unit ?? '';

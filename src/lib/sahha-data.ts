@@ -17,6 +17,7 @@ import {
   getProfileToken,
   getProfileTokenDirect,
   refreshProfileToken,
+  findDeviceProfileDirect,
   daysAgoStart,
 } from './sahha';
 
@@ -32,13 +33,18 @@ export async function getSahhaProfile(userId: number): Promise<SahhaProfile | un
 }
 
 export async function connectSahha(userId: number): Promise<SahhaProfile> {
-  const externalId = `vector-user-${userId}`;
-
+  let externalId = `vector-user-${userId}`;
   let tokenResp;
 
   if (isSahhaDirectEnabled) {
-    // Direct sandbox mode — client-side auth
-    tokenResp = await registerProfileDirect(externalId);
+    // In sandbox mode, first check if there's a device-linked profile with real data
+    const deviceProfile = await findDeviceProfileDirect();
+    if (deviceProfile) {
+      externalId = deviceProfile.externalId;
+      tokenResp = await getProfileTokenDirect(externalId);
+    } else {
+      tokenResp = await registerProfileDirect(externalId);
+    }
   } else {
     // Production mode — via Supabase Edge Function
     tokenResp = await registerProfile(externalId);
@@ -50,12 +56,18 @@ export async function connectSahha(userId: number): Promise<SahhaProfile> {
   }
 
   const now = new Date();
+  // expiresIn may be a Unix timestamp or seconds; handle both
+  const expiresMs =
+    tokenResp.expiresIn > 1_000_000_000
+      ? tokenResp.expiresIn * 1000 // Unix timestamp in seconds → ms
+      : now.getTime() + tokenResp.expiresIn * 1000; // relative seconds
+
   const profile: SahhaProfile = {
     userId,
     externalId,
     profileToken: tokenResp.profileToken,
     refreshToken: tokenResp.refreshToken,
-    tokenExpiresAt: new Date(now.getTime() + tokenResp.expiresIn * 1000),
+    tokenExpiresAt: new Date(expiresMs),
     createdAt: now,
     updatedAt: now,
   };
