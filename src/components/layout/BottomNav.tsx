@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, PenLine, Clock, Settings } from 'lucide-react';
+import { usePendingUsers } from '../../lib/usePendingUsers';
 
 const tabs = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
@@ -11,6 +12,7 @@ const tabs = [
 export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const pendingCount = usePendingUsers();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t border-border safe-area-bottom">
@@ -18,6 +20,7 @@ export function BottomNav() {
         {tabs.map(tab => {
           const isActive = location.pathname === tab.path;
           const Icon = tab.icon;
+          const showBadge = tab.path === '/settings' && pendingCount > 0;
           return (
             <button
               key={tab.path}
@@ -28,7 +31,14 @@ export function BottomNav() {
                   : 'text-muted-foreground'
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <div className="relative">
+                <Icon className="h-5 w-5" />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] font-medium">{tab.label}</span>
             </button>
           );

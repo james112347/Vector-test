@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { getTodayLog, getRecentLogs } from '../lib/energy';
+import { usePendingUsers } from '../lib/usePendingUsers';
 import type { EnergyLog } from '../db/schema';
 import {
   ResponsiveContainer,
@@ -46,6 +47,7 @@ function EnergyRing({ value, label, color }: { value: number; label: string; col
 export default function Dashboard() {
   const { user } = useAuthState();
   const navigate = useNavigate();
+  const pendingCount = usePendingUsers();
   const [todayLog, setTodayLog] = useState<EnergyLog | null>(null);
   const [weekLogs, setWeekLogs] = useState<EnergyLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +100,31 @@ export default function Dashboard() {
           La tua dashboard energetica
         </p>
       </div>
+
+      {/* Pending Approvals Banner */}
+      {pendingCount > 0 && (
+        <button
+          onClick={() => navigate('/settings')}
+          className="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-left transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/30"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white text-sm font-bold shrink-0">
+              {pendingCount}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                {pendingCount === 1 ? 'Nuovo utente in attesa' : `${pendingCount} utenti in attesa`}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Tocca per approvare o rifiutare
+              </p>
+            </div>
+            <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </button>
+      )}
 
       {/* Today's Energy */}
       {todayLog ? (

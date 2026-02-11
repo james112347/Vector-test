@@ -198,6 +198,13 @@ export async function getAllUsers(): Promise<User[]> {
 }
 
 /**
+ * Get count of pending (unapproved) users.
+ */
+export async function getPendingUsersCount(): Promise<number> {
+  return db.users.where('isApproved').equals(0).count();
+}
+
+/**
  * Reset entire database (clears all users, sessions, preferences).
  * Used when user needs to start fresh.
  */
