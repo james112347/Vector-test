@@ -29,7 +29,11 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   5. App shell loads even when offline
   6. Dark mode toggle works and preference is saved
   7. Design follows neuroscience color principles (documented in design tokens)
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 01-01-PLAN.md -- Project scaffolding + Vite + React 19 + PWA configuration
+- [ ] 01-02-PLAN.md -- Neuroscience design system + dark mode + shadcn/ui components
+- [ ] 01-03-PLAN.md -- Auth database (Dexie.js) + AuthContext + helpers
+- [ ] 01-04-PLAN.md -- Auth pages + App shell + routing + verification checkpoint
 
 ### Phase 2: Onboarding Questionnaire
 **Goal**: First-time users complete a multi-step onboarding form collecting all lifestyle data needed for energy calculation.
@@ -119,7 +123,7 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. PWA Shell + Auth + Design System | 0/? | Not started | - |
+| 1. PWA Shell + Auth + Design System | 0/4 | Planned | - |
 | 2. Onboarding Questionnaire | 0/? | Not started | - |
 | 3. Daily Logging | 0/? | Not started | - |
 | 4. Energy Engine + AI | 0/? | Not started | - |
