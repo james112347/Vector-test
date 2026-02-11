@@ -5,6 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import { useAuthActions } from '../contexts/AuthContext';
+import { resetDatabase } from '../lib/auth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [pendingApproval, setPendingApproval] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
   const { signIn } = useAuthActions();
   const navigate = useNavigate();
 
@@ -34,6 +36,14 @@ export default function Login() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleReset = async () => {
+    await resetDatabase();
+    setShowReset(false);
+    setError('');
+    setPendingApproval(false);
+    navigate('/register');
   };
 
   return (
@@ -83,7 +93,7 @@ export default function Login() {
                       Account in attesa di approvazione
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                      Il tuo account è stato registrato ma non è ancora stato approvato dall'amministratore. Riprova più tardi.
+                      Il tuo account non è ancora stato approvato dall'amministratore.
                     </p>
                   </div>
                 </div>
@@ -104,8 +114,46 @@ export default function Login() {
                 Registrati
               </Link>
             </p>
+            <button
+              type="button"
+              onClick={() => setShowReset(true)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Password dimenticata? Resetta accessi
+            </button>
           </CardFooter>
         </form>
+
+        {showReset && (
+          <div className="px-6 pb-6">
+            <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
+              <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                Conferma reset completo
+              </p>
+              <p className="text-xs text-red-700 dark:text-red-400">
+                Questo eliminerà tutti gli account e i dati dal dispositivo. Dovrai registrarti di nuovo.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-9 flex-1"
+                  onClick={handleReset}
+                >
+                  Resetta tutto
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 flex-1"
+                  onClick={() => setShowReset(false)}
+                >
+                  Annulla
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );

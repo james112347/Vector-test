@@ -24,3 +24,15 @@ export interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
   updatedAt: Date;
 }
+
+export interface EnergyLog {
+  id?: number;
+  userId: number;
+  date: string; // YYYY-MM-DD
+  physical: number; // 1-10
+  mental: number;   // 1-10
+  emotional: number; // 1-10
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

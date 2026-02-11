@@ -5,6 +5,8 @@ import Login from '../pages/Login';
 import Register from '../pages/Register';
 import Terms from '../pages/Terms';
 import Dashboard from '../pages/Dashboard';
+import LogEnergy from '../pages/LogEnergy';
+import History from '../pages/History';
 import Settings from '../pages/Settings';
 
 export const router = createBrowserRouter([
@@ -20,6 +22,8 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: '/', element: <Dashboard /> },
+          { path: '/log', element: <LogEnergy /> },
+          { path: '/history', element: <History /> },
           { path: '/settings', element: <Settings /> },
         ],
       },

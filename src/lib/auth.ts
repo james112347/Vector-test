@@ -196,3 +196,14 @@ export async function deleteUser(userId: number): Promise<void> {
 export async function getAllUsers(): Promise<User[]> {
   return db.users.toArray();
 }
+
+/**
+ * Reset entire database (clears all users, sessions, preferences).
+ * Used when user needs to start fresh.
+ */
+export async function resetDatabase(): Promise<void> {
+  await db.sessions.clear();
+  await db.users.clear();
+  await db.userPreferences.clear();
+  await db.energyLogs.clear();
+}

@@ -1,10 +1,11 @@
 import Dexie, { type Table } from 'dexie';
-import type { User, Session, UserPreferences } from './schema';
+import type { User, Session, UserPreferences, EnergyLog } from './schema';
 
 export class VectorDB extends Dexie {
   users!: Table<User>;
   sessions!: Table<Session>;
   userPreferences!: Table<UserPreferences>;
+  energyLogs!: Table<EnergyLog>;
 
   constructor() {
     super('VectorDB');
@@ -22,6 +23,12 @@ export class VectorDB extends Dexie {
         if (user.isApproved === undefined) user.isApproved = true;
         if (user.isAdmin === undefined) user.isAdmin = false;
       });
+    });
+    this.version(3).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+      energyLogs: '++id, userId, date, [userId+date]',
     });
   }
 }
