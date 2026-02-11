@@ -105,8 +105,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4 py-8">
-      <Card className="w-full max-w-md">
+    <div className="min-h-[100dvh] bg-background px-4 py-6 overflow-y-auto">
+      <Card className="w-full max-w-md mx-auto">
         <CardHeader>
           <CardTitle className="text-xl">Completa il tuo profilo</CardTitle>
           <CardDescription>
@@ -138,7 +138,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="h-12 text-base"
+                    className="h-11 text-base"
                   />
                 </div>
                 <div className="space-y-2">
@@ -152,18 +152,18 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     value={birthYear}
                     onChange={(e) => setBirthYear(e.target.value)}
                     required
-                    className="h-12 text-base"
+                    className="h-11 text-base"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Genere</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-1.5">
                     {GENDER_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setGender(opt.value)}
-                        className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
+                        className={`py-2 px-2 rounded-lg border text-sm font-medium transition-colors ${
                           gender === opt.value
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border hover:border-primary/50'
@@ -186,7 +186,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       value={heightCm}
                       onChange={(e) => setHeightCm(e.target.value)}
                       required
-                      className="h-12 text-base"
+                      className="h-11 text-base"
                     />
                   </div>
                   <div className="space-y-2">
@@ -201,7 +201,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       value={weightKg}
                       onChange={(e) => setWeightKg(e.target.value)}
                       required
-                      className="h-12 text-base"
+                      className="h-11 text-base"
                     />
                   </div>
                 </div>
@@ -213,22 +213,22 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="space-y-2">
                   <Label>Livello di attivita fisica</Label>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {ACTIVITY_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setActivityLevel(opt.value)}
-                        className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                        className={`w-full py-2.5 px-3 rounded-lg border text-left transition-colors ${
                           activityLevel === opt.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
                         }`}
                       >
-                        <p className={`text-sm font-medium ${activityLevel === opt.value ? 'text-primary' : ''}`}>
+                        <span className={`text-sm font-medium ${activityLevel === opt.value ? 'text-primary' : ''}`}>
                           {opt.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2">{opt.desc}</span>
                       </button>
                     ))}
                   </div>
@@ -257,22 +257,22 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="space-y-2">
                   <Label>Qual e il tuo obiettivo principale?</Label>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {GOAL_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setGoal(opt.value)}
-                        className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                        className={`w-full py-2.5 px-3 rounded-lg border text-left transition-colors ${
                           goal === opt.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
                         }`}
                       >
-                        <p className={`text-sm font-medium ${goal === opt.value ? 'text-primary' : ''}`}>
+                        <span className={`text-sm font-medium ${goal === opt.value ? 'text-primary' : ''}`}>
                           {opt.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2">{opt.desc}</span>
                       </button>
                     ))}
                   </div>
@@ -294,7 +294,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           </CardContent>
 
-          <CardFooter className="flex gap-3 px-6 pb-6">
+          <CardFooter className="flex gap-3 px-6 pb-8 pt-4">
             {step > 0 && (
               <Button
                 type="button"
