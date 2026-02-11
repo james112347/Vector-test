@@ -1,5 +1,6 @@
 import { db } from '../db/db';
 import type { User, Session } from '../db/schema';
+import { supabase } from './supabase';
 
 /**
  * Admin email - hardcoded owner of the app.
@@ -71,6 +72,19 @@ export async function checkExistingSession(): Promise<{ session: Session; user: 
     return null;
   }
 
+  // Sync approval status from Supabase (in case admin approved on another device)
+  if (supabase && !user.isApproved) {
+    const { data } = await supabase
+      .from('app_users')
+      .select('is_approved')
+      .eq('email', user.email)
+      .single();
+    if (data?.is_approved) {
+      await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
+      user.isApproved = true;
+    }
+  }
+
   return { session, user };
 }
 
@@ -93,6 +107,7 @@ export async function cleanExpiredSessions(): Promise<void> {
  * Register a new user.
  * Admin email is auto-approved and flagged as admin.
  * All other users require admin approval.
+ * Syncs to Supabase for cross-device visibility.
  */
 export async function registerUser(
   email: string,
@@ -124,12 +139,28 @@ export async function registerUser(
   };
 
   const id = await db.users.add(user);
+
+  // Sync to Supabase (no password hash — only metadata)
+  if (supabase) {
+    await supabase.from('app_users').upsert(
+      {
+        email,
+        is_approved: admin,
+        is_admin: admin,
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      },
+      { onConflict: 'email' }
+    );
+  }
+
   return { ...user, id };
 }
 
 /**
  * Authenticate a user by email and password.
  * Throws specific error if user is not approved.
+ * Checks Supabase for latest approval status.
  */
 export async function authenticateUser(email: string, password: string): Promise<User> {
   const user = await db.users.where('email').equals(email).first();
@@ -149,6 +180,19 @@ export async function authenticateUser(email: string, password: string): Promise
     user.isApproved = true;
   }
 
+  // Check Supabase for latest approval status
+  if (supabase && !user.isApproved) {
+    const { data } = await supabase
+      .from('app_users')
+      .select('is_approved')
+      .eq('email', email)
+      .single();
+    if (data?.is_approved) {
+      await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
+      user.isApproved = true;
+    }
+  }
+
   if (!user.isApproved) {
     throw new Error('PENDING_APPROVAL');
   }
@@ -158,9 +202,18 @@ export async function authenticateUser(email: string, password: string): Promise
 
 /**
  * Approve a user (admin only).
+ * Updates both local DB and Supabase.
  */
 export async function approveUser(userId: number): Promise<void> {
+  const user = await db.users.get(userId);
   await db.users.update(userId, { isApproved: true, updatedAt: new Date() });
+
+  if (supabase && user) {
+    await supabase
+      .from('app_users')
+      .update({ is_approved: true, updated_at: new Date().toISOString() })
+      .eq('email', user.email);
+  }
 }
 
 /**
@@ -173,8 +226,14 @@ export async function revokeUser(userId: number): Promise<void> {
     throw new Error('Non puoi revocare l\'accesso all\'amministratore.');
   }
   await db.users.update(userId, { isApproved: false, updatedAt: new Date() });
-  // Clear their sessions
   await db.sessions.where('userId').equals(userId).delete();
+
+  if (supabase && user) {
+    await supabase
+      .from('app_users')
+      .update({ is_approved: false, updated_at: new Date().toISOString() })
+      .eq('email', user.email);
+  }
 }
 
 /**
@@ -188,19 +247,78 @@ export async function deleteUser(userId: number): Promise<void> {
   }
   await db.sessions.where('userId').equals(userId).delete();
   await db.users.delete(userId);
+
+  if (supabase && user) {
+    await supabase.from('app_users').delete().eq('email', user.email);
+  }
 }
 
 /**
- * Get all users (admin view).
+ * Get all users.
+ * If Supabase is available, merges remote users (from other devices)
+ * with local users.
  */
 export async function getAllUsers(): Promise<User[]> {
-  return db.users.toArray();
+  const localUsers = await db.users.toArray();
+
+  if (!supabase) return localUsers;
+
+  const { data: remoteUsers } = await supabase
+    .from('app_users')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (!remoteUsers) return localUsers;
+
+  // Build map by email — remote data has the authoritative approval status
+  const localMap = new Map(localUsers.map(u => [u.email, u]));
+  const merged: User[] = [];
+
+  for (const remote of remoteUsers) {
+    const local = localMap.get(remote.email);
+    if (local) {
+      // Update local approval status if changed remotely
+      if (local.isApproved !== remote.is_approved) {
+        await db.users.update(local.id!, { isApproved: remote.is_approved, updatedAt: new Date() });
+        local.isApproved = remote.is_approved;
+      }
+      merged.push(local);
+      localMap.delete(remote.email);
+    } else {
+      // Remote-only user (registered on another device)
+      merged.push({
+        id: remote.id,
+        email: remote.email,
+        passwordHash: '',
+        hasAcceptedTerms: true,
+        isApproved: remote.is_approved,
+        isAdmin: remote.is_admin,
+        createdAt: new Date(remote.created_at),
+        updatedAt: new Date(remote.updated_at),
+      });
+    }
+  }
+
+  // Add any local-only users not yet in Supabase
+  for (const local of localMap.values()) {
+    merged.push(local);
+  }
+
+  return merged;
 }
 
 /**
  * Get count of pending (unapproved) users.
+ * Reads from Supabase if available for cross-device accuracy.
  */
 export async function getPendingUsersCount(): Promise<number> {
+  if (supabase) {
+    const { count } = await supabase
+      .from('app_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_approved', false);
+    return count ?? 0;
+  }
   return db.users.filter(u => !u.isApproved).count();
 }
 
