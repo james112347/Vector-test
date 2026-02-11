@@ -12,6 +12,7 @@ import {
   getCachedScores,
   getCachedBiomarkers,
 } from '../lib/sahha-data';
+import { getDemoScores, getDemoBiomarkers } from '../lib/sahha-demo';
 import { scoreStateLabel, scoreStateColor } from '../lib/sahha';
 import type { SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import {
@@ -24,6 +25,7 @@ import {
   RefreshCw,
   Unplug,
   Loader2,
+  FlaskConical,
 } from 'lucide-react';
 
 function ScoreCard({ score }: { score: SahhaScoreLog }) {
@@ -160,6 +162,7 @@ function BiomarkerRow({ biomarker }: { biomarker: SahhaBiomarkerLog }) {
 export default function Health() {
   const { user } = useAuthState();
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [demo, setDemo] = useState(false);
   const [scores, setScores] = useState<SahhaScoreLog[]>([]);
   const [biomarkers, setBiomarkers] = useState<SahhaBiomarkerLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +235,22 @@ export default function Health() {
     }
   };
 
+  const handleDemo = () => {
+    if (!user?.id) return;
+    setScores(getDemoScores(user.id));
+    setBiomarkers(getDemoBiomarkers(user.id));
+    setDemo(true);
+    setConnected(true);
+    setLoading(false);
+  };
+
+  const exitDemo = () => {
+    setDemo(false);
+    setConnected(false);
+    setScores([]);
+    setBiomarkers([]);
+  };
+
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -241,7 +260,7 @@ export default function Health() {
     );
   }
 
-  if (!isSupabaseEnabled) {
+  if (!isSupabaseEnabled && !demo) {
     return (
       <div className="space-y-4 pb-24">
         <div>
@@ -259,6 +278,10 @@ export default function Health() {
             <p className="text-xs text-muted-foreground">
               Imposta VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nel file .env
             </p>
+            <Button variant="outline" size="sm" onClick={handleDemo}>
+              <FlaskConical className="h-4 w-4 mr-2" />
+              Prova con dati demo
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -292,7 +315,7 @@ export default function Health() {
             Dati da dispositivi wearable
           </p>
         </div>
-        {connected && (
+        {connected && !demo && (
           <Button
             variant="ghost"
             size="icon"
@@ -329,14 +352,32 @@ export default function Health() {
               <span className="px-2 py-1 rounded-full bg-muted">Whoop</span>
               <span className="px-2 py-1 rounded-full bg-muted">Samsung</span>
             </div>
-            <Button onClick={handleConnect}>
-              <Watch className="h-4 w-4 mr-2" />
-              Collega Sahha
-            </Button>
+            <div className="flex flex-col gap-2 items-center">
+              <Button onClick={handleConnect}>
+                <Watch className="h-4 w-4 mr-2" />
+                Collega Sahha
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDemo}>
+                <FlaskConical className="h-4 w-4 mr-2" />
+                Prova con dati demo
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
         <>
+          {demo && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 flex items-center gap-3">
+              <FlaskConical className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Modalita demo</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Dati di esempio — collega un dispositivo per dati reali.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Health Scores */}
           {scores.length > 0 ? (
             <div>
@@ -383,17 +424,24 @@ export default function Health() {
             </Card>
           )}
 
-          {/* Disconnect */}
+          {/* Disconnect / Exit demo */}
           <div className="pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDisconnect}
-              className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
-            >
-              <Unplug className="h-4 w-4 mr-2" />
-              Disconnetti Sahha
-            </Button>
+            {demo ? (
+              <Button variant="outline" size="sm" onClick={exitDemo}>
+                <FlaskConical className="h-4 w-4 mr-2" />
+                Esci dalla demo
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnect}
+                className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+              >
+                <Unplug className="h-4 w-4 mr-2" />
+                Disconnetti Sahha
+              </Button>
+            )}
           </div>
         </>
       )}
