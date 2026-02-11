@@ -20,14 +20,14 @@ Progress: [███░░░░░░░] 37.5%
 
 **Velocity:**
 - Total plans completed: 3
-- Average duration: 4.5 min
-- Total execution time: 0.22 hours
+- Average duration: 4.6 min
+- Total execution time: 0.23 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3 | 13.3min | 4.4min |
+| 01 | 3 | 13.7min | 4.6min |
 
 ## Accumulated Context
 
@@ -44,6 +44,9 @@ Progress: [███░░░░░░░] 37.5%
 - [01-01 Tailwind]: Using Tailwind CSS v4 with new Vite plugin approach (@tailwindcss/vite)
 - [01-01 PWA]: Configured VitePWA with 'prompt' strategy for user-controlled updates
 - [01-01 Dark Mode]: Dark mode flash prevention with inline script before page render
+- [01-02 Color System]: HSL format for Tailwind v4, neuroscience-informed palette (calm blues/greens, energy oranges/yellows, stress pink)
+- [01-02 Dark Mode]: localStorage persistence with system preference fallback via useDarkMode hook
+- [01-02 Components]: shadcn/ui "new-york" style variant for all UI components
 - [01-03 Auth Context]: Split context pattern (AuthStateContext + AuthActionsContext) to prevent unnecessary re-renders
 - [01-03 Password Hash]: SHA-256 for Phase 1 client-only auth (flagged for backend bcrypt replacement in Phase 3)
 - [01-03 Sessions]: 30-day session expiration with IndexedDB persistence across restarts
@@ -52,7 +55,6 @@ Progress: [███░░░░░░░] 37.5%
 
 - Energy calculation formula to be defined
 - Terms & conditions legal text to be written
-- Neuroscience color palette to be researched and documented
 
 ### Blockers/Concerns
 
@@ -63,5 +65,5 @@ Progress: [███░░░░░░░] 37.5%
 ## Session Continuity
 
 Last session: 2026-02-11T13:36:24Z
-Stopped at: Completed 01-03-PLAN.md (Auth Data Layer & Context)
+Stopped at: Completed 01-02-PLAN.md (Design System Foundation - re-executed)
 Resume file: None
