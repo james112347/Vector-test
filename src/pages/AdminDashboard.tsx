@@ -38,6 +38,49 @@ const genderLabels: Record<string, string> = {
   prefer_not_to_say: '-',
 };
 
+const occupationLabels: Record<string, string> = {
+  student: 'Studente',
+  worker: 'Lavoratore',
+  student_worker: 'Stud-lav',
+  unemployed: 'Disoccupato',
+  retired: 'Pensionato',
+};
+
+const scheduleLabels: Record<string, string> = {
+  regular: 'Fisso',
+  shifts: 'Turni',
+  flexible: 'Flessibile',
+  irregular: 'Irregolare',
+};
+
+const smokingLabels: Record<string, string> = {
+  never: 'Mai',
+  occasional: 'Occasionale',
+  daily: 'Quotidiano',
+  heavy: 'Pesante',
+};
+
+const alcoholLabels: Record<string, string> = {
+  never: 'Mai',
+  occasional: 'Occasionale',
+  weekly: 'Settimanale',
+  daily: 'Quotidiano',
+};
+
+const stressLabels: Record<string, string> = {
+  low: 'Basso',
+  moderate: 'Moderato',
+  high: 'Alto',
+  very_high: 'Molto alto',
+};
+
+const energyPatternLabels: Record<string, string> = {
+  morning: 'Mattiniero',
+  afternoon: 'Pomeridiano',
+  evening: 'Serale',
+  variable: 'Variabile',
+};
+
 const scoreLabels: Record<string, string> = {
   wellbeing: 'Benessere',
   activity: 'Attivita',
@@ -254,24 +297,59 @@ export default function AdminDashboard() {
                         <div>
                           <h4 className="text-sm font-medium mb-2">Profilo</h4>
                           <div className="grid grid-cols-2 gap-y-1.5 text-sm">
+                            <span className="text-muted-foreground">Occupazione</span>
+                            <span>{occupationLabels[profile.occupation] || profile.occupation}</span>
+                            {profile.workType && (
+                              <>
+                                <span className="text-muted-foreground">Lavoro</span>
+                                <span>{profile.workType}</span>
+                              </>
+                            )}
+                            <span className="text-muted-foreground">Ore/settimana</span>
+                            <span>{profile.weeklyWorkHours}h</span>
+                            <span className="text-muted-foreground">Orario</span>
+                            <span>{scheduleLabels[profile.workSchedule] || profile.workSchedule}</span>
                             <span className="text-muted-foreground">Attivita</span>
                             <span>{activityLabels[profile.activityLevel]}</span>
                             <span className="text-muted-foreground">Sonno tipico</span>
                             <span>{profile.sleepHours}h/notte</span>
+                            <span className="text-muted-foreground">Fumo</span>
+                            <span>{smokingLabels[profile.smokingFrequency] || '-'}</span>
+                            <span className="text-muted-foreground">Alcol</span>
+                            <span>{alcoholLabels[profile.alcoholFrequency] || '-'}</span>
+                            <span className="text-muted-foreground">Caffeina</span>
+                            <span>{profile.caffeineDaily} tazzine/gg</span>
+                            <span className="text-muted-foreground">Stress</span>
+                            <span>{stressLabels[profile.stressLevel] || '-'}</span>
+                            <span className="text-muted-foreground">Pattern energia</span>
+                            <span>{energyPatternLabels[profile.energyPattern] || '-'}</span>
                             <span className="text-muted-foreground">Obiettivo</span>
                             <span>{goalLabels[profile.goal]}</span>
-                            {profile.notes && (
-                              <>
-                                <span className="text-muted-foreground">Note</span>
-                                <span className="text-xs">{profile.notes}</span>
-                              </>
-                            )}
-                            <span className="text-muted-foreground">Completato</span>
-                            <span className="text-xs">
-                              {new Date(profile.completedAt).toLocaleDateString('it-IT')}
-                            </span>
                           </div>
                         </div>
+                        <div>
+                          <h4 className="text-sm font-medium mb-2">Energia di base</h4>
+                          <div className="flex gap-4">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                              <span className="text-sm">Fisica: {profile.baselinePhysical}/10</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                              <span className="text-sm">Mentale: {profile.baselineMental}/10</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                              <span className="text-sm">Emotiva: {profile.baselineEmotional}/10</span>
+                            </div>
+                          </div>
+                        </div>
+                        {profile.notes && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-1">Note</h4>
+                            <p className="text-xs text-muted-foreground">{profile.notes}</p>
+                          </div>
+                        )}
                       </>
                     )}
 

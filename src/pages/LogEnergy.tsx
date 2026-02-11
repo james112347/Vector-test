@@ -52,6 +52,7 @@ export default function LogEnergy() {
   const [physical, setPhysical] = useState(5);
   const [mental, setMental] = useState(5);
   const [emotional, setEmotional] = useState(5);
+  const [workHoursToday, setWorkHoursToday] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -64,6 +65,7 @@ export default function LogEnergy() {
         setPhysical(log.physical);
         setMental(log.mental);
         setEmotional(log.emotional);
+        setWorkHoursToday(log.workHoursToday?.toString() || '');
         setNotes(log.notes || '');
         setExistingLog(true);
       }
@@ -73,7 +75,13 @@ export default function LogEnergy() {
   const handleSave = async () => {
     if (!user?.id) return;
     setSaving(true);
-    await saveEnergyLog(user.id, { physical, mental, emotional, notes: notes || undefined });
+    await saveEnergyLog(user.id, {
+      physical,
+      mental,
+      emotional,
+      workHoursToday: workHoursToday ? parseFloat(workHoursToday) : undefined,
+      notes: notes || undefined,
+    });
     setSaving(false);
     setSaved(true);
     setExistingLog(true);
@@ -133,6 +141,27 @@ export default function LogEnergy() {
             onChange={setEmotional}
             color="text-amber-600 dark:text-amber-400"
           />
+        </CardContent>
+      </Card>
+
+      {/* Work hours */}
+      <Card>
+        <CardContent className="pt-5">
+          <label className="text-sm font-medium block mb-2">Ore di lavoro/studio oggi</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min={0}
+              max={16}
+              step={0.5}
+              value={workHoursToday}
+              onChange={(e) => setWorkHoursToday(e.target.value)}
+              placeholder="0"
+              className="w-24 h-11 rounded-md border border-input bg-background px-3 text-base tabular-nums placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              style={{ fontSize: '16px' }}
+            />
+            <span className="text-sm text-muted-foreground">ore</span>
+          </div>
         </CardContent>
       </Card>
 

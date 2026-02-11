@@ -32,6 +32,7 @@ export interface EnergyLog {
   physical: number; // 1-10
   mental: number;   // 1-10
   emotional: number; // 1-10
+  workHoursToday?: number; // ore di lavoro previste oggi
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -44,13 +45,30 @@ export interface EnergyLog {
 export interface UserProfile {
   id?: number;
   userId: number;
+  // Dati personali
   name: string;
   birthYear: number;
   gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   heightCm: number;
   weightKg: number;
+  // Occupazione
+  occupation: 'student' | 'worker' | 'student_worker' | 'unemployed' | 'retired';
+  workType?: string; // tipo di lavoro (testo libero)
+  weeklyWorkHours: number;
+  workSchedule: 'regular' | 'shifts' | 'flexible' | 'irregular';
+  // Stile di vita e abitudini
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
-  sleepHours: number; // typical hours per night
+  sleepHours: number; // ore tipiche per notte
+  smokingFrequency: 'never' | 'occasional' | 'daily' | 'heavy';
+  alcoholFrequency: 'never' | 'occasional' | 'weekly' | 'daily';
+  caffeineDaily: number; // tazzine/giorno
+  // Valutazione energia di base
+  baselinePhysical: number;  // 1-10
+  baselineMental: number;    // 1-10
+  baselineEmotional: number; // 1-10
+  energyPattern: 'morning' | 'afternoon' | 'evening' | 'variable';
+  stressLevel: 'low' | 'moderate' | 'high' | 'very_high';
+  // Obiettivi
   goal: 'more_energy' | 'better_sleep' | 'fitness' | 'stress' | 'general_wellness';
   notes?: string;
   completedAt: Date;

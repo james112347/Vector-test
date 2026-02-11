@@ -63,14 +63,17 @@ export default function Terms() {
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                 <li><strong>Informazioni anagrafiche:</strong> nome, anno di nascita, genere</li>
                 <li><strong>Dati fisici:</strong> altezza, peso</li>
-                <li><strong>Stile di vita:</strong> livello di attivita fisica, ore di sonno tipiche</li>
+                <li><strong>Occupazione:</strong> tipo (studente, lavoratore, ecc.), tipologia di lavoro, ore settimanali, tipo di orario (fisso, turni, flessibile)</li>
+                <li><strong>Abitudini:</strong> livello di attivita fisica, ore di sonno, fumo, alcol, caffeina</li>
+                <li><strong>Valutazione energia di base:</strong> livelli iniziali di energia fisica, mentale ed emotiva, pattern energetico giornaliero, livello di stress</li>
                 <li><strong>Obiettivi:</strong> il tuo obiettivo principale (energia, sonno, fitness, stress, benessere)</li>
                 <li><strong>Note aggiuntive:</strong> eventuali condizioni mediche o note personali (facoltativo)</li>
               </ul>
 
-              <h3 className="text-base font-semibold mt-4 mb-2">Registrazioni energetiche</h3>
+              <h3 className="text-base font-semibold mt-4 mb-2">Registrazioni giornaliere</h3>
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                 <li>Livelli di energia: fisica, mentale ed emotiva (scala 1-10)</li>
+                <li>Ore di lavoro/studio previste per la giornata</li>
                 <li>Note giornaliere sullo stato di benessere</li>
                 <li>Storico e trend nel tempo</li>
               </ul>

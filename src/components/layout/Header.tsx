@@ -35,12 +35,12 @@ export function Header() {
     general_wellness: 'Benessere',
   };
 
-  const activityLabels: Record<string, string> = {
-    sedentary: 'Sedentario',
-    light: 'Leggero',
-    moderate: 'Moderato',
-    active: 'Attivo',
-    very_active: 'Molto attivo',
+  const occupationLabels: Record<string, string> = {
+    student: 'Studente',
+    worker: 'Lavoratore',
+    student_worker: 'Studente-lavoratore',
+    unemployed: 'Disoccupato',
+    retired: 'Pensionato',
   };
 
   return (
@@ -121,17 +121,19 @@ export function Header() {
               <span>{new Date().getFullYear() - profile.birthYear} anni</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Altezza</span>
-              <span>{profile.heightCm} cm</span>
+              <span className="text-muted-foreground">Fisico</span>
+              <span>{profile.heightCm}cm, {profile.weightKg}kg</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Peso</span>
-              <span>{profile.weightKg} kg</span>
+              <span className="text-muted-foreground">Occupazione</span>
+              <span>{occupationLabels[profile.occupation] || profile.occupation}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Attivita</span>
-              <span>{activityLabels[profile.activityLevel] || profile.activityLevel}</span>
-            </div>
+            {profile.workType && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Lavoro</span>
+                <span className="truncate max-w-[140px]">{profile.workType}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Sonno</span>
               <span>{profile.sleepHours}h/notte</span>

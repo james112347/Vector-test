@@ -11,7 +11,7 @@ function todayString(): string {
  */
 export async function saveEnergyLog(
   userId: number,
-  data: { physical: number; mental: number; emotional: number; notes?: string },
+  data: { physical: number; mental: number; emotional: number; workHoursToday?: number; notes?: string },
   date?: string
 ): Promise<EnergyLog> {
   const logDate = date || todayString();

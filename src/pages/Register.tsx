@@ -169,8 +169,8 @@ export default function Register() {
                 <h3 className="font-semibold text-base">Privacy e Raccolta Dati</h3>
                 <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                   <li>I dati sono conservati localmente e sincronizzati per la gestione account</li>
-                  <li>Dopo la registrazione ti chiediamo di compilare un profilo: nome, eta, genere, peso, altezza, stile di vita e obiettivi</li>
-                  <li>Registriamo livelli di energia: fisica, mentale ed emotiva</li>
+                  <li>Dopo la registrazione compili un profilo: dati personali, occupazione, turni/orari, abitudini (fumo, alcol, caffeina), energia di base e obiettivi</li>
+                  <li>Registriamo livelli di energia giornalieri e ore di lavoro</li>
                   <li>Se colleghi un wearable: dati sonno (durata, REM, profondo), attivita, segni vitali</li>
                   <li>L'amministratore puo visualizzare i tuoi dati per migliorare il servizio</li>
                 </ul>
