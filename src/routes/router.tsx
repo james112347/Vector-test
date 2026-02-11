@@ -23,4 +23,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+], {
+  basename: '/Vector-test',
+});

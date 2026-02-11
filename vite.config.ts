@@ -6,6 +6,7 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/Vector-test/',
   plugins: [
     react(),
     tailwindcss(),
@@ -19,7 +20,7 @@ export default defineConfig({
         theme_color: '#1e40af',
         background_color: '#0f172a',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/Vector-test/',
         orientation: 'portrait',
         categories: ['health', 'lifestyle', 'productivity'],
         icons: [
