@@ -1,8 +1,12 @@
+import { RouterProvider } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { router } from './routes/router';
+
 function App() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-      <h1 className="text-2xl font-bold">Vector</h1>
-    </div>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   );
 }
 
