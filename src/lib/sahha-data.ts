@@ -1,17 +1,27 @@
 /**
  * Sahha data operations — read/write to local Dexie DB + sync from Sahha API.
+ *
+ * Supports two auth modes:
+ * - Direct sandbox mode (isSahhaDirectEnabled): uses client credentials
+ * - Production mode: uses Supabase Edge Functions
  */
 
 import { db } from '../db/db';
 import type { SahhaProfile, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import {
+  isSahhaDirectEnabled,
   getScores,
   getBiomarkers,
   registerProfile,
+  registerProfileDirect,
   getProfileToken,
+  getProfileTokenDirect,
   refreshProfileToken,
   daysAgoStart,
 } from './sahha';
+
+/** True when any Sahha auth mode is available. */
+export const isSahhaAvailable = isSahhaDirectEnabled || !!import.meta.env.VITE_SUPABASE_URL;
 
 // ---------------------------------------------------------------------------
 // Profile management
@@ -22,13 +32,21 @@ export async function getSahhaProfile(userId: number): Promise<SahhaProfile | un
 }
 
 export async function connectSahha(userId: number): Promise<SahhaProfile> {
-  // Generate a deterministic externalId from the user ID
   const externalId = `vector-user-${userId}`;
 
-  // Try to register via Supabase Edge Function
-  const tokenResp = await registerProfile(externalId);
-  if (!tokenResp) {
-    throw new Error('Supabase non configurato. Configura VITE_SUPABASE_URL per usare Sahha.');
+  let tokenResp;
+
+  if (isSahhaDirectEnabled) {
+    // Direct sandbox mode — client-side auth
+    tokenResp = await registerProfileDirect(externalId);
+  } else {
+    // Production mode — via Supabase Edge Function
+    tokenResp = await registerProfile(externalId);
+    if (!tokenResp) {
+      throw new Error(
+        'Configura VITE_SAHHA_CLIENT_ID/SECRET oppure Supabase per usare Sahha.',
+      );
+    }
   }
 
   const now = new Date();
@@ -82,8 +100,13 @@ async function getValidToken(profile: SahhaProfile): Promise<string> {
     });
     return newToken.profileToken;
   } catch {
-    // If refresh fails, try getting a new token via Edge Function
-    const tokenResp = await getProfileToken(profile.externalId);
+    // If refresh fails, try getting a new token
+    let tokenResp;
+    if (isSahhaDirectEnabled) {
+      tokenResp = await getProfileTokenDirect(profile.externalId);
+    } else {
+      tokenResp = await getProfileToken(profile.externalId);
+    }
     if (!tokenResp) throw new Error('Impossibile rinnovare il token Sahha');
     const now = new Date();
     await db.sahhaProfiles.update(profile.id!, {
@@ -100,7 +123,7 @@ async function getValidToken(profile: SahhaProfile): Promise<string> {
 // Sync scores & biomarkers from Sahha API → local DB
 // ---------------------------------------------------------------------------
 
-export async function syncScores(userId: number, days = 7): Promise<SahhaScoreLog[]> {
+export async function syncScores(userId: number, days = 30): Promise<SahhaScoreLog[]> {
   const profile = await getSahhaProfile(userId);
   if (!profile) return [];
 
@@ -115,7 +138,7 @@ export async function syncScores(userId: number, days = 7): Promise<SahhaScoreLo
     score: s.score,
     state: s.state,
     factors: JSON.stringify(s.factors),
-    scoreDateTime: s.scoreDateTime,
+    scoreDateTime: s.scoreDateTime || s.createdAtUtc || new Date().toISOString(),
     fetchedAt: now,
   }));
 
@@ -128,7 +151,7 @@ export async function syncScores(userId: number, days = 7): Promise<SahhaScoreLo
   return logs;
 }
 
-export async function syncBiomarkers(userId: number, days = 7): Promise<SahhaBiomarkerLog[]> {
+export async function syncBiomarkers(userId: number, days = 30): Promise<SahhaBiomarkerLog[]> {
   const profile = await getSahhaProfile(userId);
   if (!profile) return [];
 
@@ -158,6 +181,18 @@ export async function syncBiomarkers(userId: number, days = 7): Promise<SahhaBio
   return logs;
 }
 
+/** Full sync: scores + biomarkers in parallel. */
+export async function syncAll(
+  userId: number,
+  days = 30,
+): Promise<{ scores: SahhaScoreLog[]; biomarkers: SahhaBiomarkerLog[] }> {
+  const [scores, biomarkers] = await Promise.all([
+    syncScores(userId, days),
+    syncBiomarkers(userId, days),
+  ]);
+  return { scores, biomarkers };
+}
+
 // ---------------------------------------------------------------------------
 // Local reads (from Dexie cache)
 // ---------------------------------------------------------------------------
@@ -178,4 +213,30 @@ export async function getCachedBiomarkers(
       .toArray();
   }
   return db.sahhaBiomarkers.where('userId').equals(userId).toArray();
+}
+
+/** Get the latest score for each type (most recent per type). */
+export async function getLatestScoresByType(
+  userId: number,
+): Promise<Record<string, SahhaScoreLog>> {
+  const all = await getCachedScores(userId);
+  const byType: Record<string, SahhaScoreLog> = {};
+  for (const s of all) {
+    const existing = byType[s.type];
+    if (!existing || s.scoreDateTime > existing.scoreDateTime) {
+      byType[s.type] = s;
+    }
+  }
+  return byType;
+}
+
+/** Get score history for a specific type (sorted by date). */
+export async function getScoreHistory(
+  userId: number,
+  type: string,
+): Promise<SahhaScoreLog[]> {
+  const all = await getCachedScores(userId);
+  return all
+    .filter((s) => s.type === type)
+    .sort((a, b) => a.scoreDateTime.localeCompare(b.scoreDateTime));
 }

@@ -1,18 +1,23 @@
 /**
  * Sahha Health API client.
  *
- * Architecture:
- * - Account-level operations (register profile, delete) go through
- *   Supabase Edge Functions that hold the clientId/clientSecret.
- * - Profile-level reads (scores, biomarkers) can be called directly
- *   from the client using the profile token stored locally.
- * - Webhooks push data to a Supabase Edge Function which writes to
- *   the sahha_* tables.
+ * Supports two auth modes:
+ * 1. Direct (sandbox): Uses VITE_SAHHA_CLIENT_ID/SECRET for client-side auth.
+ *    Suitable for sandbox testing without Supabase Edge Functions.
+ * 2. Proxy (production): Uses Supabase Edge Functions that hold credentials.
  */
 
 const SAHHA_API_URL =
   (import.meta.env.VITE_SAHHA_API_URL as string) ||
   'https://sandbox-api.sahha.ai';
+
+const SAHHA_CLIENT_ID =
+  (import.meta.env.VITE_SAHHA_CLIENT_ID as string) || '';
+const SAHHA_CLIENT_SECRET =
+  (import.meta.env.VITE_SAHHA_CLIENT_SECRET as string) || '';
+
+/** True when direct Sahha credentials are configured (sandbox/test mode). */
+export const isSahhaDirectEnabled = !!(SAHHA_CLIENT_ID && SAHHA_CLIENT_SECRET);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,8 +35,9 @@ export interface SahhaScore {
   score: number;
   state: 'high' | 'medium' | 'low' | 'minimal';
   factors: SahhaScoreFactor[];
-  dataSources: string[];
-  scoreDateTime: string;
+  dataSources?: string[];
+  scoreDateTime?: string;
+  createdAtUtc?: string;
 }
 
 export interface SahhaScoreFactor {
@@ -43,17 +49,91 @@ export interface SahhaScoreFactor {
 }
 
 export interface SahhaBiomarker {
-  id: string;
+  id?: string;
   type: string;
   category: string;
   value: string;
-  valueType: string;
+  valueType?: string;
   unit: string;
-  aggregation: string;
+  aggregation?: string;
   periodicity: string;
   startDateTime: string;
   endDateTime: string;
-  createdAtUtc: string;
+  createdAtUtc?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Account token (direct sandbox mode)
+// ---------------------------------------------------------------------------
+
+let cachedAccountToken: { token: string; expiresAt: number } | null = null;
+
+/** Get an account token using client credentials. */
+export async function getAccountToken(): Promise<string> {
+  if (cachedAccountToken && cachedAccountToken.expiresAt > Date.now() + 60_000) {
+    return cachedAccountToken.token;
+  }
+
+  const res = await fetch(`${SAHHA_API_URL}/api/v1/oauth/account/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientId: SAHHA_CLIENT_ID,
+      clientSecret: SAHHA_CLIENT_SECRET,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Sahha account token ${res.status}: ${await res.text()}`);
+  }
+  const data = await res.json();
+  cachedAccountToken = {
+    token: data.accountToken,
+    expiresAt: Date.now() + 86400 * 1000,
+  };
+  return cachedAccountToken.token;
+}
+
+/** Register a profile directly using account token (sandbox mode). */
+export async function registerProfileDirect(
+  externalId: string,
+): Promise<SahhaProfileToken> {
+  const accountToken = await getAccountToken();
+  const res = await fetch(`${SAHHA_API_URL}/api/v1/oauth/profile/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `account ${accountToken}`,
+    },
+    body: JSON.stringify({ externalId }),
+  });
+
+  if (!res.ok) {
+    // Profile may already exist — try getting token instead
+    if (res.status === 400) {
+      return getProfileTokenDirect(externalId);
+    }
+    throw new Error(`Sahha register ${res.status}: ${await res.text()}`);
+  }
+  return res.json() as Promise<SahhaProfileToken>;
+}
+
+/** Get profile token directly using account token (sandbox mode). */
+export async function getProfileTokenDirect(
+  externalId: string,
+): Promise<SahhaProfileToken> {
+  const accountToken = await getAccountToken();
+  const res = await fetch(`${SAHHA_API_URL}/api/v1/oauth/profile/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `account ${accountToken}`,
+    },
+    body: JSON.stringify({ externalId }),
+  });
+  if (!res.ok) {
+    throw new Error(`Sahha profile token ${res.status}: ${await res.text()}`);
+  }
+  return res.json() as Promise<SahhaProfileToken>;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +161,7 @@ async function profileFetch<T>(
 /** Fetch health scores for the authenticated profile. */
 export async function getScores(
   profileToken: string,
-  types: string[] = ['wellbeing', 'activity', 'sleep', 'readiness'],
+  types: string[] = ['wellbeing', 'activity', 'sleep', 'readiness', 'mental_wellbeing'],
   startDateTime?: string,
   endDateTime?: string,
 ): Promise<SahhaScore[]> {
@@ -97,7 +177,7 @@ export async function getScores(
 /** Fetch biomarkers for the authenticated profile. */
 export async function getBiomarkers(
   profileToken: string,
-  categories: string[] = ['activity', 'sleep', 'vitals'],
+  categories: string[] = ['activity', 'sleep', 'vitals', 'body'],
   startDateTime?: string,
   endDateTime?: string,
 ): Promise<SahhaBiomarker[]> {
@@ -139,8 +219,7 @@ export async function refreshProfileToken(
 import { supabase } from './supabase';
 
 /**
- * Register a Sahha profile for the current user.
- * This calls a Supabase Edge Function that holds the Sahha clientId/clientSecret.
+ * Register a Sahha profile via Supabase Edge Function (production mode).
  */
 export async function registerProfile(
   externalId: string,
@@ -154,8 +233,7 @@ export async function registerProfile(
 }
 
 /**
- * Get a profile token for an existing Sahha profile.
- * This calls a Supabase Edge Function.
+ * Get a profile token via Supabase Edge Function (production mode).
  */
 export async function getProfileToken(
   externalId: string,
