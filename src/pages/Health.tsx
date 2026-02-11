@@ -14,7 +14,8 @@ import {
 } from '../lib/sahha-data';
 import { getDemoScores, getDemoBiomarkers } from '../lib/sahha-demo';
 import { scoreStateLabel, scoreStateColor } from '../lib/sahha';
-import type { SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
+import { getRecentLogs } from '../lib/energy';
+import type { SahhaScoreLog, SahhaBiomarkerLog, EnergyLog } from '../db/schema';
 import {
   Activity,
   Moon,
@@ -382,6 +383,214 @@ function BiomarkerRow({ biomarker }: { biomarker: SahhaBiomarkerLog }) {
         )}
       </span>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Key Metric Card (passi, sonno, FC)
+// ---------------------------------------------------------------------------
+
+function KeyMetricCard({
+  label,
+  value,
+  unit,
+  icon: Icon,
+  color,
+  status,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  icon: typeof Activity;
+  color: string;
+  status?: 'good' | 'warning' | 'low';
+}) {
+  const statusColors = {
+    good: 'bg-green-500/15 text-green-600 dark:text-green-400',
+    warning: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    low: 'bg-red-500/15 text-red-600 dark:text-red-400',
+  };
+
+  return (
+    <Card>
+      <CardContent className="py-3 px-3">
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + '20' }}>
+            <Icon className="h-3.5 w-3.5" style={{ color }} />
+          </div>
+          <span className="text-xs text-muted-foreground">{label}</span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-xl font-bold tabular-nums">{value}</span>
+          <span className="text-xs text-muted-foreground">{unit}</span>
+        </div>
+        {status && (
+          <span className={`inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${statusColors[status]}`}>
+            {status === 'good' ? 'Nella norma' : status === 'warning' ? 'Attenzione' : 'Basso'}
+          </span>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Health Summary Ring
+// ---------------------------------------------------------------------------
+
+function HealthSummaryRing({ scores }: { scores: SahhaScoreLog[] }) {
+  if (scores.length === 0) return null;
+
+  const avg = Math.round((scores.reduce((s, sc) => s + sc.score, 0) / scores.length) * 100);
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (avg / 100) * circumference;
+  const color = avg >= 70 ? '#22c55e' : avg >= 40 ? '#f59e0b' : '#ef4444';
+
+  const iconMap: Record<string, typeof Activity> = {
+    activity: Activity,
+    sleep: Moon,
+    wellbeing: Heart,
+    readiness: Zap,
+    mental_wellbeing: Brain,
+  };
+  const colorMap: Record<string, string> = {
+    activity: '#3b82f6',
+    sleep: '#8b5cf6',
+    wellbeing: '#22c55e',
+    readiness: '#f59e0b',
+    mental_wellbeing: '#ec4899',
+  };
+  const labelMap: Record<string, string> = {
+    activity: 'Attivita',
+    sleep: 'Sonno',
+    wellbeing: 'Benessere',
+    readiness: 'Prontezza',
+    mental_wellbeing: 'Mente',
+  };
+
+  return (
+    <Card>
+      <CardContent className="py-4">
+        <div className="flex items-center gap-5">
+          <div className="relative w-24 h-24 shrink-0">
+            <svg className="w-24 h-24 -rotate-90" viewBox="0 0 90 90">
+              <circle cx="45" cy="45" r={radius} fill="none" stroke="currentColor" className="text-muted" strokeWidth="7" />
+              <circle
+                cx="45" cy="45" r={radius} fill="none"
+                stroke={color} strokeWidth="7" strokeLinecap="round"
+                strokeDasharray={circumference} strokeDashoffset={offset}
+                className="transition-all duration-500"
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-xl font-bold" style={{ color }}>{avg}%</span>
+              <span className="text-[10px] text-muted-foreground">salute</span>
+            </div>
+          </div>
+          <div className="flex-1 space-y-1.5">
+            {scores.map(s => {
+              const pct = Math.round(s.score * 100);
+              const Icon = iconMap[s.type] || Activity;
+              const c = colorMap[s.type] || '#6b7280';
+              return (
+                <div key={s.type} className="flex items-center gap-2">
+                  <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: c }} />
+                  <span className="text-xs flex-1">{labelMap[s.type] || s.type}</span>
+                  <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: c }}
+                    />
+                  </div>
+                  <span className="text-xs font-bold tabular-nums w-8 text-right">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Energy-Health Correlation
+// ---------------------------------------------------------------------------
+
+function EnergyHealthCorrelation({
+  energyLogs,
+  scores,
+}: {
+  energyLogs: EnergyLog[];
+  scores: SahhaScoreLog[];
+}) {
+  if (energyLogs.length < 2 || scores.length === 0) return null;
+
+  const avgEnergy = energyLogs.reduce((s, l) => s + (l.physical + l.mental + l.emotional) / 3, 0) / energyLogs.length;
+  const avgHealth = scores.reduce((s, sc) => s + sc.score, 0) / scores.length * 10;
+
+  const sleepScore = scores.find(s => s.type === 'sleep');
+  const activityScore = scores.find(s => s.type === 'activity');
+
+  const insights: { icon: string; text: string }[] = [];
+
+  if (sleepScore) {
+    const sleepPct = Math.round(sleepScore.score * 100);
+    if (sleepPct < 50 && avgEnergy < 5) {
+      insights.push({ icon: '😴', text: 'Il tuo sonno basso potrebbe influire sull\'energia. Prova a migliorare la routine serale.' });
+    } else if (sleepPct >= 70 && avgEnergy >= 7) {
+      insights.push({ icon: '✨', text: 'Ottimo sonno e ottima energia! Stai mantenendo un buon equilibrio.' });
+    } else if (sleepPct >= 70 && avgEnergy < 5) {
+      insights.push({ icon: '🤔', text: 'Dormi bene ma l\'energia e bassa. Potrebbe dipendere da stress o alimentazione.' });
+    }
+  }
+
+  if (activityScore) {
+    const actPct = Math.round(activityScore.score * 100);
+    if (actPct >= 60 && avgEnergy >= 6) {
+      insights.push({ icon: '💪', text: 'L\'attivita fisica regolare sta supportando i tuoi livelli di energia.' });
+    } else if (actPct < 40) {
+      insights.push({ icon: '🚶', text: 'Piu movimento potrebbe aiutare ad aumentare i tuoi livelli energetici.' });
+    }
+  }
+
+  const diff = avgEnergy - avgHealth;
+  if (Math.abs(diff) > 2) {
+    if (diff > 0) {
+      insights.push({ icon: '📊', text: 'La tua percezione energetica e superiore ai dati biometrici. Ascolta il tuo corpo.' });
+    } else {
+      insights.push({ icon: '📈', text: 'I tuoi dati biometrici sono buoni! La percezione energetica potrebbe migliorare con piccoli cambiamenti.' });
+    }
+  }
+
+  if (insights.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Energia e salute</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="flex-1 text-center">
+            <p className="text-lg font-bold text-primary">{avgEnergy.toFixed(1)}</p>
+            <p className="text-[10px] text-muted-foreground">Energia percepita</p>
+          </div>
+          <div className="text-muted-foreground text-xs">vs</div>
+          <div className="flex-1 text-center">
+            <p className="text-lg font-bold text-green-600 dark:text-green-400">{avgHealth.toFixed(1)}</p>
+            <p className="text-[10px] text-muted-foreground">Score biometrico</p>
+          </div>
+        </div>
+        {insights.map((ins, i) => (
+          <div key={i} className="flex gap-2.5">
+            <span className="text-base shrink-0">{ins.icon}</span>
+            <p className="text-xs text-muted-foreground leading-relaxed">{ins.text}</p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -761,6 +970,7 @@ export default function Health() {
   const [demo, setDemo] = useState(false);
   const [scores, setScores] = useState<SahhaScoreLog[]>([]);
   const [biomarkers, setBiomarkers] = useState<SahhaBiomarkerLog[]>([]);
+  const [energyLogs, setEnergyLogs] = useState<EnergyLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -772,7 +982,11 @@ export default function Health() {
   const loadData = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const profile = await getSahhaProfile(user.id);
+      const [profile, recentEnergy] = await Promise.all([
+        getSahhaProfile(user.id),
+        getRecentLogs(user.id, 7),
+      ]);
+      setEnergyLogs(recentEnergy);
       setConnected(!!profile);
       if (profile) {
         const [s, b] = await Promise.all([
@@ -1078,14 +1292,39 @@ export default function Health() {
     );
   }
 
-  // Connected — show dashboard
+  // Extract key biomarkers for highlights
+  const findBiomarker = (type: string) => biomarkers.find(b => b.type === type);
+  const stepsBio = findBiomarker('steps');
+  const sleepDurBio = findBiomarker('sleep_duration');
+  const hrBio = findBiomarker('heart_rate_resting');
+  const hrvBio = findBiomarker('heart_rate_variability_sdnn');
+  const spo2Bio = findBiomarker('oxygen_saturation');
+
+  const getStepsStatus = (val: number): 'good' | 'warning' | 'low' => {
+    if (val >= 8000) return 'good';
+    if (val >= 5000) return 'warning';
+    return 'low';
+  };
+  const getSleepStatus = (mins: number): 'good' | 'warning' | 'low' => {
+    const hrs = mins / 60;
+    if (hrs >= 7) return 'good';
+    if (hrs >= 5.5) return 'warning';
+    return 'low';
+  };
+  const getHrStatus = (bpm: number): 'good' | 'warning' | 'low' => {
+    if (bpm >= 50 && bpm <= 80) return 'good';
+    if (bpm >= 40 && bpm <= 100) return 'warning';
+    return 'low';
+  };
+
+  // Connected — show optimized dashboard
   return (
     <div className="space-y-4 pb-24">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Salute</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Dati da dispositivi wearable
+            Panoramica del tuo benessere
           </p>
         </div>
         {!demo && (
@@ -1114,20 +1353,91 @@ export default function Health() {
         </div>
       )}
 
-      {/* Sync info */}
-      {!demo && scores.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5" />
-          <span>
-            {scores.length} score, {biomarkers.length} biomarker — ultimi 30 giorni
-          </span>
+      {/* Health Summary */}
+      {latestScores.length > 0 && (
+        <HealthSummaryRing scores={latestScores} />
+      )}
+
+      {/* Key Metrics Highlights */}
+      {(stepsBio || sleepDurBio || hrBio) && (
+        <div className="grid grid-cols-2 gap-3">
+          {stepsBio && (() => {
+            const val = parseInt(stepsBio.value);
+            return (
+              <KeyMetricCard
+                label="Passi oggi"
+                value={Number.isFinite(val) ? val.toLocaleString('it-IT') : stepsBio.value}
+                unit=""
+                icon={Activity}
+                color="#3b82f6"
+                status={Number.isFinite(val) ? getStepsStatus(val) : undefined}
+              />
+            );
+          })()}
+          {sleepDurBio && (() => {
+            const mins = parseFloat(sleepDurBio.value);
+            const hrs = Number.isFinite(mins) ? Math.floor(mins / 60) : 0;
+            const remainMins = Number.isFinite(mins) ? Math.round(mins % 60) : 0;
+            return (
+              <KeyMetricCard
+                label="Sonno"
+                value={Number.isFinite(mins) ? `${hrs}h ${remainMins}m` : sleepDurBio.value}
+                unit=""
+                icon={Moon}
+                color="#8b5cf6"
+                status={Number.isFinite(mins) ? getSleepStatus(mins) : undefined}
+              />
+            );
+          })()}
+          {hrBio && (() => {
+            const val = parseFloat(hrBio.value);
+            return (
+              <KeyMetricCard
+                label="FC a riposo"
+                value={Number.isFinite(val) ? val.toFixed(0) : hrBio.value}
+                unit="bpm"
+                icon={Heart}
+                color="#ef4444"
+                status={Number.isFinite(val) ? getHrStatus(val) : undefined}
+              />
+            );
+          })()}
+          {hrvBio && (() => {
+            const val = parseFloat(hrvBio.value);
+            return (
+              <KeyMetricCard
+                label="HRV"
+                value={Number.isFinite(val) ? val.toFixed(0) : hrvBio.value}
+                unit="ms"
+                icon={Zap}
+                color="#f59e0b"
+                status={Number.isFinite(val) ? (val >= 30 ? 'good' : val >= 15 ? 'warning' : 'low') : undefined}
+              />
+            );
+          })()}
+          {spo2Bio && (() => {
+            const val = parseFloat(spo2Bio.value);
+            return (
+              <KeyMetricCard
+                label="SpO2"
+                value={Number.isFinite(val) ? val.toFixed(0) : spo2Bio.value}
+                unit="%"
+                icon={Heart}
+                color="#22c55e"
+                status={Number.isFinite(val) ? (val >= 95 ? 'good' : val >= 90 ? 'warning' : 'low') : undefined}
+              />
+            );
+          })()}
         </div>
       )}
 
-      {/* Health Scores */}
+      {/* Energy-Health Correlation */}
+      <EnergyHealthCorrelation energyLogs={energyLogs} scores={latestScores} />
+
+      {/* Health Scores Detail */}
       {latestScores.length > 0 ? (
         <div>
-          <h2 className="text-base font-semibold mb-3">Score di salute</h2>
+          <h2 className="text-base font-semibold mb-3">Score dettagliati</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {latestScores.map((s) => (
               <ScoreCard
@@ -1152,7 +1462,6 @@ export default function Health() {
             </p>
             <p className="text-xs text-muted-foreground">
               I dati appariranno dopo la prima sincronizzazione dall'app Sahha sul tuo telefono.
-              Assicurati di aver installato l'app Sahha e autorizzato l'accesso ai dati salute.
             </p>
             {!demo && (
               <div className="flex flex-col items-center gap-2 pt-1">
@@ -1171,24 +1480,37 @@ export default function Health() {
       )}
 
       {/* Biomarkers by Category */}
-      {Object.keys(biomarkersByCategory).length > 0 &&
-        Object.entries(biomarkersByCategory).map(([category, items]) => (
-          <Card key={category}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                {categoryLabels[category] || category}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {items.map((b, i) => (
-                <BiomarkerRow key={`${b.type}-${i}`} biomarker={b} />
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+      {Object.keys(biomarkersByCategory).length > 0 && (
+        <div>
+          <h2 className="text-base font-semibold mb-3">Tutti i biomarker</h2>
+          {Object.entries(biomarkersByCategory).map(([category, items]) => (
+            <Card key={category} className="mb-3">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  {category === 'activity' && <Activity className="h-4 w-4 text-blue-500" />}
+                  {category === 'sleep' && <Moon className="h-4 w-4 text-purple-500" />}
+                  {category === 'vitals' && <Heart className="h-4 w-4 text-red-500" />}
+                  {category === 'body' && <Zap className="h-4 w-4 text-amber-500" />}
+                  {categoryLabels[category] || category}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {items.map((b, i) => (
+                  <BiomarkerRow key={`${b.type}-${i}`} biomarker={b} />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {/* Disconnect / Exit demo */}
-      <div className="pt-2">
+      {/* Sync info + Disconnect */}
+      <div className="flex items-center justify-between pt-2">
+        {!demo && scores.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">
+            {scores.length} score, {biomarkers.length} biomarker
+          </span>
+        )}
         {demo ? (
           <Button variant="outline" size="sm" onClick={exitDemo}>
             <FlaskConical className="h-4 w-4 mr-2" />
