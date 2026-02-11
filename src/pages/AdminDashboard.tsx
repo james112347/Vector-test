@@ -96,6 +96,20 @@ const stateColors: Record<string, string> = {
   minimal: 'text-red-700 dark:text-red-300',
 };
 
+// Deterministic color from string for avatar disambiguation
+const avatarColors = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500',
+  'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-teal-500',
+  'bg-indigo-500', 'bg-orange-500',
+];
+function getAvatarColor(email: string): string {
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = ((hash << 5) - hash + email.charCodeAt(i)) | 0;
+  }
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+}
+
 export default function AdminDashboard() {
   const { user: currentUser } = useAuthState();
   const [usersData, setUsersData] = useState<UserData[]>([]);
@@ -234,17 +248,22 @@ export default function AdminDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-primary">
+                    <div className={`w-10 h-10 rounded-full ${getAvatarColor(user.email)} flex items-center justify-center shrink-0`}>
+                      <span className="text-sm font-bold text-white">
                         {profile?.name
                           ? profile.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
                           : user.email[0].toUpperCase()}
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <CardTitle className="text-base truncate">
-                        {profile?.name || user.email.split('@')[0]}
-                      </CardTitle>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-base truncate">
+                          {profile?.name || user.email.split('@')[0]}
+                        </CardTitle>
+                        <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0">
+                          #{user.id}
+                        </span>
+                      </div>
                       <CardDescription className="truncate">{user.email}</CardDescription>
                     </div>
                   </div>
