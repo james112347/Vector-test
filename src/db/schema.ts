@@ -36,3 +36,42 @@ export interface EnergyLog {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// ---------------------------------------------------------------------------
+// Sahha Health Data (local cache)
+// ---------------------------------------------------------------------------
+
+export interface SahhaProfile {
+  id?: number;
+  userId: number;
+  externalId: string;
+  profileToken: string;
+  refreshToken: string;
+  tokenExpiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SahhaScoreLog {
+  id?: number;
+  userId: number;
+  type: string; // wellbeing | activity | sleep | readiness | mental_wellbeing
+  score: number; // 0-1
+  state: string; // high | medium | low | minimal
+  factors: string; // JSON-stringified factors array
+  scoreDateTime: string; // ISO datetime from Sahha
+  fetchedAt: Date;
+}
+
+export interface SahhaBiomarkerLog {
+  id?: number;
+  userId: number;
+  type: string; // steps, heart_rate_resting, sleep_duration, etc.
+  category: string; // activity, sleep, vitals, body
+  value: string;
+  unit: string;
+  periodicity: string; // daily, hourly
+  startDateTime: string;
+  endDateTime: string;
+  fetchedAt: Date;
+}

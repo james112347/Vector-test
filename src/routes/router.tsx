@@ -7,6 +7,7 @@ import Terms from '../pages/Terms';
 import Dashboard from '../pages/Dashboard';
 import LogEnergy from '../pages/LogEnergy';
 import History from '../pages/History';
+import Health from '../pages/Health';
 import Settings from '../pages/Settings';
 
 export const router = createBrowserRouter([
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
           { path: '/', element: <Dashboard /> },
           { path: '/log', element: <LogEnergy /> },
           { path: '/history', element: <History /> },
+          { path: '/health', element: <Health /> },
           { path: '/settings', element: <Settings /> },
         ],
       },

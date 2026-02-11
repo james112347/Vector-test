@@ -39,3 +39,68 @@ create policy "allow_delete" on public.app_users
 
 -- Abilita Realtime per questa tabella
 alter publication supabase_realtime add table public.app_users;
+
+-- =============================================================
+-- Sahha Health Data Tables
+-- =============================================================
+
+-- Profili Sahha collegati agli utenti dell'app
+create table if not exists public.sahha_profiles (
+  id bigint generated always as identity primary key,
+  user_id bigint not null references public.app_users(id) on delete cascade,
+  external_id text unique not null,  -- UUID usato come externalId in Sahha
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists idx_sahha_profiles_user
+  on public.sahha_profiles (user_id);
+
+alter table public.sahha_profiles enable row level security;
+create policy "sahha_profiles_all" on public.sahha_profiles
+  for all using (true) with check (true);
+
+-- Score di salute calcolati da Sahha (wellbeing, activity, sleep, readiness, mental_wellbeing)
+create table if not exists public.sahha_scores (
+  id bigint generated always as identity primary key,
+  user_id bigint not null references public.app_users(id) on delete cascade,
+  type text not null,              -- wellbeing | activity | sleep | readiness | mental_wellbeing
+  score numeric(4,3) not null,     -- 0.000 - 1.000
+  state text not null,             -- high | medium | low | minimal
+  factors jsonb,                   -- array di {name, value, goal, score, state}
+  score_date_time timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_sahha_scores_user_type
+  on public.sahha_scores (user_id, type, score_date_time desc);
+
+alter table public.sahha_scores enable row level security;
+create policy "sahha_scores_all" on public.sahha_scores
+  for all using (true) with check (true);
+
+-- Biomarker grezzi da Sahha (passi, frequenza cardiaca, sonno, ecc.)
+create table if not exists public.sahha_biomarkers (
+  id bigint generated always as identity primary key,
+  user_id bigint not null references public.app_users(id) on delete cascade,
+  sahha_id text unique,            -- ID univoco dal webhook Sahha (per idempotenza)
+  type text not null,              -- steps, heart_rate_resting, sleep_duration, etc.
+  category text not null,          -- activity | sleep | vitals | body
+  value text not null,
+  unit text,
+  aggregation text,                -- total | average | minimum | maximum
+  periodicity text,                -- daily | hourly
+  start_date_time timestamptz not null,
+  end_date_time timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_sahha_biomarkers_user_type
+  on public.sahha_biomarkers (user_id, type, start_date_time desc);
+
+create index if not exists idx_sahha_biomarkers_user_category
+  on public.sahha_biomarkers (user_id, category, start_date_time desc);
+
+alter table public.sahha_biomarkers enable row level security;
+create policy "sahha_biomarkers_all" on public.sahha_biomarkers
+  for all using (true) with check (true);

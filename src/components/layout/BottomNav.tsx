@@ -1,10 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PenLine, Clock, Settings } from 'lucide-react';
+import { LayoutDashboard, PenLine, Heart, Clock, Settings } from 'lucide-react';
 import { usePendingUsers } from '../../lib/usePendingUsers';
 
 const tabs = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
   { path: '/log', label: 'Registra', icon: PenLine },
+  { path: '/health', label: 'Salute', icon: Heart },
   { path: '/history', label: 'Storico', icon: Clock },
   { path: '/settings', label: 'Impost.', icon: Settings },
 ];
