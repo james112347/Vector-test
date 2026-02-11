@@ -39,7 +39,8 @@ export function usePendingUsers() {
 
     // Supabase Realtime — instant updates
     if (supabase) {
-      const channel = supabase
+      const sb = supabase;
+      const channel = sb
         .channel('pending-users')
         .on(
           'postgres_changes',
@@ -53,7 +54,7 @@ export function usePendingUsers() {
 
       return () => {
         cancelled = true;
-        supabase.removeChannel(channel);
+        sb.removeChannel(channel);
       };
     }
 
