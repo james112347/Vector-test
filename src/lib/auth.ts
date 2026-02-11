@@ -2,6 +2,16 @@ import { db } from '../db/db';
 import type { User, Session } from '../db/schema';
 
 /**
+ * Admin email - hardcoded owner of the app.
+ * This email is always admin and auto-approved.
+ */
+const ADMIN_EMAIL = 'giacomosalvato81@gmail.com';
+
+export function isAdminEmail(email: string): boolean {
+  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+
+/**
  * Simple password hashing for local-only auth.
  * WARNING: This is NOT cryptographically secure for production.
  * Phase 1 stores data in IndexedDB on-device only.
@@ -22,7 +32,6 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 /**
  * Generate a simple session token.
- * Uses crypto.randomUUID() for uniqueness.
  */
 function generateToken(): string {
   return crypto.randomUUID();
@@ -58,7 +67,6 @@ export async function checkExistingSession(): Promise<{ session: Session; user: 
 
   const user = await db.users.get(session.userId);
   if (!user) {
-    // Orphaned session, clean up
     await db.sessions.delete(session.id!);
     return null;
   }
@@ -83,8 +91,8 @@ export async function cleanExpiredSessions(): Promise<void> {
 
 /**
  * Register a new user.
- * New users are NOT approved by default - admin must approve.
- * Returns the created user or throws if email already exists.
+ * Admin email is auto-approved and flagged as admin.
+ * All other users require admin approval.
  */
 export async function registerUser(
   email: string,
@@ -95,7 +103,6 @@ export async function registerUser(
     throw new Error('Devi accettare i Termini e Condizioni per registrarti.');
   }
 
-  // Check for existing user
   const existing = await db.users.where('email').equals(email).first();
   if (existing) {
     throw new Error('Un account con questa email esiste già.');
@@ -103,18 +110,15 @@ export async function registerUser(
 
   const passwordHash = await hashPassword(password);
   const now = new Date();
-
-  // First user ever becomes admin and is auto-approved
-  const userCount = await db.users.count();
-  const isFirstUser = userCount === 0;
+  const admin = isAdminEmail(email);
 
   const user: User = {
     email,
     passwordHash,
     hasAcceptedTerms: true,
     termsAcceptedAt: now,
-    isApproved: isFirstUser,
-    isAdmin: isFirstUser,
+    isApproved: admin,
+    isAdmin: admin,
     createdAt: now,
     updatedAt: now,
   };
@@ -125,7 +129,6 @@ export async function registerUser(
 
 /**
  * Authenticate a user by email and password.
- * Returns the user or throws on invalid credentials.
  * Throws specific error if user is not approved.
  */
 export async function authenticateUser(email: string, password: string): Promise<User> {
@@ -137,6 +140,13 @@ export async function authenticateUser(email: string, password: string): Promise
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
     throw new Error('Email o password non validi.');
+  }
+
+  // Ensure admin email always has admin + approved flags
+  if (isAdminEmail(email) && (!user.isAdmin || !user.isApproved)) {
+    await db.users.update(user.id!, { isAdmin: true, isApproved: true, updatedAt: new Date() });
+    user.isAdmin = true;
+    user.isApproved = true;
   }
 
   if (!user.isApproved) {
@@ -154,10 +164,30 @@ export async function approveUser(userId: number): Promise<void> {
 }
 
 /**
- * Get all pending (unapproved) users.
+ * Revoke a user's access (admin only).
+ * Cannot revoke admin.
  */
-export async function getPendingUsers(): Promise<User[]> {
-  return db.users.filter(u => !u.isApproved).toArray();
+export async function revokeUser(userId: number): Promise<void> {
+  const user = await db.users.get(userId);
+  if (user && isAdminEmail(user.email)) {
+    throw new Error('Non puoi revocare l\'accesso all\'amministratore.');
+  }
+  await db.users.update(userId, { isApproved: false, updatedAt: new Date() });
+  // Clear their sessions
+  await db.sessions.where('userId').equals(userId).delete();
+}
+
+/**
+ * Delete a user (admin only).
+ * Cannot delete admin.
+ */
+export async function deleteUser(userId: number): Promise<void> {
+  const user = await db.users.get(userId);
+  if (user && isAdminEmail(user.email)) {
+    throw new Error('Non puoi eliminare l\'account amministratore.');
+  }
+  await db.sessions.where('userId').equals(userId).delete();
+  await db.users.delete(userId);
 }
 
 /**

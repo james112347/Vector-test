@@ -5,7 +5,7 @@ import Login from '../pages/Login';
 import Register from '../pages/Register';
 import Terms from '../pages/Terms';
 import Dashboard from '../pages/Dashboard';
-import AdminUsers from '../pages/AdminUsers';
+import Settings from '../pages/Settings';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -20,7 +20,7 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: '/', element: <Dashboard /> },
-          { path: '/admin/users', element: <AdminUsers /> },
+          { path: '/settings', element: <Settings /> },
         ],
       },
     ],

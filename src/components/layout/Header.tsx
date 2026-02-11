@@ -1,13 +1,12 @@
-import { Moon, Sun, LogOut, Users } from 'lucide-react';
+import { Moon, Sun, LogOut, Settings } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useDarkMode } from '../../lib/useDarkMode';
-import { useAuthActions, useAuthState } from '../../contexts/AuthContext';
+import { useAuthActions } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export function Header() {
   const { isDark, toggleDark } = useDarkMode();
   const { signOut } = useAuthActions();
-  const { user } = useAuthState();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -26,17 +25,15 @@ export function Header() {
         </h1>
 
         <div className="flex items-center gap-1">
-          {user?.isAdmin && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/admin/users')}
-              aria-label="Gestione utenti"
-              className="w-10 h-10"
-            >
-              <Users className="h-5 w-5" />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/settings')}
+            aria-label="Impostazioni"
+            className="w-10 h-10"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
 
           <Button
             variant="ghost"
