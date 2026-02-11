@@ -10,6 +10,7 @@ import History from '../pages/History';
 import Health from '../pages/Health';
 import Settings from '../pages/Settings';
 import AdminDashboard from '../pages/AdminDashboard';
+import ProfileEdit from '../pages/ProfileEdit';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
           { path: '/history', element: <History /> },
           { path: '/health', element: <Health /> },
           { path: '/settings', element: <Settings /> },
+          { path: '/profile', element: <ProfileEdit /> },
           { path: '/admin', element: <AdminDashboard /> },
         ],
       },

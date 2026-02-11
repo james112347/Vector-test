@@ -198,44 +198,46 @@ function EnergySlider({
 
 interface OnboardingProps {
   onComplete: () => void;
+  initialProfile?: UserProfile;
+  editMode?: boolean;
 }
 
-export default function Onboarding({ onComplete }: OnboardingProps) {
+export default function Onboarding({ onComplete, initialProfile, editMode }: OnboardingProps) {
   const { user } = useAuthState();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   // Step 1: Dati personali
-  const [name, setName] = useState('');
-  const [birthYear, setBirthYear] = useState('');
-  const [gender, setGender] = useState<UserProfile['gender']>('prefer_not_to_say');
-  const [heightCm, setHeightCm] = useState('');
-  const [weightKg, setWeightKg] = useState('');
+  const [name, setName] = useState(initialProfile?.name ?? '');
+  const [birthYear, setBirthYear] = useState(initialProfile?.birthYear?.toString() ?? '');
+  const [gender, setGender] = useState<UserProfile['gender']>(initialProfile?.gender ?? 'prefer_not_to_say');
+  const [heightCm, setHeightCm] = useState(initialProfile?.heightCm?.toString() ?? '');
+  const [weightKg, setWeightKg] = useState(initialProfile?.weightKg?.toString() ?? '');
 
   // Step 2: Occupazione
-  const [occupation, setOccupation] = useState<UserProfile['occupation']>('worker');
-  const [workType, setWorkType] = useState('');
-  const [weeklyWorkHours, setWeeklyWorkHours] = useState('40');
-  const [workSchedule, setWorkSchedule] = useState<UserProfile['workSchedule']>('regular');
+  const [occupation, setOccupation] = useState<UserProfile['occupation']>(initialProfile?.occupation ?? 'worker');
+  const [workType, setWorkType] = useState(initialProfile?.workType ?? '');
+  const [weeklyWorkHours, setWeeklyWorkHours] = useState(initialProfile?.weeklyWorkHours?.toString() ?? '40');
+  const [workSchedule, setWorkSchedule] = useState<UserProfile['workSchedule']>(initialProfile?.workSchedule ?? 'regular');
 
   // Step 3: Abitudini
-  const [activityLevel, setActivityLevel] = useState<UserProfile['activityLevel']>('moderate');
-  const [sleepHours, setSleepHours] = useState('7');
-  const [smokingFrequency, setSmokingFrequency] = useState<UserProfile['smokingFrequency']>('never');
-  const [alcoholFrequency, setAlcoholFrequency] = useState<UserProfile['alcoholFrequency']>('never');
-  const [caffeineDaily, setCaffeineDaily] = useState('2');
+  const [activityLevel, setActivityLevel] = useState<UserProfile['activityLevel']>(initialProfile?.activityLevel ?? 'moderate');
+  const [sleepHours, setSleepHours] = useState(initialProfile?.sleepHours?.toString() ?? '7');
+  const [smokingFrequency, setSmokingFrequency] = useState<UserProfile['smokingFrequency']>(initialProfile?.smokingFrequency ?? 'never');
+  const [alcoholFrequency, setAlcoholFrequency] = useState<UserProfile['alcoholFrequency']>(initialProfile?.alcoholFrequency ?? 'never');
+  const [caffeineDaily, setCaffeineDaily] = useState(initialProfile?.caffeineDaily?.toString() ?? '2');
 
   // Step 4: Energia di base
-  const [baselinePhysical, setBaselinePhysical] = useState(5);
-  const [baselineMental, setBaselineMental] = useState(5);
-  const [baselineEmotional, setBaselineEmotional] = useState(5);
-  const [energyPattern, setEnergyPattern] = useState<UserProfile['energyPattern']>('morning');
-  const [stressLevel, setStressLevel] = useState<UserProfile['stressLevel']>('moderate');
+  const [baselinePhysical, setBaselinePhysical] = useState(initialProfile?.baselinePhysical ?? 5);
+  const [baselineMental, setBaselineMental] = useState(initialProfile?.baselineMental ?? 5);
+  const [baselineEmotional, setBaselineEmotional] = useState(initialProfile?.baselineEmotional ?? 5);
+  const [energyPattern, setEnergyPattern] = useState<UserProfile['energyPattern']>(initialProfile?.energyPattern ?? 'morning');
+  const [stressLevel, setStressLevel] = useState<UserProfile['stressLevel']>(initialProfile?.stressLevel ?? 'moderate');
 
   // Step 5: Obiettivi
-  const [goal, setGoal] = useState<UserProfile['goal']>('general_wellness');
-  const [notes, setNotes] = useState('');
+  const [goal, setGoal] = useState<UserProfile['goal']>(initialProfile?.goal ?? 'general_wellness');
+  const [notes, setNotes] = useState(initialProfile?.notes ?? '');
 
   const canNext = () => {
     if (step === 0) return name.trim().length >= 2 && birthYear && heightCm && weightKg;
@@ -303,7 +305,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     <div className="min-h-[100dvh] bg-background px-4 py-6 overflow-y-auto">
       <Card className="w-full max-w-md mx-auto mb-8">
         <CardHeader className="pb-3">
-          <CardTitle className="text-xl">Completa il tuo profilo</CardTitle>
+          <CardTitle className="text-xl">{editMode ? 'Modifica profilo' : 'Completa il tuo profilo'}</CardTitle>
           <CardDescription>
             Passo {step + 1} di {STEPS.length}: {STEPS[step]}
           </CardDescription>
@@ -560,7 +562,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 ? 'Salvataggio...'
                 : step < STEPS.length - 1
                   ? 'Avanti'
-                  : 'Completa'}
+                  : editMode ? 'Salva modifiche' : 'Completa'}
             </Button>
           </CardFooter>
         </form>
