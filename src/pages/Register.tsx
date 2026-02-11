@@ -217,7 +217,7 @@ export default function Register() {
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
+          <CardFooter className="flex flex-col space-y-4 px-6 pt-6 pb-6">
             <Button
               type="submit"
               className="w-full h-12 text-base"
@@ -225,7 +225,7 @@ export default function Register() {
             >
               {isLoading ? 'Creazione account...' : 'Registrati'}
             </Button>
-            <p className="text-sm text-muted-foreground text-center">
+            <p className="text-sm text-muted-foreground text-center pb-2">
               Hai già un account?{' '}
               <Link to="/login" className="text-primary hover:underline">
                 Accedi
