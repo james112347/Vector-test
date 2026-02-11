@@ -11,7 +11,6 @@ import {
   getProfileToken,
   refreshProfileToken,
   daysAgoStart,
-  type SahhaProfileToken,
 } from './sahha';
 
 // ---------------------------------------------------------------------------
