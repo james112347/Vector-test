@@ -38,6 +38,26 @@ export interface EnergyLog {
 }
 
 // ---------------------------------------------------------------------------
+// User Profile (onboarding data)
+// ---------------------------------------------------------------------------
+
+export interface UserProfile {
+  id?: number;
+  userId: number;
+  name: string;
+  birthYear: number;
+  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  heightCm: number;
+  weightKg: number;
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+  sleepHours: number; // typical hours per night
+  goal: 'more_energy' | 'better_sleep' | 'fitness' | 'stress' | 'general_wellness';
+  notes?: string;
+  completedAt: Date;
+  updatedAt: Date;
+}
+
+// ---------------------------------------------------------------------------
 // Sahha Health Data (local cache)
 // ---------------------------------------------------------------------------
 

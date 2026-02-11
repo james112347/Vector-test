@@ -9,6 +9,7 @@ import LogEnergy from '../pages/LogEnergy';
 import History from '../pages/History';
 import Health from '../pages/Health';
 import Settings from '../pages/Settings';
+import AdminDashboard from '../pages/AdminDashboard';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
           { path: '/history', element: <History /> },
           { path: '/health', element: <Health /> },
           { path: '/settings', element: <Settings /> },
+          { path: '/admin', element: <AdminDashboard /> },
         ],
       },
     ],

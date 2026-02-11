@@ -161,29 +161,18 @@ export default function Register() {
                 <h3 className="font-semibold text-base">Termini di Servizio</h3>
                 <p className="text-muted-foreground leading-relaxed">
                   Utilizzando Vector, accetti di monitorare i tuoi livelli di energia
-                  e fornire informazioni sulle tue attività quotidiane, stile di vita e benessere.
-                  Questo servizio è progettato per aiutarti a comprendere i tuoi pattern energetici
-                  e ricevere raccomandazioni personalizzate.
+                  e fornire informazioni sulle tue attivita quotidiane, stile di vita e benessere.
                 </p>
 
                 <Separator />
 
-                <h3 className="font-semibold text-base">Privacy</h3>
+                <h3 className="font-semibold text-base">Privacy e Raccolta Dati</h3>
                 <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>Tutti i dati sono conservati localmente sul tuo dispositivo</li>
-                  <li>Nessun dato viene inviato a server esterni senza il tuo consenso</li>
-                  <li>Mantieni la piena proprietà dei tuoi dati</li>
-                  <li>Puoi esportare o eliminare i tuoi dati in qualsiasi momento</li>
-                </ul>
-
-                <Separator />
-
-                <h3 className="font-semibold text-base">Raccolta Dati</h3>
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>Livelli di energia: fisica, mentale ed emotiva</li>
-                  <li>Profilo stile di vita: sonno, esercizio, alimentazione</li>
-                  <li>Attività quotidiane: lavoro, riposo e recupero</li>
-                  <li>Obiettivi e preferenze personali</li>
+                  <li>I dati sono conservati localmente e sincronizzati per la gestione account</li>
+                  <li>Dopo la registrazione ti chiediamo di compilare un profilo: nome, eta, genere, peso, altezza, stile di vita e obiettivi</li>
+                  <li>Registriamo livelli di energia: fisica, mentale ed emotiva</li>
+                  <li>Se colleghi un wearable: dati sonno (durata, REM, profondo), attivita, segni vitali</li>
+                  <li>L'amministratore puo visualizzare i tuoi dati per migliorare il servizio</li>
                 </ul>
 
                 <Separator />
@@ -193,23 +182,27 @@ export default function Register() {
                   <li><strong>Accesso:</strong> Puoi visualizzare tutti i dati memorizzati</li>
                   <li><strong>Esportazione:</strong> Puoi esportare i tuoi dati</li>
                   <li><strong>Cancellazione:</strong> Puoi eliminare account e dati</li>
-                  <li><strong>Revoca consenso:</strong> Puoi smettere di usare il servizio</li>
+                  <li><strong>Revoca:</strong> Puoi smettere di usare il servizio in qualsiasi momento</li>
                 </ul>
 
                 <Separator />
 
-                <h3 className="font-semibold text-base">Funzionalità AI</h3>
+                <h3 className="font-semibold text-base">Servizi Terzi</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Vector include funzionalità AI opzionali che analizzano i tuoi pattern energetici.
-                  Nessuna informazione personale viene inclusa nelle richieste.
-                  Puoi disabilitare le funzionalità AI in qualsiasi momento.
+                  Vector utilizza Sahha per i dati wearable, Supabase per la sincronizzazione account,
+                  e funzionalita AI opzionali per l'analisi dei pattern energetici.
                 </p>
 
                 <div className="mt-4 p-3 bg-muted rounded-md">
                   <p className="text-xs text-center text-muted-foreground">
-                    Cliccando "Registrati" confermi di aver letto e accettato questi Termini e Condizioni.
+                    Cliccando "Registrati" confermi di aver letto e accettato questi Termini e Condizioni,
+                    inclusa la raccolta dei dati del profilo personale e sanitari.
                   </p>
                 </div>
+
+                <Link to="/terms" className="block text-center text-xs text-primary hover:underline mt-2">
+                  Leggi i Termini completi
+                </Link>
               </div>
             )}
 

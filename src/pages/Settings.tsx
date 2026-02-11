@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
@@ -14,6 +15,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   const loadUsers = async () => {
     const all = await getAllUsers();
@@ -100,6 +102,23 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Admin Dashboard Link */}
+      {currentUser?.isAdmin && (
+        <Card>
+          <CardContent className="py-4">
+            <Button
+              className="w-full h-12 text-base"
+              onClick={() => navigate('/admin')}
+            >
+              Dashboard Utenti
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Visualizza profili, energia e dati salute degli utenti
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Access Management - Admin Only */}
       {currentUser?.isAdmin && (

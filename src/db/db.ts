@@ -4,6 +4,7 @@ import type {
   Session,
   UserPreferences,
   EnergyLog,
+  UserProfile,
   SahhaProfile,
   SahhaScoreLog,
   SahhaBiomarkerLog,
@@ -14,6 +15,7 @@ export class VectorDB extends Dexie {
   sessions!: Table<Session>;
   userPreferences!: Table<UserPreferences>;
   energyLogs!: Table<EnergyLog>;
+  userProfiles!: Table<UserProfile>;
   sahhaProfiles!: Table<SahhaProfile>;
   sahhaScores!: Table<SahhaScoreLog>;
   sahhaBiomarkers!: Table<SahhaBiomarkerLog>;
@@ -46,6 +48,16 @@ export class VectorDB extends Dexie {
       sessions: '++id, userId, expiresAt',
       userPreferences: '++id, userId',
       energyLogs: '++id, userId, date, [userId+date]',
+      sahhaProfiles: '++id, &userId, externalId',
+      sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
+      sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
+    });
+    this.version(5).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+      energyLogs: '++id, userId, date, [userId+date]',
+      userProfiles: '++id, &userId',
       sahhaProfiles: '++id, &userId, externalId',
       sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
       sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
