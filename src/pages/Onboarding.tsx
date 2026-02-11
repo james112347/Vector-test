@@ -11,7 +11,6 @@ const STEPS = [
   'Dati personali',
   'Occupazione',
   'Abitudini',
-  'Energia di base',
   'Obiettivi',
 ];
 
@@ -19,7 +18,6 @@ const STEP_DESC = [
   'Ci servono per calcolare il tuo metabolismo basale e personalizzare le raccomandazioni in base a eta, corporatura e genere.',
   'Sapere che lavoro fai e i tuoi orari ci aiuta a capire quanto il lavoro influisce sulla tua energia quotidiana.',
   'Le abitudini quotidiane hanno un impatto diretto sui tuoi livelli di energia. Questo ci aiuta a identificare fattori che potresti migliorare.',
-  'Questa e la tua fotografia iniziale. La confronteremo nel tempo per misurare i tuoi progressi reali.',
   'Il tuo obiettivo guida le raccomandazioni che riceverai. Potrai cambiarlo in qualsiasi momento.',
 ];
 
@@ -67,20 +65,6 @@ const ALCOHOL_OPTIONS = [
   { value: 'occasional', label: 'Occasionale' },
   { value: 'weekly', label: 'Settimanale' },
   { value: 'daily', label: 'Quotidiano' },
-] as const;
-
-const ENERGY_PATTERN_OPTIONS = [
-  { value: 'morning', label: 'Mattiniero', desc: 'Piu energia al mattino' },
-  { value: 'afternoon', label: 'Pomeridiano', desc: 'Picco nel pomeriggio' },
-  { value: 'evening', label: 'Serale', desc: 'Piu energia la sera' },
-  { value: 'variable', label: 'Variabile', desc: 'Cambia di giorno in giorno' },
-] as const;
-
-const STRESS_OPTIONS = [
-  { value: 'low', label: 'Basso', desc: 'Raramente stressato' },
-  { value: 'moderate', label: 'Moderato', desc: 'Qualche situazione stressante' },
-  { value: 'high', label: 'Alto', desc: 'Spesso sotto pressione' },
-  { value: 'very_high', label: 'Molto alto', desc: 'Costantemente stressato' },
 ] as const;
 
 const GOAL_OPTIONS = [
@@ -161,39 +145,6 @@ function StepHint({ text }: { text: string }) {
   );
 }
 
-function EnergySlider({
-  label,
-  color,
-  value,
-  onChange,
-}: {
-  label: string;
-  color: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex justify-between">
-        <Label>{label}</Label>
-        <span className="text-sm font-bold" style={{ color }}>{value}/10</span>
-      </div>
-      <input
-        type="range"
-        min={1}
-        max={10}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full accent-primary h-2"
-      />
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>Molto basso</span>
-        <span>Eccellente</span>
-      </div>
-    </div>
-  );
-}
-
 // --- Main component ---
 
 interface OnboardingProps {
@@ -218,7 +169,7 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
   // Step 2: Occupazione
   const [occupation, setOccupation] = useState<UserProfile['occupation']>(initialProfile?.occupation ?? 'worker');
   const [workType, setWorkType] = useState(initialProfile?.workType ?? '');
-  const [weeklyWorkHours, setWeeklyWorkHours] = useState(initialProfile?.weeklyWorkHours?.toString() ?? '40');
+  const [dailyWorkHours, setDailyWorkHours] = useState(initialProfile?.dailyWorkHours?.toString() ?? '8');
   const [workSchedule, setWorkSchedule] = useState<UserProfile['workSchedule']>(initialProfile?.workSchedule ?? 'regular');
 
   // Step 3: Abitudini
@@ -228,14 +179,7 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
   const [alcoholFrequency, setAlcoholFrequency] = useState<UserProfile['alcoholFrequency']>(initialProfile?.alcoholFrequency ?? 'never');
   const [caffeineDaily, setCaffeineDaily] = useState(initialProfile?.caffeineDaily?.toString() ?? '2');
 
-  // Step 4: Energia di base
-  const [baselinePhysical, setBaselinePhysical] = useState(initialProfile?.baselinePhysical ?? 5);
-  const [baselineMental, setBaselineMental] = useState(initialProfile?.baselineMental ?? 5);
-  const [baselineEmotional, setBaselineEmotional] = useState(initialProfile?.baselineEmotional ?? 5);
-  const [energyPattern, setEnergyPattern] = useState<UserProfile['energyPattern']>(initialProfile?.energyPattern ?? 'morning');
-  const [stressLevel, setStressLevel] = useState<UserProfile['stressLevel']>(initialProfile?.stressLevel ?? 'moderate');
-
-  // Step 5: Obiettivi
+  // Step 4: Obiettivi
   const [goal, setGoal] = useState<UserProfile['goal']>(initialProfile?.goal ?? 'general_wellness');
   const [notes, setNotes] = useState(initialProfile?.notes ?? '');
 
@@ -259,18 +203,13 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
         weightKg: parseFloat(weightKg),
         occupation,
         workType: workType.trim() || undefined,
-        weeklyWorkHours: parseInt(weeklyWorkHours) || 0,
+        dailyWorkHours: parseFloat(dailyWorkHours) || 0,
         workSchedule,
         activityLevel,
         sleepHours: parseFloat(sleepHours),
         smokingFrequency,
         alcoholFrequency,
         caffeineDaily: parseInt(caffeineDaily) || 0,
-        baselinePhysical,
-        baselineMental,
-        baselineEmotional,
-        energyPattern,
-        stressLevel,
         goal,
         notes: notes.trim() || undefined,
         completedAt: new Date(),
@@ -394,18 +333,19 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="weeklyHours">Ore lavorative/studio a settimana</Label>
+                  <Label htmlFor="dailyHours">In media quante ore al giorno lavori/studi?</Label>
                   <div className="flex items-center gap-3">
                     <Input
-                      id="weeklyHours"
+                      id="dailyHours"
                       type="number"
                       min={0}
-                      max={80}
-                      value={weeklyWorkHours}
-                      onChange={(e) => setWeeklyWorkHours(e.target.value)}
+                      max={16}
+                      step={0.5}
+                      value={dailyWorkHours}
+                      onChange={(e) => setDailyWorkHours(e.target.value)}
                       className="h-11 text-base w-24"
                     />
-                    <span className="text-sm text-muted-foreground">ore/settimana</span>
+                    <span className="text-sm text-muted-foreground">ore/giorno</span>
                   </div>
                 </div>
 
@@ -476,40 +416,8 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
               </>
             )}
 
-            {/* --- Step 4: Energia di base --- */}
+            {/* --- Step 4: Obiettivi --- */}
             {step === 3 && (
-              <>
-                <EnergySlider label="Energia fisica" color="#3b82f6"
-                  value={baselinePhysical} onChange={setBaselinePhysical} />
-                <EnergySlider label="Energia mentale" color="#22c55e"
-                  value={baselineMental} onChange={setBaselineMental} />
-                <EnergySlider label="Energia emotiva" color="#f59e0b"
-                  value={baselineEmotional} onChange={setBaselineEmotional} />
-
-                <div className="space-y-2">
-                  <Label>Quando hai piu energia?</Label>
-                  <ChipGroup options={ENERGY_PATTERN_OPTIONS} value={energyPattern} onChange={setEnergyPattern} />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Livello di stress attuale</Label>
-                  <div className="space-y-1.5">
-                    {STRESS_OPTIONS.map((opt) => (
-                      <OptionButton
-                        key={opt.value}
-                        selected={stressLevel === opt.value}
-                        onClick={() => setStressLevel(opt.value)}
-                        label={opt.label}
-                        desc={opt.desc}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* --- Step 5: Obiettivi --- */}
-            {step === 4 && (
               <>
                 <div className="space-y-2">
                   <Label>Qual e il tuo obiettivo principale?</Label>

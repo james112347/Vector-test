@@ -54,7 +54,8 @@ export interface UserProfile {
   // Occupazione
   occupation: 'student' | 'worker' | 'student_worker' | 'unemployed' | 'retired';
   workType?: string; // tipo di lavoro (testo libero)
-  weeklyWorkHours: number;
+  dailyWorkHours: number; // ore medie al giorno
+  weeklyWorkHours?: number; // @deprecated - usa dailyWorkHours
   workSchedule: 'regular' | 'shifts' | 'flexible' | 'irregular';
   // Stile di vita e abitudini
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
@@ -62,12 +63,12 @@ export interface UserProfile {
   smokingFrequency: 'never' | 'occasional' | 'daily' | 'heavy';
   alcoholFrequency: 'never' | 'occasional' | 'weekly' | 'daily';
   caffeineDaily: number; // tazzine/giorno
-  // Valutazione energia di base
-  baselinePhysical: number;  // 1-10
-  baselineMental: number;    // 1-10
-  baselineEmotional: number; // 1-10
-  energyPattern: 'morning' | 'afternoon' | 'evening' | 'variable';
-  stressLevel: 'low' | 'moderate' | 'high' | 'very_high';
+  // Campi legacy (rimossi dall'onboarding, mantenuti per compatibilita')
+  baselinePhysical?: number;
+  baselineMental?: number;
+  baselineEmotional?: number;
+  energyPattern?: 'morning' | 'afternoon' | 'evening' | 'variable';
+  stressLevel?: 'low' | 'moderate' | 'high' | 'very_high';
   // Obiettivi
   goal: 'more_energy' | 'better_sleep' | 'fitness' | 'stress' | 'general_wellness';
   notes?: string;

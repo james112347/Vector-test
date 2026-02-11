@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { getTodayLog, getRecentLogs } from '../lib/energy';
 import { usePendingUsers } from '../lib/usePendingUsers';
+import { useUserProfile } from '../lib/useUserProfile';
+import { isAIAvailable, generateInsights, getCachedInsights, cacheInsights, type AIAnalysis } from '../lib/ai';
 import type { EnergyLog } from '../db/schema';
 import {
   ResponsiveContainer,
@@ -48,9 +50,13 @@ export default function Dashboard() {
   const { user } = useAuthState();
   const navigate = useNavigate();
   const pendingCount = usePendingUsers();
+  const { profile } = useUserProfile(user?.id);
   const [todayLog, setTodayLog] = useState<EnergyLog | null>(null);
   const [weekLogs, setWeekLogs] = useState<EnergyLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aiInsights, setAiInsights] = useState<AIAnalysis | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
     if (!user?.id) return;
@@ -63,6 +69,32 @@ export default function Dashboard() {
       setLoading(false);
     });
   }, [user?.id]);
+
+  const loadInsights = useCallback(async () => {
+    if (!profile || weekLogs.length < 2 || !isAIAvailable()) return;
+    const cached = getCachedInsights(weekLogs.length);
+    if (cached) {
+      setAiInsights(cached);
+      return;
+    }
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const result = await generateInsights(profile, weekLogs);
+      setAiInsights(result);
+      cacheInsights(result, weekLogs.length);
+    } catch (e) {
+      setAiError((e as Error).message);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [profile, weekLogs]);
+
+  useEffect(() => {
+    if (!loading && weekLogs.length >= 2 && profile && isAIAvailable()) {
+      loadInsights();
+    }
+  }, [loading, weekLogs.length, profile, loadInsights]);
 
   const chartData = weekLogs.map(log => {
     const [, , d] = log.date.split('-');
@@ -227,37 +259,121 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Stats */}
-      {weekLogs.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+      {/* Average Energy Level */}
+      {weekLogs.length > 0 && (() => {
+        const avgPhysical = weekLogs.reduce((s, l) => s + l.physical, 0) / weekLogs.length;
+        const avgMental = weekLogs.reduce((s, l) => s + l.mental, 0) / weekLogs.length;
+        const avgEmotional = weekLogs.reduce((s, l) => s + l.emotional, 0) / weekLogs.length;
+        const overallAvg = Math.round(((avgPhysical + avgMental + avgEmotional) / 3) * 10) / 10;
+        const percentage = overallAvg * 10;
+        const radius = 44;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (percentage / 100) * circumference;
+        const color = overallAvg >= 7 ? '#22c55e' : overallAvg >= 4 ? '#f59e0b' : '#ef4444';
+
+        return (
           <Card>
-            <CardContent className="py-4 text-center">
-              <p className="text-xs text-muted-foreground">Fisica</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {(weekLogs.reduce((s, l) => s + l.physical, 0) / weekLogs.length).toFixed(1)}
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Livello medio energia</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-6">
+                <div className="relative w-28 h-28 shrink-0">
+                  <svg className="w-28 h-28 -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r={radius} fill="none" stroke="currentColor" className="text-muted" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r={radius} fill="none"
+                      stroke={color}
+                      strokeWidth="8"
+                      strokeLinecap="round"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={offset}
+                      className="transition-all duration-500"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-bold" style={{ color }}>{overallAvg}</span>
+                    <span className="text-xs text-muted-foreground">/10</span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                      <span className="text-sm">Fisica</span>
+                    </div>
+                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{avgPhysical.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                      <span className="text-sm">Mentale</span>
+                    </div>
+                    <span className="text-sm font-bold text-green-600 dark:text-green-400">{avgMental.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                      <span className="text-sm">Emotiva</span>
+                    </div>
+                    <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{avgEmotional.toFixed(1)}</span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                Media degli ultimi {weekLogs.length} giorni
               </p>
-              <p className="text-xs text-muted-foreground">media</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="py-4 text-center">
-              <p className="text-xs text-muted-foreground">Mentale</p>
-              <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                {(weekLogs.reduce((s, l) => s + l.mental, 0) / weekLogs.length).toFixed(1)}
-              </p>
-              <p className="text-xs text-muted-foreground">media</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="py-4 text-center">
-              <p className="text-xs text-muted-foreground">Emotiva</p>
-              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                {(weekLogs.reduce((s, l) => s + l.emotional, 0) / weekLogs.length).toFixed(1)}
-              </p>
-              <p className="text-xs text-muted-foreground">media</p>
-            </CardContent>
-          </Card>
-        </div>
+        );
+      })()}
+
+      {/* AI Insights */}
+      {isAIAvailable() && weekLogs.length >= 2 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Insight IA</CardTitle>
+              {!aiLoading && (
+                <button
+                  onClick={loadInsights}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Aggiorna
+                </button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {aiLoading && (
+              <div className="py-4 text-center">
+                <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-xs text-muted-foreground mt-2">Analisi in corso...</p>
+              </div>
+            )}
+            {aiError && (
+              <p className="text-xs text-red-600 dark:text-red-400 py-2">{aiError}</p>
+            )}
+            {aiInsights && !aiLoading && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium">{aiInsights.summary}</p>
+                {aiInsights.insights.map((insight, i) => (
+                  <div key={i} className="flex gap-2.5">
+                    <span className="text-lg shrink-0">{insight.emoji}</span>
+                    <div>
+                      <p className="text-sm font-medium">{insight.title}</p>
+                      <p className="text-xs text-muted-foreground">{insight.body}</p>
+                    </div>
+                  </div>
+                ))}
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 mt-2">
+                  <p className="text-sm font-medium text-primary">Consiglio per oggi</p>
+                  <p className="text-xs mt-1">{aiInsights.suggestion}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

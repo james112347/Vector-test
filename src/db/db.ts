@@ -62,6 +62,22 @@ export class VectorDB extends Dexie {
       sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
       sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
     });
+    this.version(6).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+      energyLogs: '++id, userId, date, [userId+date]',
+      userProfiles: '++id, &userId',
+      sahhaProfiles: '++id, &userId, externalId',
+      sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
+      sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
+    }).upgrade(tx => {
+      return tx.table('userProfiles').toCollection().modify(profile => {
+        if (profile.weeklyWorkHours != null && profile.dailyWorkHours == null) {
+          profile.dailyWorkHours = Math.round((profile.weeklyWorkHours / 5) * 10) / 10;
+        }
+      });
+    });
   }
 }
 
