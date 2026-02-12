@@ -83,35 +83,47 @@ export default function UpdatePrompt() {
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 p-3 safe-area-top">
-      <div className="max-w-md mx-auto bg-card border border-border rounded-xl shadow-lg p-4 animate-in slide-in-from-top fade-in duration-300">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-            <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-in fade-in duration-200">
+      <div className="w-full max-w-sm rounded-2xl bg-card border border-border shadow-xl p-6 space-y-5 animate-in zoom-in-95 fade-in duration-300">
+        {/* Icon */}
+        <div className="flex justify-center">
+          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+            <svg className="w-7 h-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
             </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">Nuova versione disponibile</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Aggiorna per ottenere le ultime novita e correzioni.
-            </p>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={doUpdate}
-                disabled={updating}
-                className="px-4 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
-              >
-                {updating ? 'Aggiornamento...' : 'Aggiorna ora'}
-              </button>
-              <button
-                onClick={dismiss}
-                className="px-4 py-1.5 text-xs font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
-              >
-                Dopo
-              </button>
-            </div>
-          </div>
+        </div>
+
+        {/* Text */}
+        <div className="text-center space-y-2">
+          <h3 className="text-lg font-bold">Aggiornamento disponibile</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Una nuova versione di Vector e pronta. Aggiorna per ottenere miglioramenti, nuove funzionalita e correzioni.
+          </p>
+        </div>
+
+        {/* Buttons */}
+        <div className="space-y-2.5">
+          <button
+            onClick={doUpdate}
+            disabled={updating}
+            className="w-full py-3 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 active:scale-[0.98]"
+          >
+            {updating ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                Aggiornamento in corso...
+              </span>
+            ) : (
+              'Aggiorna ora'
+            )}
+          </button>
+          <button
+            onClick={dismiss}
+            className="w-full py-2.5 text-sm font-medium rounded-xl text-muted-foreground hover:bg-muted transition-colors"
+          >
+            Ricordamelo dopo
+          </button>
         </div>
       </div>
     </div>
