@@ -18,9 +18,8 @@ const tooltipMessages = [
   'La tua opinione conta, lascia un feedback!',
 ];
 
-const TOOLTIP_SHOW_DURATION = 6000;   // visible for 6s
 const TOOLTIP_FIRST_DELAY = 8000;     // first popup after 8s
-const TOOLTIP_INTERVAL = 120000;      // repeat every 2 minutes
+const TOOLTIP_RESHOW_DELAY = 120000;  // next message 2 min after dismissal
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -29,8 +28,7 @@ export function AppShell() {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipText, setTooltipText] = useState('');
   const lastIndexRef = useRef(-1);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const reshowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const { user } = useAuthState();
 
@@ -42,7 +40,6 @@ export function AppShell() {
 
   const pickMessage = useCallback(() => {
     let idx = Math.floor(Math.random() * tooltipMessages.length);
-    // Avoid repeating the same message twice in a row
     if (idx === lastIndexRef.current && tooltipMessages.length > 1) {
       idx = (idx + 1) % tooltipMessages.length;
     }
@@ -53,33 +50,33 @@ export function AppShell() {
   const showPopup = useCallback(() => {
     setTooltipText(pickMessage());
     setShowTooltip(true);
-    // Auto-dismiss after TOOLTIP_SHOW_DURATION
-    timeoutRef.current = setTimeout(() => setShowTooltip(false), TOOLTIP_SHOW_DURATION);
   }, [pickMessage]);
 
+  // Show first popup after delay
   useEffect(() => {
     if (isFeedbackPage) {
       setShowTooltip(false);
+      clearTimeout(reshowTimerRef.current);
       return;
     }
 
-    // First popup after a short delay
-    const firstTimer = setTimeout(showPopup, TOOLTIP_FIRST_DELAY);
-
-    // Then repeat periodically
-    intervalRef.current = setInterval(showPopup, TOOLTIP_INTERVAL);
+    // Only show first popup if not already visible
+    const firstTimer = setTimeout(() => {
+      if (!isFeedbackPage) showPopup();
+    }, TOOLTIP_FIRST_DELAY);
 
     return () => {
       clearTimeout(firstTimer);
-      clearInterval(intervalRef.current);
-      clearTimeout(timeoutRef.current);
+      clearTimeout(reshowTimerRef.current);
     };
   }, [isFeedbackPage, showPopup]);
 
-  const dismissTooltip = () => {
+  const dismissTooltip = useCallback(() => {
     setShowTooltip(false);
-    clearTimeout(timeoutRef.current);
-  };
+    // Schedule next message after delay
+    clearTimeout(reshowTimerRef.current);
+    reshowTimerRef.current = setTimeout(showPopup, TOOLTIP_RESHOW_DELAY);
+  }, [showPopup]);
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">
