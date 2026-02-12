@@ -31,8 +31,13 @@ function pctTo5Inv(pct: number): number {
   return pctTo5(100 - pct);
 }
 
-/** Emoji e label in base alla percentuale */
-function getEmojiForPct(pct: number): { emoji: string; label: string; color: string } {
+// ---------------------------------------------------------------------------
+// Emoji per contesto (energia, cibo, attivita)
+// ---------------------------------------------------------------------------
+
+type EmojiInfo = { emoji: string; label: string; color: string };
+
+function emojiEnergia(pct: number): EmojiInfo {
   if (pct <= 15) return { emoji: '😩', label: 'Pessimo', color: '#dc2626' };
   if (pct <= 30) return { emoji: '😟', label: 'Male', color: '#ef4444' };
   if (pct <= 45) return { emoji: '😐', label: 'Cosi cosi', color: '#f59e0b' };
@@ -42,25 +47,54 @@ function getEmojiForPct(pct: number): { emoji: string; label: string; color: str
   return { emoji: '🔥', label: 'Alla grande!', color: '#3b82f6' };
 }
 
+function emojiCibo(pct: number): EmojiInfo {
+  if (pct <= 10) return { emoji: '🚫', label: 'Saltato', color: '#dc2626' };
+  if (pct <= 30) return { emoji: '🍪', label: 'Snack', color: '#ef4444' };
+  if (pct <= 50) return { emoji: '🥐', label: 'Veloce', color: '#f59e0b' };
+  if (pct <= 70) return { emoji: '🍽️', label: 'Discreto', color: '#eab308' };
+  if (pct <= 85) return { emoji: '🥗', label: 'Completo', color: '#22c55e' };
+  return { emoji: '🍱', label: 'Ottimo pasto', color: '#16a34a' };
+}
+
+function emojiAttivita(pct: number): EmojiInfo {
+  if (pct <= 10) return { emoji: '🛋️', label: 'Nessuna', color: '#dc2626' };
+  if (pct <= 30) return { emoji: '🚶', label: 'Passeggiata', color: '#f59e0b' };
+  if (pct <= 50) return { emoji: '🏃', label: 'Moderata', color: '#eab308' };
+  if (pct <= 70) return { emoji: '💪', label: 'Buona', color: '#22c55e' };
+  if (pct <= 85) return { emoji: '🏋️', label: 'Intensa', color: '#16a34a' };
+  return { emoji: '🔥', label: 'Top!', color: '#3b82f6' };
+}
+
+type EmojiMapper = (pct: number) => EmojiInfo;
+
+// ---------------------------------------------------------------------------
+// Configurazione fasi
+// ---------------------------------------------------------------------------
+
+interface SliderMap {
+  type: CheckinType;
+  label: string;
+  inverse?: boolean;
+}
+
+interface FollowUpConfig {
+  question: string;
+  condition?: (checkins: QuickCheckin[]) => boolean;
+  maps: SliderMap[];
+  emojiMapper: EmojiMapper;
+  gradient: string;
+}
+
 interface PhaseConfig {
   greeting: string;
   mainQuestion: string;
-  /** Tipi di check-in che il % mappa automaticamente */
-  maps: Array<{
-    type: CheckinType;
-    label: string;
-    inverse?: boolean; // true = alto % -> basso valore (es. stress)
-  }>;
-  /** Follow-up dopo il slider */
-  followUps: Array<{
-    question: string;
-    condition?: (checkins: QuickCheckin[]) => boolean;
-    answers: Array<{
-      label: string;
-      saves: Array<{ type: CheckinType; value: number }>;
-    }>;
-  }>;
+  maps: SliderMap[];
+  followUps: FollowUpConfig[];
 }
+
+const GRADIENT_ENERGIA = 'linear-gradient(90deg, #dc2626 0%, #f59e0b 35%, #22c55e 65%, #3b82f6 100%)';
+const GRADIENT_CIBO = 'linear-gradient(90deg, #dc2626 0%, #f59e0b 30%, #22c55e 60%, #16a34a 100%)';
+const GRADIENT_ATTIVITA = 'linear-gradient(90deg, #94a3b8 0%, #f59e0b 30%, #22c55e 60%, #3b82f6 100%)';
 
 const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
   morning: {
@@ -73,12 +107,10 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
     ],
     followUps: [
       {
-        question: 'Hai fatto colazione?',
-        answers: [
-          { label: 'Saltata', saves: [{ type: 'meal_time', value: 1 }] },
-          { label: 'Veloce', saves: [{ type: 'meal_time', value: 3 }] },
-          { label: 'Completa', saves: [{ type: 'meal_time', value: 5 }] },
-        ],
+        question: 'Colazione?',
+        maps: [{ type: 'meal_time', label: 'Pasto' }],
+        emojiMapper: emojiCibo,
+        gradient: GRADIENT_CIBO,
       },
     ],
   },
@@ -92,12 +124,10 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
     ],
     followUps: [
       {
-        question: 'Hai pranzato?',
-        answers: [
-          { label: 'Non ancora', saves: [{ type: 'meal_time', value: 1 }] },
-          { label: 'Qualcosa', saves: [{ type: 'meal_time', value: 3 }] },
-          { label: 'Pasto completo', saves: [{ type: 'meal_time', value: 5 }] },
-        ],
+        question: 'Pranzo?',
+        maps: [{ type: 'meal_time', label: 'Pasto' }],
+        emojiMapper: emojiCibo,
+        gradient: GRADIENT_CIBO,
       },
     ],
   },
@@ -112,11 +142,9 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
     followUps: [
       {
         question: 'Movimento oggi?',
-        answers: [
-          { label: 'Niente', saves: [{ type: 'activity_done', value: 1 }] },
-          { label: 'Poco', saves: [{ type: 'activity_done', value: 2 }] },
-          { label: 'Si!', saves: [{ type: 'activity_done', value: 4 }] },
-        ],
+        maps: [{ type: 'activity_done', label: 'Attivita' }],
+        emojiMapper: emojiAttivita,
+        gradient: GRADIENT_ATTIVITA,
       },
     ],
   },
@@ -131,11 +159,9 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
       {
         question: 'Attivita fisica oggi?',
         condition: (checkins) => !checkins.some(c => c.type === 'activity_done'),
-        answers: [
-          { label: 'Nessuna', saves: [{ type: 'activity_done', value: 1 }] },
-          { label: 'Leggera', saves: [{ type: 'activity_done', value: 3 }] },
-          { label: 'Intensa', saves: [{ type: 'activity_done', value: 5 }] },
-        ],
+        maps: [{ type: 'activity_done', label: 'Attivita' }],
+        emojiMapper: emojiAttivita,
+        gradient: GRADIENT_ATTIVITA,
       },
     ],
   },
@@ -158,7 +184,7 @@ const COUNTERS: Array<{
 ];
 
 // ---------------------------------------------------------------------------
-// Slider percentuale touch-friendly
+// Slider percentuale touch-friendly (riusabile)
 // ---------------------------------------------------------------------------
 
 function PercentSlider({
@@ -166,16 +192,22 @@ function PercentSlider({
   onChange,
   onConfirm,
   maps,
+  emojiMapper = emojiEnergia,
+  gradient = GRADIENT_ENERGIA,
+  compact = false,
 }: {
   value: number;
   onChange: (v: number) => void;
   onConfirm: () => void;
-  maps: PhaseConfig['maps'];
+  maps: SliderMap[];
+  emojiMapper?: EmojiMapper;
+  gradient?: string;
+  compact?: boolean;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
-  const emojiInfo = getEmojiForPct(value);
+  const info = emojiMapper(value);
 
   const updateFromEvent = (clientX: number) => {
     if (!trackRef.current) return;
@@ -199,24 +231,30 @@ function PercentSlider({
     dragging.current = false;
   };
 
+  const trackHeight = compact ? 'h-8' : 'h-10';
+  const thumbSize = compact ? 'w-6 h-6' : 'w-7 h-7';
+  const thumbOffset = compact ? '12px' : '14px';
+  const emojiSize = compact ? 'text-xl' : 'text-2xl';
+  const pctSize = compact ? 'text-xl' : 'text-2xl';
+
   return (
-    <div className="space-y-3">
+    <div className={compact ? 'space-y-2' : 'space-y-3'}>
       {/* Emoji + Percentuale */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-2xl" role="img">{emojiInfo.emoji}</span>
-          <span className="text-sm font-medium" style={{ color: emojiInfo.color }}>
-            {emojiInfo.label}
+          <span className={emojiSize} role="img">{info.emoji}</span>
+          <span className="text-sm font-medium" style={{ color: info.color }}>
+            {info.label}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold tabular-nums" style={{ color: emojiInfo.color }}>
+          <span className={`${pctSize} font-bold tabular-nums`} style={{ color: info.color }}>
             {value}%
           </span>
           <button
             onClick={onConfirm}
             className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all"
-            style={{ backgroundColor: emojiInfo.color }}
+            style={{ backgroundColor: info.color }}
           >
             <Send className="h-3.5 w-3.5 text-white" />
           </button>
@@ -226,20 +264,18 @@ function PercentSlider({
       {/* Track slider */}
       <div
         ref={trackRef}
-        className="relative h-10 rounded-xl cursor-pointer touch-none select-none"
-        style={{
-          background: 'linear-gradient(90deg, #dc2626 0%, #f59e0b 35%, #22c55e 65%, #3b82f6 100%)',
-        }}
+        className={`relative ${trackHeight} rounded-xl cursor-pointer touch-none select-none`}
+        style={{ background: gradient }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
         {/* Thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white border-2 shadow-md transition-[left] duration-75"
+          className={`absolute top-1/2 -translate-y-1/2 ${thumbSize} rounded-full bg-white border-2 shadow-md transition-[left] duration-75`}
           style={{
-            left: `calc(${value}% - 14px)`,
-            borderColor: emojiInfo.color,
+            left: `calc(${value}% - ${thumbOffset})`,
+            borderColor: info.color,
           }}
         />
         {/* Tick marks */}
@@ -252,7 +288,7 @@ function PercentSlider({
         </div>
       </div>
 
-      {/* Preview mapping: cosa viene salvato */}
+      {/* Preview mapping */}
       <div className="flex items-center gap-2 flex-wrap">
         {maps.map(m => {
           const val = m.inverse ? pctTo5Inv(value) : pctTo5(value);
@@ -279,6 +315,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [step, setStep] = useState<'main' | 'followup' | 'done'>('main');
   const [followUpIdx, setFollowUpIdx] = useState(0);
   const [sliderValue, setSliderValue] = useState(50);
+  const [followUpSliderValue, setFollowUpSliderValue] = useState(50);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -290,7 +327,6 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   useEffect(() => { loadCheckins(); }, [loadCheckins]);
 
-  // Controlla se l'utente ha gia risposto alla domanda di questa fase
   const hasAnsweredMain = useMemo(() => {
     const phaseStart = phase === 'morning' ? 5 : phase === 'midday' ? 11 : phase === 'afternoon' ? 14 : 18;
     return checkins.some(c => {
@@ -310,39 +346,40 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       .reduce((s, c) => s + c.value, 0);
   };
 
-  const saveMultiple = async (saves: Array<{ type: CheckinType; value: number }>) => {
-    for (const { type, value } of saves) {
-      await addCheckin(userId, type, value);
+  const saveFromSlider = async (maps: SliderMap[], pct: number) => {
+    for (const m of maps) {
+      const value = m.inverse ? pctTo5Inv(pct) : pctTo5(pct);
+      await addCheckin(userId, m.type, value);
     }
     await loadCheckins();
   };
 
-  /** Converte il valore slider in tutti i check-in mappati e salva */
-  const handleSliderConfirm = async () => {
-    const saves = config.maps.map(m => ({
-      type: m.type,
-      value: m.inverse ? pctTo5Inv(sliderValue) : pctTo5(sliderValue),
-    }));
-    await saveMultiple(saves);
-
+  const handleMainConfirm = async () => {
+    await saveFromSlider(config.maps, sliderValue);
     const applicableFollowUps = config.followUps.filter(
       f => !f.condition || f.condition(checkins),
     );
     if (applicableFollowUps.length > 0) {
       setFollowUpIdx(0);
+      setFollowUpSliderValue(50);
       setStep('followup');
     } else {
       setStep('done');
     }
   };
 
-  const handleFollowUp = async (saves: Array<{ type: CheckinType; value: number }>) => {
-    await saveMultiple(saves);
+  const handleFollowUpConfirm = async () => {
     const applicableFollowUps = config.followUps.filter(
       f => !f.condition || f.condition(checkins),
     );
+    const fu = applicableFollowUps[followUpIdx];
+    if (!fu) return;
+
+    await saveFromSlider(fu.maps, followUpSliderValue);
+
     if (followUpIdx + 1 < applicableFollowUps.length) {
       setFollowUpIdx(followUpIdx + 1);
+      setFollowUpSliderValue(50);
     } else {
       setStep('done');
     }
@@ -382,7 +419,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           })}
         </div>
 
-        {/* Slider percentuale contestuale */}
+        {/* Slider percentuale principale */}
         {step === 'main' && (
           <div className="px-4 py-3 space-y-2">
             <div className="flex items-center gap-2">
@@ -395,13 +432,13 @@ export default function QuickCheckins({ userId }: { userId: number }) {
             <PercentSlider
               value={sliderValue}
               onChange={setSliderValue}
-              onConfirm={handleSliderConfirm}
+              onConfirm={handleMainConfirm}
               maps={config.maps}
             />
           </div>
         )}
 
-        {/* Follow-up */}
+        {/* Follow-up — anche questi con slider percentuale */}
         {step === 'followup' && (() => {
           const applicableFollowUps = config.followUps.filter(
             f => !f.condition || f.condition(checkins),
@@ -409,22 +446,20 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           const fu = applicableFollowUps[followUpIdx];
           if (!fu) return null;
           return (
-            <div className="px-4 py-3 space-y-2.5">
+            <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-sm font-medium">{fu.question}</p>
               </div>
-              <div className="flex gap-2">
-                {fu.answers.map((ans, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleFollowUp(ans.saves)}
-                    className="flex-1 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all"
-                  >
-                    <span className="text-xs font-medium">{ans.label}</span>
-                  </button>
-                ))}
-              </div>
+              <PercentSlider
+                value={followUpSliderValue}
+                onChange={setFollowUpSliderValue}
+                onConfirm={handleFollowUpConfirm}
+                maps={fu.maps}
+                emojiMapper={fu.emojiMapper}
+                gradient={fu.gradient}
+                compact
+              />
             </div>
           );
         })()}
@@ -439,7 +474,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               Check-in completato — {typesRecorded} parametri raccolti
             </p>
             <button
-              onClick={() => { setStep('main'); setSliderValue(50); }}
+              onClick={() => { setStep('main'); setSliderValue(50); setFollowUpSliderValue(50); }}
               className="text-[10px] text-primary font-medium hover:underline"
             >
               Aggiorna
