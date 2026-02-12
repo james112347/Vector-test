@@ -4,10 +4,18 @@ import { supabase } from './supabase';
 import { notifyNewFeedback, notifyFeedbackReply } from './notifications';
 import { getAppSettings } from './useAppSettings';
 
+export interface ChatAttachment {
+  type: 'image' | 'video';
+  data: string;   // base64 data URL
+  name: string;
+  size: number;   // original file size in bytes
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  attachments?: ChatAttachment[];
 }
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -384,6 +392,50 @@ export async function getUnreadFeedbackCount(): Promise<number> {
     return count ?? 0;
   }
   return db.feedbacks.where('status').equals('sent').count();
+}
+
+/**
+ * Remove all attachments from a feedback's chat history (admin action to save space).
+ */
+export async function deleteAttachments(feedbackId: number): Promise<void> {
+  // Get current chat history
+  let chatHistory: ChatMessage[] = [];
+
+  if (supabase) {
+    const { data } = await supabase
+      .from('feedbacks')
+      .select('chat_history')
+      .eq('id', feedbackId)
+      .single();
+    if (data?.chat_history) {
+      chatHistory = (typeof data.chat_history === 'string'
+        ? JSON.parse(data.chat_history)
+        : data.chat_history) as ChatMessage[];
+    }
+  } else {
+    const local = await db.feedbacks.get(feedbackId);
+    if (local?.chatHistory) {
+      chatHistory = JSON.parse(local.chatHistory);
+    }
+  }
+
+  // Strip attachments from all messages
+  const cleaned = chatHistory.map(msg => {
+    if (msg.attachments?.length) {
+      return { ...msg, attachments: undefined };
+    }
+    return msg;
+  });
+
+  // Save back
+  const now = new Date();
+  await db.feedbacks.update(feedbackId, { chatHistory: JSON.stringify(cleaned), updatedAt: now });
+  if (supabase) {
+    await supabase.from('feedbacks').update({
+      chat_history: cleaned,
+      updated_at: now.toISOString(),
+    }).eq('id', feedbackId);
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

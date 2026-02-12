@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
 import { useAuthState } from '../contexts/AuthContext';
 import { getAllUsers, adminResetPassword } from '../lib/auth';
-import { getAllFeedbacks, markFeedbackRead, replyToFeedback } from '../lib/feedback';
+import { getAllFeedbacks, markFeedbackRead, replyToFeedback, deleteAttachments, type ChatMessage } from '../lib/feedback';
 import { getAllUserActivity, type UserActivity } from '../lib/useActivityTracker';
 import { db } from '../db/db';
 import type { User, UserProfile, EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, UserFeedback } from '../db/schema';
@@ -275,6 +275,10 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   <p className="text-sm">{fb.message}</p>
+                  <FeedbackAttachments feedback={fb} onDeleteAttachments={async () => {
+                    await deleteAttachments(fb.id!);
+                    setFeedbacks(await getAllFeedbacks());
+                  }} />
                   {fb.adminReply && (
                     <div className="rounded bg-muted p-2">
                       <p className="text-[10px] font-medium text-muted-foreground mb-0.5">La tua risposta</p>
@@ -755,6 +759,60 @@ export default function AdminDashboard() {
             </Card>
           );
         })}
+    </div>
+  );
+}
+
+function FeedbackAttachments({ feedback, onDeleteAttachments }: { feedback: UserFeedback; onDeleteAttachments: () => void }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  let attachments: Array<{ type: string; data: string; name: string }> = [];
+  try {
+    const msgs: ChatMessage[] = JSON.parse(feedback.chatHistory);
+    attachments = msgs.flatMap(m => (m.attachments ?? []) as Array<{ type: string; data: string; name: string }>);
+  } catch { /* ignore */ }
+
+  if (attachments.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {attachments.map((att, i) => (
+          <div key={i} className="relative">
+            {att.type === 'image' ? (
+              <img
+                src={att.data}
+                alt={att.name}
+                className="rounded-md h-20 w-auto cursor-pointer border border-border"
+                onClick={() => setExpanded(att.data)}
+              />
+            ) : (
+              <video src={att.data} controls className="rounded-md h-20 w-auto border border-border" preload="metadata" />
+            )}
+          </div>
+        ))}
+      </div>
+      {expanded && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setExpanded(null)}>
+          <img src={expanded} alt="Allegato" className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+      {confirmDelete ? (
+        <div className="flex gap-2 items-center">
+          <span className="text-xs text-muted-foreground">Eliminare tutti gli allegati?</span>
+          <Button size="sm" variant="destructive" className="h-6 text-[10px] px-2" onClick={() => { onDeleteAttachments(); setConfirmDelete(false); }}>
+            Conferma
+          </Button>
+          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setConfirmDelete(false)}>
+            Annulla
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2 text-muted-foreground" onClick={() => setConfirmDelete(true)}>
+          Elimina allegati ({attachments.length})
+        </Button>
+      )}
     </div>
   );
 }

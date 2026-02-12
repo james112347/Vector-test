@@ -11,6 +11,7 @@ import {
   saveFeedback,
   getUserFeedbacks,
   type ChatMessage,
+  type ChatAttachment,
 } from '../lib/feedback';
 import type { UserFeedback } from '../db/schema';
 
@@ -30,6 +31,108 @@ const categoryColors: Record<string, string> = {
   other: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
 };
 
+const MAX_IMAGE_SIZE = 800; // max dimension in px for compression
+const MAX_VIDEO_BYTES = 8 * 1024 * 1024; // 8MB max for videos
+
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      let w = img.width;
+      let h = img.height;
+      if (w > MAX_IMAGE_SIZE || h > MAX_IMAGE_SIZE) {
+        if (w > h) { h = Math.round(h * MAX_IMAGE_SIZE / w); w = MAX_IMAGE_SIZE; }
+        else { w = Math.round(w * MAX_IMAGE_SIZE / h); h = MAX_IMAGE_SIZE; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function AttachmentPreview({ att, onRemove }: { att: ChatAttachment; onRemove?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="relative mt-1.5">
+      {att.type === 'image' ? (
+        <>
+          <img
+            src={att.data}
+            alt={att.name}
+            className="rounded-lg max-w-full max-h-48 cursor-pointer"
+            onClick={() => setExpanded(true)}
+          />
+          {expanded && (
+            <div
+              className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+              onClick={() => setExpanded(false)}
+            >
+              <img src={att.data} alt={att.name} className="max-w-full max-h-full rounded-lg" />
+            </div>
+          )}
+        </>
+      ) : (
+        <video
+          src={att.data}
+          controls
+          className="rounded-lg max-w-full max-h-48"
+          preload="metadata"
+        />
+      )}
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function HistoryAttachments({ chatHistory }: { chatHistory: string }) {
+  try {
+    const msgs: ChatMessage[] = JSON.parse(chatHistory);
+    const attachments = msgs.flatMap(m => m.attachments ?? []);
+    if (attachments.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-2 mt-1">
+        {attachments.map((att, i) => (
+          <div key={i} className="relative">
+            {att.type === 'image' ? (
+              <img src={att.data} alt={att.name} className="rounded-md h-16 w-auto" />
+            ) : (
+              <video src={att.data} className="rounded-md h-16 w-auto" preload="metadata" />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  } catch {
+    return null;
+  }
+}
+
 export default function FeedbackChat() {
   const { user } = useAuthState();
   const navigate = useNavigate();
@@ -40,8 +143,11 @@ export default function FeedbackChat() {
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [pastFeedbacks, setPastFeedbacks] = useState<UserFeedback[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  const [uploadError, setUploadError] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user?.id) {
@@ -53,18 +159,67 @@ export default function FeedbackChat() {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setUploadError('');
+
+    for (const file of Array.from(files)) {
+      try {
+        if (file.type.startsWith('image/')) {
+          const data = await compressImage(file);
+          setPendingAttachments(prev => [...prev, {
+            type: 'image',
+            data,
+            name: file.name,
+            size: file.size,
+          }]);
+        } else if (file.type.startsWith('video/')) {
+          if (file.size > MAX_VIDEO_BYTES) {
+            setUploadError(`Video troppo grande (max ${MAX_VIDEO_BYTES / 1024 / 1024}MB). Usa un video piu corto.`);
+            continue;
+          }
+          const data = await readFileAsDataURL(file);
+          setPendingAttachments(prev => [...prev, {
+            type: 'video',
+            data,
+            name: file.name,
+            size: file.size,
+          }]);
+        }
+      } catch {
+        setUploadError('Errore nel caricamento del file.');
+      }
+    }
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
+
+  const removePendingAttachment = (index: number) => {
+    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && pendingAttachments.length === 0) || loading) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: text || (pendingAttachments.length > 0 ? `[${pendingAttachments.length} allegat${pendingAttachments.length === 1 ? 'o' : 'i'}]` : ''),
+      timestamp: Date.now(),
+      attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
+    };
     const updated = [...messages, userMsg];
     setMessages(updated);
     setInput('');
+    setPendingAttachments([]);
+    setUploadError('');
     setLoading(true);
 
     try {
-      const reply = await chatWithAI(updated);
+      // Send only text messages to AI (strip attachments for the API call)
+      const textOnly = updated.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
+      const reply = await chatWithAI(textOnly);
       const aiMsg: ChatMessage = { role: 'assistant', content: reply, timestamp: Date.now() };
       const withReply = [...updated, aiMsg];
       setMessages(withReply);
@@ -73,7 +228,6 @@ export default function FeedbackChat() {
         setFeedbackReady(true);
       }
     } catch {
-      // chatWithAI has its own fallback, so this is a truly unexpected error
       const errMsg: ChatMessage = {
         role: 'assistant',
         content: 'Si e verificato un errore imprevisto. Prova a riscrivere il messaggio.',
@@ -88,7 +242,6 @@ export default function FeedbackChat() {
   const handleSendFeedback = async () => {
     if (!user?.id || !user.email) return;
 
-    // Extract the final feedback from the last AI message or user's last message
     const lastAiMsg = [...messages].reverse().find(m => m.role === 'assistant');
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     const feedbackText = lastAiMsg
@@ -106,6 +259,8 @@ export default function FeedbackChat() {
     setFeedbackReady(false);
     setFeedbackSent(false);
     setInput('');
+    setPendingAttachments([]);
+    setUploadError('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -115,14 +270,21 @@ export default function FeedbackChat() {
     }
   };
 
-  // Send directly without AI
   const handleDirectSend = async () => {
     const text = input.trim();
-    if (!text || !user?.id || !user.email) return;
-    const directMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
+    if (!user?.id || !user.email) return;
+    if (!text && pendingAttachments.length === 0) return;
+
+    const directMsg: ChatMessage = {
+      role: 'user',
+      content: text || `[${pendingAttachments.length} allegat${pendingAttachments.length === 1 ? 'o' : 'i'}]`,
+      timestamp: Date.now(),
+      attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
+    };
     const category = detectCategory([directMsg]);
-    await saveFeedback(user.id, user.email, text, [directMsg], category);
+    await saveFeedback(user.id, user.email, text || 'Screenshot/video allegato', [directMsg], category);
     setInput('');
+    setPendingAttachments([]);
     setFeedbackSent(true);
   };
 
@@ -165,6 +327,7 @@ export default function FeedbackChat() {
                   </span>
                 </div>
                 <p className="text-sm">{fb.message}</p>
+                <HistoryAttachments chatHistory={fb.chatHistory} />
                 {fb.adminReply && (
                   <div className="rounded-lg bg-primary/5 border border-primary/10 p-2.5 mt-2">
                     <p className="text-[10px] font-medium text-primary mb-1">Risposta admin</p>
@@ -210,7 +373,6 @@ export default function FeedbackChat() {
             {/* Welcome + Informativa */}
             {messages.length === 0 && (
               <div className="space-y-3">
-                {/* Informativa */}
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2">
                   <div className="flex items-center gap-2">
                     <svg className="w-4 h-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -225,14 +387,13 @@ export default function FeedbackChat() {
                   </p>
                 </div>
 
-                {/* AI greeting */}
                 <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-3 max-w-[85%]">
                   <p className="text-sm">
                     Ciao! Ti aiuto a scrivere il tuo feedback per Vector. Descrivi il problema, la richiesta o il suggerimento e ti guidero con alcune domande per renderlo chiaro e utile.
+                    Puoi anche allegare screenshot o video!
                   </p>
                 </div>
 
-                {/* Quick suggestions */}
                 <div className="flex flex-wrap gap-2">
                   {[
                     'Ho trovato un errore',
@@ -268,11 +429,16 @@ export default function FeedbackChat() {
                       : 'bg-muted rounded-bl-sm'
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">
-                    {msg.role === 'assistant'
-                      ? extractFeedbackMessage(msg.content)
-                      : msg.content}
-                  </p>
+                  {msg.content && (
+                    <p className="text-sm whitespace-pre-wrap">
+                      {msg.role === 'assistant'
+                        ? extractFeedbackMessage(msg.content)
+                        : msg.content}
+                    </p>
+                  )}
+                  {msg.attachments?.map((att, j) => (
+                    <AttachmentPreview key={j} att={att} />
+                  ))}
                 </div>
               </div>
             ))}
@@ -305,9 +471,62 @@ export default function FeedbackChat() {
             <div ref={scrollRef} />
           </div>
 
+          {/* Pending attachments preview */}
+          {pendingAttachments.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 pt-1 border-t border-border">
+              {pendingAttachments.map((att, i) => (
+                <div key={i} className="relative shrink-0">
+                  {att.type === 'image' ? (
+                    <img src={att.data} alt={att.name} className="h-16 w-auto rounded-lg" />
+                  ) : (
+                    <div className="h-16 w-24 rounded-lg bg-muted flex items-center justify-center">
+                      <svg className="w-6 h-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removePendingAttachment(i)}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {uploadError && (
+            <p className="text-xs text-red-600 dark:text-red-400 pb-1">{uploadError}</p>
+          )}
+
           {/* Input area */}
           <div className="border-t border-border pt-3 space-y-2">
             <div className="flex gap-2">
+              {/* File upload button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 w-10 shrink-0 rounded-xl p-0"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || feedbackSent}
+                title="Allega screenshot o video"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </Button>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -322,7 +541,7 @@ export default function FeedbackChat() {
                 size="sm"
                 className="h-10 w-10 shrink-0 rounded-xl p-0"
                 onClick={sendMessage}
-                disabled={!input.trim() || loading || feedbackSent}
+                disabled={(!input.trim() && pendingAttachments.length === 0) || loading || feedbackSent}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
@@ -332,7 +551,7 @@ export default function FeedbackChat() {
             {messages.length === 0 && (
               <button
                 onClick={handleDirectSend}
-                disabled={!input.trim()}
+                disabled={!input.trim() && pendingAttachments.length === 0}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
               >
                 Oppure invia direttamente senza assistenza IA
