@@ -334,6 +334,7 @@ export async function getUserFeedbacks(userId: number): Promise<UserFeedback[]> 
       .select('*')
       .eq('user_email', user.email)
       .neq('category', '_data_sync')
+      .neq('category', '_sahha_qr')
       .order('created_at', { ascending: false });
     if (data && data.length > 0) {
       return data.map(mapSupabaseFeedback);
@@ -349,6 +350,7 @@ export async function getAllFeedbacks(): Promise<UserFeedback[]> {
       .from('feedbacks')
       .select('*')
       .neq('category', '_data_sync')
+      .neq('category', '_sahha_qr')
       .order('created_at', { ascending: false });
     if (data) {
       return data.map(mapSupabaseFeedback);
@@ -388,7 +390,8 @@ export async function getUnreadFeedbackCount(): Promise<number> {
       .from('feedbacks')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'sent')
-      .neq('category', '_data_sync');
+      .neq('category', '_data_sync')
+      .neq('category', '_sahha_qr');
     return count ?? 0;
   }
   return db.feedbacks.where('status').equals('sent').count();
