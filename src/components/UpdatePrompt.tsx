@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
 import { sendNotification } from '../lib/notifications';
 import { getAppSettings } from '../lib/useAppSettings';
@@ -78,7 +77,6 @@ function usePeriodicUpdateCheck() {
 export default function UpdatePrompt() {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const navigate = useNavigate();
 
   usePeriodicUpdateCheck();
 
@@ -99,8 +97,8 @@ export default function UpdatePrompt() {
 
   const goToChangelog = useCallback(() => {
     setNeedRefresh(false);
-    navigate('/settings', { state: { scrollToChangelog: true } });
-  }, [navigate]);
+    window.location.href = '/Vector-test/settings#changelog';
+  }, []);
 
   if (!needRefresh) return null;
 
