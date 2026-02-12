@@ -13,7 +13,7 @@ let notifyUpdate: (() => void) | null = null;
  */
 export function initSW(registerSW: (options: RegisterSWOptions) => (reloadPage?: boolean) => Promise<void>) {
   updateSWFn = registerSW({
-    onRegisteredSW(swUrl, registration) {
+    onRegisteredSW(_swUrl, registration) {
       swRegistration = registration;
       if (resolveReady) resolveReady(registration);
     },
