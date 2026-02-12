@@ -20,6 +20,7 @@ import {
   findDeviceProfileDirect,
   daysAgoStart,
 } from './sahha';
+import { supabase } from './supabase';
 
 /** True when any Sahha auth mode is available. */
 export const isSahhaAvailable = isSahhaDirectEnabled || !!import.meta.env.VITE_SUPABASE_URL;
@@ -203,6 +204,97 @@ export async function syncAll(
     syncBiomarkers(userId, days),
   ]);
   return { scores, biomarkers };
+}
+
+// ---------------------------------------------------------------------------
+// Sync from Supabase (webhook data — available even when app was closed)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch Sahha data stored by the webhook in Supabase and import into local DB.
+ * This allows the app to show fresh data even if it was closed for days,
+ * because the webhook pushes data to Supabase 24/7.
+ *
+ * Returns true if data was found and imported.
+ */
+export async function syncFromSupabase(userId: number): Promise<boolean> {
+  if (!supabase) return false;
+
+  const localProfile = await getSahhaProfile(userId);
+  if (!localProfile) return false;
+
+  try {
+    // Find the Supabase user_id via external_id
+    const { data: sbProfile } = await supabase
+      .from('sahha_profiles')
+      .select('user_id')
+      .eq('external_id', localProfile.externalId)
+      .single();
+
+    if (!sbProfile) return false;
+
+    const sbUserId = sbProfile.user_id;
+
+    // Fetch scores and biomarkers from Supabase in parallel
+    const [scoresResult, biomarkersResult] = await Promise.all([
+      supabase
+        .from('sahha_scores')
+        .select('*')
+        .eq('user_id', sbUserId)
+        .order('score_date_time', { ascending: false })
+        .limit(200),
+      supabase
+        .from('sahha_biomarkers')
+        .select('*')
+        .eq('user_id', sbUserId)
+        .order('start_date_time', { ascending: false })
+        .limit(500),
+    ]);
+
+    const sbScores = scoresResult.data;
+    const sbBiomarkers = biomarkersResult.data;
+
+    if (!sbScores?.length && !sbBiomarkers?.length) return false;
+
+    const now = new Date();
+
+    // Import scores into local DB
+    if (sbScores && sbScores.length > 0) {
+      const logs: SahhaScoreLog[] = sbScores.map((s) => ({
+        userId,
+        type: s.type,
+        score: Number(s.score),
+        state: s.state,
+        factors: typeof s.factors === 'string' ? s.factors : JSON.stringify(s.factors ?? []),
+        scoreDateTime: s.score_date_time,
+        fetchedAt: now,
+      }));
+      await db.sahhaScores.where('userId').equals(userId).delete();
+      await db.sahhaScores.bulkAdd(logs);
+    }
+
+    // Import biomarkers into local DB
+    if (sbBiomarkers && sbBiomarkers.length > 0) {
+      const logs: SahhaBiomarkerLog[] = sbBiomarkers.map((b) => ({
+        userId,
+        type: b.type,
+        category: b.category,
+        value: b.value,
+        unit: b.unit,
+        periodicity: b.periodicity,
+        startDateTime: b.start_date_time,
+        endDateTime: b.end_date_time,
+        fetchedAt: now,
+      }));
+      await db.sahhaBiomarkers.where('userId').equals(userId).delete();
+      await db.sahhaBiomarkers.bulkAdd(logs);
+    }
+
+    return true;
+  } catch (e) {
+    console.warn('syncFromSupabase failed:', e);
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
