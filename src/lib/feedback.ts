@@ -67,12 +67,25 @@ FUNZIONALITA DELL'APP VECTOR:
 - Impostazioni: tema chiaro/scuro, notifiche, aggiornamento automatico
 - Dashboard amministratore per gestione utenti`;
 
+/**
+ * Main chat function. Tries Groq AI first, falls back to guided assistant.
+ */
 export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
+  // Try real AI first
   const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('IA non disponibile. Scrivi il tuo feedback e lo invieremo direttamente.');
+  if (apiKey) {
+    try {
+      return await callGroqAPI(apiKey, messages);
+    } catch (e) {
+      console.warn('Groq API failed, using guided assistant:', e);
+    }
   }
 
+  // Fallback: guided assistant (always works, no API needed)
+  return guidedAssistant(messages);
+}
+
+async function callGroqAPI(apiKey: string, messages: ChatMessage[]): Promise<string> {
   const apiMessages = [
     { role: 'system' as const, content: SYSTEM_PROMPT },
     ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
@@ -100,6 +113,114 @@ export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
 
   const data = await response.json();
   return data.choices?.[0]?.message?.content || 'Nessuna risposta';
+}
+
+// ─── Guided assistant (offline, rule-based) ─────────────────────────
+
+type FeedbackType = 'bug' | 'feature' | 'improvement' | 'support' | null;
+
+interface GuidedStep {
+  question: string;
+  field: string;
+}
+
+const GUIDED_FLOWS: Record<string, GuidedStep[]> = {
+  bug: [
+    { question: 'In quale pagina o sezione dell\'app si e verificato il problema?', field: 'pagina' },
+    { question: 'Cosa stavi facendo quando e successo?', field: 'azione' },
+    { question: 'Cosa ti aspettavi che succedesse e cosa e successo invece?', field: 'risultato' },
+    { question: 'Su quale dispositivo usi l\'app? (es. iPhone, Android, computer)', field: 'dispositivo' },
+  ],
+  feature: [
+    { question: 'Cosa vorresti poter fare nell\'app che oggi non e possibile?', field: 'descrizione' },
+    { question: 'In quale situazione ti sarebbe utile questa funzione?', field: 'contesto' },
+    { question: 'Come immagini che funzioni? Anche una descrizione semplice va bene.', field: 'dettaglio' },
+  ],
+  improvement: [
+    { question: 'Quale parte dell\'app vorresti migliorare?', field: 'area' },
+    { question: 'Cosa non ti convince del funzionamento attuale?', field: 'problema' },
+    { question: 'Come vorresti che funzionasse invece?', field: 'proposta' },
+  ],
+  support: [
+    { question: 'Con quale funzione dell\'app hai bisogno di aiuto?', field: 'funzione' },
+    { question: 'Cosa hai provato a fare e cosa e successo?', field: 'dettaglio' },
+  ],
+};
+
+function detectFeedbackType(text: string): FeedbackType {
+  const t = text.toLowerCase();
+  if (/bug|errore|crash|non funziona|problema|rotto|blocca|si chiude/.test(t)) return 'bug';
+  if (/nuova funzion|aggiung|vorrei poter|manca|sarebbe bello|aggiungere/.test(t)) return 'feature';
+  if (/miglior|meglio|cambiare|modific|ottimizz|suggerim/.test(t)) return 'improvement';
+  if (/aiuto|come si fa|non capisco|non riesco|spieg|help/.test(t)) return 'support';
+  return null;
+}
+
+function guidedAssistant(messages: ChatMessage[]): string {
+  const userMessages = messages.filter(m => m.role === 'user');
+  const userCount = userMessages.length;
+
+  // No messages yet - shouldn't happen, but handle it
+  if (userCount === 0) {
+    return 'Ciao! Dimmi cosa vorresti segnalare o chiedere riguardo a Vector.';
+  }
+
+  const firstUserText = userMessages[0].content;
+  const lastUserText = userMessages[userMessages.length - 1].content;
+  const feedbackType = detectFeedbackType(firstUserText);
+
+  // First message: detect type and ask first question
+  if (userCount === 1) {
+    if (!feedbackType) {
+      return 'Grazie per il messaggio. Per poterti aiutare al meglio, di che tipo di segnalazione si tratta?\n\n' +
+        '- Un problema o errore (bug)\n' +
+        '- Una nuova funzione che vorresti\n' +
+        '- Un miglioramento a qualcosa di esistente\n' +
+        '- Hai bisogno di aiuto con l\'app';
+    }
+
+    const flow = GUIDED_FLOWS[feedbackType];
+    return `Capito, grazie. ${flow[0].question}`;
+  }
+
+  // Second message: if type wasn't clear before, try to detect it now
+  const resolvedType = feedbackType || detectFeedbackType(lastUserText) || 'bug';
+  const flow = GUIDED_FLOWS[resolvedType];
+
+  // Calculate which step we're on (subtract 1 for the type detection step if needed)
+  const answeredSteps = feedbackType ? userCount - 1 : userCount - 2;
+
+  // Still have questions to ask
+  if (answeredSteps < flow.length) {
+    const nextStep = flow[answeredSteps];
+    if (nextStep) {
+      return nextStep.question;
+    }
+  }
+
+  // All questions answered - build summary
+  const typeLabels: Record<string, string> = {
+    bug: 'Segnalazione bug',
+    feature: 'Richiesta nuova funzione',
+    improvement: 'Suggerimento di miglioramento',
+    support: 'Richiesta di supporto',
+  };
+
+  const answers = userMessages.map(m => m.content);
+  let summary = `Grazie per le informazioni. Ecco il riepilogo del tuo feedback:\n\n`;
+  summary += `**Tipo:** ${typeLabels[resolvedType]}\n`;
+
+  // Include all user answers as structured feedback
+  const relevantAnswers = feedbackType ? answers.slice(1) : answers.slice(2);
+  for (let i = 0; i < Math.min(relevantAnswers.length, flow.length); i++) {
+    summary += `**${flow[i].field.charAt(0).toUpperCase() + flow[i].field.slice(1)}:** ${relevantAnswers[i]}\n`;
+  }
+
+  // Include the original message
+  summary += `\n**Messaggio originale:** "${firstUserText}"`;
+  summary += `\n\nSe e tutto corretto, premi "Invia all'amministratore". [FEEDBACK_PRONTO]`;
+
+  return summary;
 }
 
 export function isFeedbackReady(text: string): boolean {

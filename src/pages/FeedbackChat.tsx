@@ -72,14 +72,14 @@ export default function FeedbackChat() {
       if (isFeedbackReady(reply)) {
         setFeedbackReady(true);
       }
-    } catch (e) {
+    } catch {
+      // chatWithAI has its own fallback, so this is a truly unexpected error
       const errMsg: ChatMessage = {
         role: 'assistant',
-        content: `Mi dispiace, c'e stato un errore. Puoi comunque scrivere il tuo feedback e inviarlo direttamente.`,
+        content: 'Si e verificato un errore imprevisto. Prova a riscrivere il messaggio.',
         timestamp: Date.now(),
       };
       setMessages([...updated, errMsg]);
-      setFeedbackReady(true);
     } finally {
       setLoading(false);
     }
@@ -228,17 +228,17 @@ export default function FeedbackChat() {
                 {/* AI greeting */}
                 <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-3 max-w-[85%]">
                   <p className="text-sm">
-                    Ciao! Sono l'assistente di Vector. Dimmi cosa vorresti segnalare o migliorare e ti aiutero a formulare il feedback. Puoi anche chiedermi aiuto sull'uso dell'app!
+                    Ciao! Ti aiuto a scrivere il tuo feedback per Vector. Descrivi il problema, la richiesta o il suggerimento e ti guidero con alcune domande per renderlo chiaro e utile.
                   </p>
                 </div>
 
                 {/* Quick suggestions */}
                 <div className="flex flex-wrap gap-2">
                   {[
-                    'Ho trovato un problema',
+                    'Ho trovato un errore',
                     'Vorrei una nuova funzione',
                     'Ho bisogno di aiuto',
-                    'Suggerimento per migliorare',
+                    'Ho un suggerimento',
                   ].map(suggestion => (
                     <button
                       key={suggestion}
