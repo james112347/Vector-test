@@ -73,15 +73,21 @@ export async function checkExistingSession(): Promise<{ session: Session; user: 
   }
 
   // Sync approval status from Supabase (in case admin approved on another device)
+  // Wrapped in try/catch: network failure should NOT invalidate a valid local session
   if (supabase && !user.isApproved) {
-    const { data } = await supabase
-      .from('app_users')
-      .select('is_approved')
-      .eq('email', user.email)
-      .single();
-    if (data?.is_approved) {
-      await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
-      user.isApproved = true;
+    try {
+      const { data } = await supabase
+        .from('app_users')
+        .select('is_approved')
+        .eq('email', user.email)
+        .single();
+      if (data?.is_approved) {
+        await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
+        user.isApproved = true;
+      }
+    } catch {
+      // Network error — don't kill the session, use local data
+      console.warn('Could not sync approval status, using local data');
     }
   }
 
@@ -118,17 +124,38 @@ export async function registerUser(
     throw new Error('Devi accettare i Termini e Condizioni per registrarti.');
   }
 
-  const existing = await db.users.where('email').equals(email).first();
+  // Normalize email to lowercase
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const existing = await db.users.where('email').equals(normalizedEmail).first();
   if (existing) {
     throw new Error('Un account con questa email esiste già.');
   }
 
+  // Also check Supabase for existing account (registered on another device)
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('app_users')
+        .select('email')
+        .eq('email', normalizedEmail)
+        .single();
+      if (data) {
+        throw new Error('Un account con questa email esiste già. Prova ad accedere.');
+      }
+    } catch (e) {
+      // If it's our own error, rethrow
+      if (e instanceof Error && e.message.includes('esiste')) throw e;
+      // Network error — proceed with registration
+    }
+  }
+
   const passwordHash = await hashPassword(password);
   const now = new Date();
-  const admin = isAdminEmail(email);
+  const admin = isAdminEmail(normalizedEmail);
 
   const user: User = {
-    email,
+    email: normalizedEmail,
     passwordHash,
     hasAcceptedTerms: true,
     termsAcceptedAt: now,
@@ -144,7 +171,7 @@ export async function registerUser(
   if (supabase) {
     await supabase.from('app_users').upsert(
       {
-        email,
+        email: normalizedEmail,
         password_hash: passwordHash,
         is_approved: admin,
         is_admin: admin,
@@ -164,31 +191,48 @@ export async function registerUser(
  * Checks Supabase for latest approval status.
  */
 export async function authenticateUser(email: string, password: string): Promise<User> {
-  let user = await db.users.where('email').equals(email).first();
+  // Normalize email to lowercase to prevent case-sensitivity issues
+  const normalizedEmail = email.trim().toLowerCase();
+
+  let user = await db.users.where('email').equals(normalizedEmail).first();
 
   // If user not found locally, try to fetch from Supabase (cross-device login)
   if (!user && supabase) {
-    const { data } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('email', email)
-      .single();
-    if (data?.password_hash) {
-      const valid = await verifyPassword(password, data.password_hash);
-      if (!valid) throw new Error('Email o password non validi.');
-      // Create local copy of this user
-      const now = new Date();
-      const localUser: User = {
-        email: data.email,
-        passwordHash: data.password_hash,
-        hasAcceptedTerms: true,
-        isApproved: data.is_approved ?? false,
-        isAdmin: data.is_admin ?? false,
-        createdAt: new Date(data.created_at),
-        updatedAt: now,
-      };
-      const id = await db.users.add(localUser);
-      user = { ...localUser, id };
+    try {
+      const { data, error } = await supabase
+        .from('app_users')
+        .select('*')
+        .eq('email', normalizedEmail)
+        .single();
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = "not found", any other error is a connectivity/server issue
+        throw error;
+      }
+      if (data?.password_hash) {
+        const valid = await verifyPassword(password, data.password_hash);
+        if (!valid) throw new Error('Email o password non validi.');
+        // Create local copy of this user
+        const now = new Date();
+        const localUser: User = {
+          email: data.email,
+          passwordHash: data.password_hash,
+          hasAcceptedTerms: true,
+          isApproved: data.is_approved ?? false,
+          isAdmin: data.is_admin ?? false,
+          createdAt: new Date(data.created_at),
+          updatedAt: now,
+        };
+        const id = await db.users.add(localUser);
+        user = { ...localUser, id };
+      }
+    } catch (e) {
+      // If it's our own auth error, rethrow
+      if (e instanceof Error && e.message === 'Email o password non validi.') throw e;
+      // Network/Supabase error — inform user clearly
+      console.error('Supabase auth fetch failed:', e);
+      if (!user) {
+        throw new Error('Impossibile connettersi al server. Verifica la connessione internet e riprova.');
+      }
     }
   }
 
@@ -200,20 +244,25 @@ export async function authenticateUser(email: string, password: string): Promise
 
   // If local password fails, check if password was reset remotely via Supabase
   if (!valid && supabase) {
-    const { data } = await supabase
-      .from('app_users')
-      .select('password_hash')
-      .eq('email', email)
-      .single();
-    if (data?.password_hash) {
-      valid = await verifyPassword(password, data.password_hash);
-      if (valid) {
-        // Sync the remotely-reset password to local DB
-        await db.users.update(user.id!, {
-          passwordHash: data.password_hash,
-          updatedAt: new Date(),
-        });
+    try {
+      const { data } = await supabase
+        .from('app_users')
+        .select('password_hash')
+        .eq('email', normalizedEmail)
+        .single();
+      if (data?.password_hash) {
+        valid = await verifyPassword(password, data.password_hash);
+        if (valid) {
+          // Sync the remotely-reset password to local DB
+          await db.users.update(user.id!, {
+            passwordHash: data.password_hash,
+            updatedAt: new Date(),
+          });
+        }
       }
+    } catch {
+      // Network error during password sync check — use local password result
+      console.warn('Could not check remote password, using local auth only');
     }
   }
 
@@ -222,7 +271,7 @@ export async function authenticateUser(email: string, password: string): Promise
   }
 
   // Ensure admin email always has admin + approved flags
-  if (isAdminEmail(email) && (!user.isAdmin || !user.isApproved)) {
+  if (isAdminEmail(normalizedEmail) && (!user.isAdmin || !user.isApproved)) {
     await db.users.update(user.id!, { isAdmin: true, isApproved: true, updatedAt: new Date() });
     user.isAdmin = true;
     user.isApproved = true;
@@ -230,14 +279,19 @@ export async function authenticateUser(email: string, password: string): Promise
 
   // Check Supabase for latest approval status
   if (supabase && !user.isApproved) {
-    const { data } = await supabase
-      .from('app_users')
-      .select('is_approved')
-      .eq('email', email)
-      .single();
-    if (data?.is_approved) {
-      await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
-      user.isApproved = true;
+    try {
+      const { data } = await supabase
+        .from('app_users')
+        .select('is_approved')
+        .eq('email', normalizedEmail)
+        .single();
+      if (data?.is_approved) {
+        await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
+        user.isApproved = true;
+      }
+    } catch {
+      // Network error — use local approval status
+      console.warn('Could not sync approval status');
     }
   }
 

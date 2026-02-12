@@ -5,6 +5,7 @@ import { Separator } from '../components/ui/separator';
 import { useAuthState } from '../contexts/AuthContext';
 import { getAllUsers, adminResetPassword } from '../lib/auth';
 import { getAllFeedbacks, markFeedbackRead, replyToFeedback } from '../lib/feedback';
+import { getAllUserActivity, type UserActivity } from '../lib/useActivityTracker';
 import { db } from '../db/db';
 import type { User, UserProfile, EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, UserFeedback } from '../db/schema';
 
@@ -111,10 +112,24 @@ function getAvatarColor(email: string): string {
   return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
+function timeAgo(date: Date): string {
+  const now = Date.now();
+  const diff = now - date.getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'ora';
+  if (mins < 60) return `${mins}min fa`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h fa`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'ieri';
+  return `${days}gg fa`;
+}
+
 export default function AdminDashboard() {
   const { user: currentUser } = useAuthState();
   const [usersData, setUsersData] = useState<UserData[]>([]);
   const [feedbacks, setFeedbacks] = useState<UserFeedback[]>([]);
+  const [activityData, setActivityData] = useState<UserActivity[]>([]);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [resetPasswordFor, setResetPasswordFor] = useState<string | null>(null);
@@ -126,6 +141,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadAllData();
     getAllFeedbacks().then(setFeedbacks);
+    getAllUserActivity().then(setActivityData);
   }, []);
 
   async function loadAllData() {
@@ -351,6 +367,46 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* User Activity Analytics */}
+      {activityData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Utilizzo App</CardTitle>
+            <CardDescription>Tempo e frequenza di utilizzo per utente</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {/* Table header */}
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pb-1 border-b border-border">
+                <span>Utente</span>
+                <span className="text-center w-14">Sessioni</span>
+                <span className="text-center w-16">Tempo tot</span>
+                <span className="text-center w-14">Oggi</span>
+              </div>
+              {activityData.map(a => {
+                const totalHours = Math.floor(a.total_minutes / 60);
+                const totalMins = a.total_minutes % 60;
+                const totalStr = totalHours > 0 ? `${totalHours}h ${totalMins}m` : `${totalMins}m`;
+                const todayStr = a.today_date === new Date().toISOString().slice(0, 10) ? `${a.today_minutes}m` : '-';
+                const lastActive = a.last_active_at ? timeAgo(new Date(a.last_active_at)) : '-';
+
+                return (
+                  <div key={a.email} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center py-1.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{a.email.split('@')[0]}</p>
+                      <p className="text-[10px] text-muted-foreground">Attivo {lastActive}</p>
+                    </div>
+                    <span className="text-sm font-bold text-center w-14">{a.total_sessions}</span>
+                    <span className="text-sm font-medium text-center w-16">{totalStr}</span>
+                    <span className={`text-sm font-medium text-center w-14 ${todayStr !== '-' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>{todayStr}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* User cards */}
       {usersData
@@ -608,6 +664,34 @@ export default function AdminDashboard() {
                         Nessun dato disponibile per questo utente
                       </p>
                     )}
+
+                    {/* User Activity */}
+                    {(() => {
+                      const activity = activityData.find(a => a.email === user.email);
+                      if (!activity) return null;
+                      const totalH = Math.floor(activity.total_minutes / 60);
+                      const totalM = activity.total_minutes % 60;
+                      return (
+                        <>
+                          <Separator />
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Utilizzo app</h4>
+                            <div className="grid grid-cols-2 gap-y-1.5 text-sm">
+                              <span className="text-muted-foreground">Sessioni totali</span>
+                              <span className="font-medium">{activity.total_sessions}</span>
+                              <span className="text-muted-foreground">Tempo totale</span>
+                              <span className="font-medium">{totalH > 0 ? `${totalH}h ${totalM}m` : `${totalM}m`}</span>
+                              <span className="text-muted-foreground">Oggi</span>
+                              <span className="font-medium">
+                                {activity.today_date === new Date().toISOString().slice(0, 10) ? `${activity.today_minutes}min` : '-'}
+                              </span>
+                              <span className="text-muted-foreground">Ultimo accesso</span>
+                              <span className="font-medium">{activity.last_active_at ? timeAgo(new Date(activity.last_active_at)) : '-'}</span>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {/* Admin: Reset Password */}
                     <Separator />

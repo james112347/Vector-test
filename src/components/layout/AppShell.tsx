@@ -5,6 +5,7 @@ import { BottomNav } from './BottomNav';
 import InstallPrompt from '../InstallPrompt';
 import { useAdminNotifications } from '../../lib/useAdminNotifications';
 import { useSahhaAutoSync } from '../../lib/useSahhaAutoSync';
+import { useActivityTracker } from '../../lib/useActivityTracker';
 import { useAuthState } from '../../contexts/AuthContext';
 
 const tooltipMessages = [
@@ -37,6 +38,9 @@ export function AppShell() {
 
   // Auto-sync Sahha wearable data (every 15 min + on app resume)
   useSahhaAutoSync(user?.id);
+
+  // Track user activity (time in app, session count) for admin analytics
+  useActivityTracker(user?.email);
 
   const pickMessage = useCallback(() => {
     let idx = Math.floor(Math.random() * tooltipMessages.length);
