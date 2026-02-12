@@ -16,8 +16,9 @@ import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
 import ScreenTimeCard from '../components/ScreenTimeCard';
 import SmartHabitPrompt from '../components/SmartHabitPrompt';
-import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
+import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, FoodLog } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
+import { getTodayFoodLogs, getTodayCalorieSummary } from '../lib/food-ai';
 import {
   ResponsiveContainer,
   LineChart,
@@ -66,6 +67,7 @@ export default function Dashboard() {
   const [checkinSummaries, setCheckinSummaries] = useState<DailyCheckinSummary[]>([]);
   const [sahhaScores, setSahhaScores] = useState<SahhaScoreLog[]>([]);
   const [sahhaBiomarkers, setSahhaBiomarkers] = useState<SahhaBiomarkerLog[]>([]);
+  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -95,6 +97,14 @@ export default function Dashboard() {
       setTodayLog(today || null);
       setWeekLogs(week);
       setCheckinSummaries(summaries);
+
+      // Load food logs
+      try {
+        const foods = await getTodayFoodLogs(uid);
+        setFoodLogs(foods);
+      } catch {
+        // ignore
+      }
 
       // Load Sahha data if connected
       try {
@@ -339,6 +349,41 @@ export default function Dashboard() {
 
       {/* Screen Time — tempo di utilizzo app */}
       {user?.id && <ScreenTimeCard userId={user.id} />}
+
+      {/* Food Scanner Card */}
+      {(() => {
+        const foodSummary = getTodayCalorieSummary(foodLogs);
+        return (
+          <button
+            onClick={() => navigate('/food')}
+            className="w-full rounded-xl border border-border bg-card p-4 text-left hover:bg-muted/50 transition-colors shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Food Scanner</p>
+                {foodLogs.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Oggi: {foodSummary.total} kcal da {foodSummary.meals} {foodSummary.meals === 1 ? 'pasto' : 'pasti'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Scatta una foto e calcola le calorie
+                  </p>
+                )}
+              </div>
+              <svg className="h-5 w-5 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        );
+      })()}
 
       {/* Today's Energy */}
       {todayLog ? (
