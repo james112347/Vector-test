@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
 import { playSuggestionSound, playAlertSound, CATEGORY_LABELS, COGNITIVE_LOAD_LABELS } from '../lib/energy-orientation';
-import type { Recommendation, EnergyState, EnergyLevel, EnergyFactor } from '../lib/energy-orientation';
+import type { Recommendation, EnergyState, EnergyLevel, EnergyFactor, AIOrientationInsight } from '../lib/energy-orientation';
 import {
   Compass,
   RefreshCw,
@@ -20,6 +20,9 @@ import {
   Heart,
   AlertTriangle,
   Info,
+  Sparkles,
+  Clock,
+  MessageCircle,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -243,6 +246,100 @@ function RecommendationCard({
 }
 
 // ---------------------------------------------------------------------------
+// AI Insight Card
+// ---------------------------------------------------------------------------
+
+function AIInsightCard({ insight }: { insight: AIOrientationInsight }) {
+  const urgencyColors: Record<string, string> = {
+    none: 'border-border',
+    low: 'border-blue-500/20 bg-blue-500/5',
+    medium: 'border-amber-500/20 bg-amber-500/5',
+    high: 'border-orange-500/20 bg-orange-500/5',
+    critical: 'border-red-500/20 bg-red-500/5',
+  };
+  const urgencyLabels: Record<string, string> = {
+    none: 'Stabile',
+    low: 'Sotto controllo',
+    medium: 'Da monitorare',
+    high: 'Richiede azione',
+    critical: 'Intervento urgente',
+  };
+
+  return (
+    <Card className={urgencyColors[insight.urgencyLevel] || ''}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          Analisi IA
+          <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-auto">
+            {urgencyLabels[insight.urgencyLevel] || 'Attivo'}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* State Analysis */}
+        <div>
+          <p className="text-sm leading-relaxed">{insight.stateAnalysis}</p>
+        </div>
+
+        {/* Primary Advice */}
+        <div className="rounded-lg bg-primary/5 border border-primary/10 p-2.5">
+          <p className="text-xs font-semibold text-primary mb-1">Consiglio principale</p>
+          <p className="text-sm">{insight.primaryAdvice}</p>
+        </div>
+
+        {/* Recommendation Rationale */}
+        {insight.recommendationRationale && (
+          <div className="flex items-start gap-2">
+            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">{insight.recommendationRationale}</p>
+          </div>
+        )}
+
+        {/* Short-term Forecast */}
+        {insight.shortTermForecast && (
+          <div className="flex items-start gap-2">
+            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Previsione</p>
+              <p className="text-xs text-muted-foreground">{insight.shortTermForecast}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Next notification timing */}
+        {insight.nextNotificationTiming && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t border-border">
+            <Clock className="h-3.5 w-3.5" />
+            <span>Prossima notifica: {insight.nextNotificationTiming}</span>
+          </div>
+        )}
+
+        {/* Auto-responses scheduled */}
+        {insight.autoResponses.length > 0 && (
+          <div className="pt-1 border-t border-border">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+              Notifiche programmate
+            </p>
+            <div className="space-y-1">
+              {insight.autoResponses.map((auto, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    auto.type === 'alert' ? 'bg-red-500' : 'bg-blue-500'
+                  }`} />
+                  <span className="text-muted-foreground">{auto.trigger}:</span>
+                  <span className="truncate">{auto.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -334,6 +431,11 @@ export default function Orientation() {
             <FactorsList factors={energyState.factors} />
           </CardContent>
         </Card>
+      )}
+
+      {/* AI Insight */}
+      {result?.aiInsight && (
+        <AIInsightCard insight={result.aiInsight} />
       )}
 
       {/* Notifications from orientation */}

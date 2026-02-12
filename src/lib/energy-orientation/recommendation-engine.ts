@@ -16,6 +16,7 @@ import type {
 } from './types';
 import { getFullCatalog } from './activity-catalog';
 import { assessEnergyState } from './state-assessor';
+import { generateAIOrientationInsight } from './ai-orientation';
 
 // ---------------------------------------------------------------------------
 // Costanti e mappe
@@ -319,10 +320,33 @@ export async function generateOrientation(userId: number): Promise<OrientationRe
   // 6. Genera notifiche
   const notifications = generateNotifications(energyState, recommendations[0] || null);
 
+  // 7. Insight IA (in parallelo, non blocca)
+  let aiInsight = null;
+  try {
+    aiInsight = await generateAIOrientationInsight(userId, energyState, recommendations);
+
+    // Se l'IA ha suggerito autoResponses, aggiungile alle notifiche come programmazioni
+    if (aiInsight?.autoResponses) {
+      for (const auto of aiInsight.autoResponses) {
+        notifications.push({
+          id: `ai_auto_${now.getTime()}_${Math.random().toString(36).slice(2, 6)}`,
+          type: auto.type,
+          title: auto.title,
+          body: `${auto.body} [${auto.trigger}]`,
+          sentAsPush: false,
+          createdAt: now,
+        });
+      }
+    }
+  } catch {
+    // IA non disponibile, continua senza
+  }
+
   return {
     energyState,
     recommendations,
     notifications,
+    aiInsight,
     generatedAt: now,
   };
 }

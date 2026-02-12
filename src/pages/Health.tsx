@@ -515,6 +515,369 @@ function HealthSummaryRing({ scores }: { scores: SahhaScoreLog[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Sleep Phases Card — mostra fasi del sonno con norme
+// ---------------------------------------------------------------------------
+
+/** Range normali delle fasi del sonno (in % della durata totale). Fonte: National Sleep Foundation */
+const SLEEP_PHASE_NORMS = {
+  rem: { min: 20, max: 25, label: 'REM', color: '#8b5cf6', description: 'Consolidamento memoria, elaborazione emotiva' },
+  deep: { min: 13, max: 23, label: 'Profondo', color: '#3b82f6', description: 'Recupero fisico, sistema immunitario, ormone della crescita' },
+  light: { min: 50, max: 60, label: 'Leggero', color: '#06b6d4', description: 'Transizione, mantenimento cicli del sonno' },
+};
+
+function SleepPhasesCard({ biomarkers }: { biomarkers: SahhaBiomarkerLog[] }) {
+  const sleepDur = biomarkers.find(b => b.type === 'sleep_duration');
+  const remDur = biomarkers.find(b => b.type === 'sleep_rem_duration');
+  const deepDur = biomarkers.find(b => b.type === 'sleep_deep_duration');
+  const lightDur = biomarkers.find(b => b.type === 'sleep_light_duration');
+
+  if (!sleepDur || (!remDur && !deepDur && !lightDur)) return null;
+
+  const totalMin = parseFloat(sleepDur.value);
+  if (!Number.isFinite(totalMin) || totalMin <= 0) return null;
+
+  const phases = [
+    { key: 'rem' as const, bio: remDur },
+    { key: 'deep' as const, bio: deepDur },
+    { key: 'light' as const, bio: lightDur },
+  ].filter(p => p.bio != null).map(p => {
+    const mins = parseFloat(p.bio!.value);
+    const pct = Number.isFinite(mins) ? Math.round((mins / totalMin) * 100) : 0;
+    const norm = SLEEP_PHASE_NORMS[p.key];
+    const status: 'good' | 'warning' | 'low' =
+      pct >= norm.min && pct <= norm.max ? 'good'
+        : pct < norm.min ? 'low'
+          : 'warning';
+    return {
+      ...norm,
+      mins: Number.isFinite(mins) ? mins : 0,
+      pct,
+      status,
+      key: p.key,
+    };
+  });
+
+  if (phases.length === 0) return null;
+
+  const totalHrs = Math.floor(totalMin / 60);
+  const totalRemainMin = Math.round(totalMin % 60);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Moon className="h-4 w-4 text-purple-500" />
+          Fasi del sonno
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Durata totale: <span className="font-semibold text-foreground">{totalHrs}h {totalRemainMin}m</span>
+        </p>
+
+        {/* Phase bars */}
+        <div className="flex h-5 rounded-full overflow-hidden bg-muted">
+          {phases.map(phase => (
+            <div
+              key={phase.key}
+              className="h-full transition-all duration-500"
+              style={{ width: `${phase.pct}%`, backgroundColor: phase.color }}
+              title={`${phase.label}: ${phase.pct}%`}
+            />
+          ))}
+        </div>
+
+        {/* Legend with status */}
+        <div className="space-y-2.5">
+          {phases.map(phase => {
+            const hrs = Math.floor(phase.mins / 60);
+            const mins = Math.round(phase.mins % 60);
+            const statusColors = {
+              good: 'text-green-600 dark:text-green-400',
+              warning: 'text-amber-600 dark:text-amber-400',
+              low: 'text-red-600 dark:text-red-400',
+            };
+            const statusLabels = {
+              good: 'Nella norma',
+              warning: phase.pct > SLEEP_PHASE_NORMS[phase.key].max ? 'Sopra la norma' : 'Sotto la norma',
+              low: 'Sotto la norma',
+            };
+
+            return (
+              <div key={phase.key}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-3 h-3 rounded-sm shrink-0"
+                      style={{ backgroundColor: phase.color }}
+                    />
+                    <span className="text-sm font-medium">{phase.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold tabular-nums">
+                      {hrs > 0 ? `${hrs}h ` : ''}{mins}m
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground">({phase.pct}%)</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between ml-5 mt-0.5">
+                  <span className="text-[10px] text-muted-foreground">{phase.description}</span>
+                  <span className={`text-[10px] font-semibold ${statusColors[phase.status]}`}>
+                    {statusLabels[phase.status]}
+                  </span>
+                </div>
+                <div className="ml-5 mt-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground">Norma: {SLEEP_PHASE_NORMS[phase.key].min}-{SLEEP_PHASE_NORMS[phase.key].max}%</span>
+                    <div className="flex-1 h-1 bg-muted rounded-full relative">
+                      {/* Normal range indicator */}
+                      <div
+                        className="absolute h-full bg-green-500/30 rounded-full"
+                        style={{
+                          left: `${SLEEP_PHASE_NORMS[phase.key].min}%`,
+                          width: `${SLEEP_PHASE_NORMS[phase.key].max - SLEEP_PHASE_NORMS[phase.key].min}%`,
+                        }}
+                      />
+                      {/* Current value indicator */}
+                      <div
+                        className="absolute w-2 h-2 rounded-full -top-0.5 transition-all"
+                        style={{
+                          left: `${Math.min(phase.pct, 100)}%`,
+                          backgroundColor: phase.color,
+                          transform: 'translateX(-50%)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Warnings for out-of-norm phases */}
+        {phases.filter(p => p.status !== 'good').length > 0 && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2.5 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold text-amber-800 dark:text-amber-200">Attenzione fasi sonno</span>
+            </div>
+            {phases.filter(p => p.status !== 'good').map(phase => (
+              <p key={phase.key} className="text-xs text-amber-700 dark:text-amber-300 ml-5">
+                {phase.label} ({phase.pct}%): {phase.status === 'low'
+                  ? `sotto la norma (min ${SLEEP_PHASE_NORMS[phase.key].min}%). ${
+                    phase.key === 'deep' ? 'Il sonno profondo e\' cruciale per il recupero fisico. Evita alcol e schermi prima di dormire.'
+                      : phase.key === 'rem' ? 'Il sonno REM e\' essenziale per la memoria. Mantieni un orario regolare e riduci lo stress.'
+                        : 'Potrebbe indicare un sonno frammentato.'
+                  }`
+                  : `sopra la norma (max ${SLEEP_PHASE_NORMS[phase.key].max}%). ${
+                    phase.key === 'light' ? 'Troppo sonno leggero puo indicare difficolta ad entrare nelle fasi profonde.'
+                      : 'Consulta i dati nei prossimi giorni per confermare il trend.'
+                  }`
+                }
+              </p>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Health Warnings — avvisi quando i valori sono fuori norma
+// ---------------------------------------------------------------------------
+
+interface HealthWarningItem {
+  severity: 'alert' | 'warning' | 'info';
+  title: string;
+  body: string;
+  metric: string;
+}
+
+function analyzeHealthWarnings(
+  biomarkers: SahhaBiomarkerLog[],
+  scores: SahhaScoreLog[],
+): HealthWarningItem[] {
+  const warnings: HealthWarningItem[] = [];
+  const find = (type: string) => biomarkers.find(b => b.type === type);
+
+  // Frequenza cardiaca a riposo
+  const hr = find('heart_rate_resting');
+  if (hr) {
+    const val = parseFloat(hr.value);
+    if (Number.isFinite(val)) {
+      if (val > 100) {
+        warnings.push({
+          severity: 'alert',
+          title: 'Frequenza cardiaca alta',
+          body: `FC a riposo ${val.toFixed(0)} bpm — sopra i 100 bpm a riposo puo indicare stress, disidratazione o necessita di consulto medico.`,
+          metric: 'heart_rate',
+        });
+      } else if (val < 40) {
+        warnings.push({
+          severity: 'warning',
+          title: 'Frequenza cardiaca molto bassa',
+          body: `FC a riposo ${val.toFixed(0)} bpm — se non sei un atleta, valori sotto 40 bpm meritano attenzione.`,
+          metric: 'heart_rate',
+        });
+      }
+    }
+  }
+
+  // SpO2
+  const spo2 = find('oxygen_saturation');
+  if (spo2) {
+    const val = parseFloat(spo2.value);
+    if (Number.isFinite(val)) {
+      if (val < 90) {
+        warnings.push({
+          severity: 'alert',
+          title: 'Saturazione ossigeno bassa',
+          body: `SpO2 ${val.toFixed(0)}% — sotto il 90% potrebbe richiedere attenzione medica. Verifica la misurazione.`,
+          metric: 'spo2',
+        });
+      } else if (val < 95) {
+        warnings.push({
+          severity: 'warning',
+          title: 'Saturazione ossigeno sotto la norma',
+          body: `SpO2 ${val.toFixed(0)}% — il range normale e' 95-100%. Potrebbe essere influenzata da altitudine, postura o sonno.`,
+          metric: 'spo2',
+        });
+      }
+    }
+  }
+
+  // Sonno < 5 ore
+  const sleep = find('sleep_duration');
+  if (sleep) {
+    const mins = parseFloat(sleep.value);
+    if (Number.isFinite(mins)) {
+      const hrs = mins / 60;
+      if (hrs < 5) {
+        warnings.push({
+          severity: 'alert',
+          title: 'Sonno insufficiente',
+          body: `Solo ${Math.floor(hrs)}h ${Math.round(mins % 60)}m di sonno. Meno di 5 ore compromette seriamente cognizione, umore e sistema immunitario.`,
+          metric: 'sleep',
+        });
+      } else if (hrs < 6) {
+        warnings.push({
+          severity: 'warning',
+          title: 'Sonno sotto la media',
+          body: `${Math.floor(hrs)}h ${Math.round(mins % 60)}m — l'ideale per un adulto e' 7-9 ore. Prova ad andare a letto 30 minuti prima.`,
+          metric: 'sleep',
+        });
+      }
+    }
+  }
+
+  // HRV molto basso
+  const hrv = find('heart_rate_variability_sdnn');
+  if (hrv) {
+    const val = parseFloat(hrv.value);
+    if (Number.isFinite(val) && val < 15) {
+      warnings.push({
+        severity: 'warning',
+        title: 'HRV molto basso',
+        body: `HRV ${val.toFixed(0)} ms — un valore basso puo indicare stress cronico, stanchezza accumulata o necessita di recupero.`,
+        metric: 'hrv',
+      });
+    }
+  }
+
+  // Passi molto bassi
+  const steps = find('steps');
+  if (steps) {
+    const val = parseInt(steps.value);
+    if (Number.isFinite(val) && val < 3000) {
+      warnings.push({
+        severity: 'info',
+        title: 'Poca attivita fisica',
+        body: `Solo ${val.toLocaleString('it-IT')} passi — meno di 3000 passi indica una giornata molto sedentaria. Anche 10 minuti di camminata aiutano.`,
+        metric: 'steps',
+      });
+    }
+  }
+
+  // Score Sahha bassi
+  for (const score of scores) {
+    const pct = Math.round(score.score * 100);
+    const labelMap: Record<string, string> = {
+      activity: 'Attivita',
+      sleep: 'Sonno',
+      wellbeing: 'Benessere',
+      readiness: 'Prontezza',
+      mental_wellbeing: 'Benessere mentale',
+    };
+    if (pct < 30) {
+      warnings.push({
+        severity: 'alert',
+        title: `Score ${labelMap[score.type] || score.type} critico`,
+        body: `Solo ${pct}% — questo valore e' molto basso e richiede attenzione immediata al tuo ${score.type === 'sleep' ? 'riposo' : score.type === 'activity' ? 'movimento' : 'benessere'}.`,
+        metric: score.type,
+      });
+    } else if (pct < 50) {
+      warnings.push({
+        severity: 'warning',
+        title: `Score ${labelMap[score.type] || score.type} basso`,
+        body: `${pct}% — sotto la media. Monitora nei prossimi giorni e considera azioni correttive.`,
+        metric: score.type,
+      });
+    }
+  }
+
+  // Ordina: alert prima, poi warning, poi info
+  const severityOrder = { alert: 0, warning: 1, info: 2 };
+  warnings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+  return warnings;
+}
+
+function HealthWarnings({
+  biomarkers,
+  scores,
+}: {
+  biomarkers: SahhaBiomarkerLog[];
+  scores: SahhaScoreLog[];
+}) {
+  const warnings = analyzeHealthWarnings(biomarkers, scores);
+  if (warnings.length === 0) return null;
+
+  const severityStyles = {
+    alert: 'border-red-500/30 bg-red-500/5',
+    warning: 'border-amber-500/30 bg-amber-500/5',
+    info: 'border-blue-500/20 bg-blue-500/5',
+  };
+  const severityIcons = {
+    alert: <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />,
+    warning: <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />,
+    info: <Heart className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />,
+  };
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-base font-semibold flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        Avvisi salute
+      </h2>
+      {warnings.map((w, i) => (
+        <div
+          key={`${w.metric}-${i}`}
+          className={`rounded-lg border p-3 flex items-start gap-2.5 ${severityStyles[w.severity]}`}
+        >
+          {severityIcons[w.severity]}
+          <div>
+            <p className="text-sm font-medium">{w.title}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{w.body}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Energy-Health Correlation
 // ---------------------------------------------------------------------------
 
@@ -1482,6 +1845,12 @@ export default function Health() {
           })()}
         </div>
       )}
+
+      {/* Sleep Phases */}
+      <SleepPhasesCard biomarkers={biomarkers} />
+
+      {/* Health Warnings */}
+      <HealthWarnings biomarkers={biomarkers} scores={latestScores} />
 
       {/* Energy-Health Correlation */}
       <EnergyHealthCorrelation energyLogs={energyLogs} scores={latestScores} />

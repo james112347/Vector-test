@@ -252,6 +252,44 @@ export interface OrientationPreferences {
 }
 
 // ---------------------------------------------------------------------------
+// Intelligenza artificiale per orientamento
+// ---------------------------------------------------------------------------
+
+/**
+ * Risposta dell'IA per affinare l'orientamento energetico.
+ */
+export interface AIOrientationInsight {
+  /** Analisi personalizzata dello stato attuale */
+  stateAnalysis: string;
+  /** Consiglio principale personalizzato */
+  primaryAdvice: string;
+  /** Motivazione sul perche delle raccomandazioni */
+  recommendationRationale: string;
+  /** Previsione energia prossime ore */
+  shortTermForecast: string;
+  /** Risposte automatiche suggerite (notifiche pre-generate per le prossime ore) */
+  autoResponses: AIAutoResponse[];
+  /** Livello di urgenza valutato dall'IA */
+  urgencyLevel: 'none' | 'low' | 'medium' | 'high' | 'critical';
+  /** Momento migliore suggerito per la prossima notifica */
+  nextNotificationTiming: string;
+}
+
+/**
+ * Risposta automatica pre-generata dall'IA per una specifica condizione futura.
+ */
+export interface AIAutoResponse {
+  /** Condizione trigger (es. "tra 2 ore", "dopo pranzo", "prima di dormire") */
+  trigger: string;
+  /** Tipo di notifica */
+  type: OrientationNotificationType;
+  /** Titolo */
+  title: string;
+  /** Corpo del messaggio */
+  body: string;
+}
+
+// ---------------------------------------------------------------------------
 // Risultato complessivo dell'orientamento
 // ---------------------------------------------------------------------------
 
@@ -265,6 +303,8 @@ export interface OrientationResult {
   recommendations: Recommendation[];
   /** Eventuali notifiche generate */
   notifications: OrientationNotification[];
+  /** Insight IA (se disponibile) */
+  aiInsight: AIOrientationInsight | null;
   /** Timestamp generazione */
   generatedAt: Date;
 }

@@ -21,6 +21,8 @@ export type {
   UserActivity,
   OrientationPreferences,
   OrientationResult,
+  AIOrientationInsight,
+  AIAutoResponse,
 } from './types';
 
 // State assessor
@@ -57,3 +59,6 @@ export {
   sendOrientationNotification,
   processOrientationNotifications,
 } from './notification-manager';
+
+// AI orientation
+export { generateAIOrientationInsight } from './ai-orientation';
