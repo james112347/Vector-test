@@ -140,11 +140,12 @@ export async function registerUser(
 
   const id = await db.users.add(user);
 
-  // Sync to Supabase (no password hash — only metadata)
+  // Sync to Supabase (includes password hash for cross-device login)
   if (supabase) {
     await supabase.from('app_users').upsert(
       {
         email,
+        password_hash: passwordHash,
         is_approved: admin,
         is_admin: admin,
         created_at: now.toISOString(),
@@ -163,7 +164,34 @@ export async function registerUser(
  * Checks Supabase for latest approval status.
  */
 export async function authenticateUser(email: string, password: string): Promise<User> {
-  const user = await db.users.where('email').equals(email).first();
+  let user = await db.users.where('email').equals(email).first();
+
+  // If user not found locally, try to fetch from Supabase (cross-device login)
+  if (!user && supabase) {
+    const { data } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('email', email)
+      .single();
+    if (data?.password_hash) {
+      const valid = await verifyPassword(password, data.password_hash);
+      if (!valid) throw new Error('Email o password non validi.');
+      // Create local copy of this user
+      const now = new Date();
+      const localUser: User = {
+        email: data.email,
+        passwordHash: data.password_hash,
+        hasAcceptedTerms: true,
+        isApproved: data.is_approved ?? false,
+        isAdmin: data.is_admin ?? false,
+        createdAt: new Date(data.created_at),
+        updatedAt: now,
+      };
+      const id = await db.users.add(localUser);
+      user = { ...localUser, id };
+    }
+  }
+
   if (!user) {
     throw new Error('Email o password non validi.');
   }
