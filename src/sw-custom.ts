@@ -13,6 +13,18 @@ declare const self: ServiceWorkerGlobalScope;
 self.skipWaiting();
 clientsClaim();
 
+// When this new SW activates, force-reload all open tabs so they get the new code.
+// This breaks the chicken-and-egg problem where old JS needs user interaction to update.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then((clients) => {
+      for (const client of clients) {
+        client.navigate(client.url);
+      }
+    }),
+  );
+});
+
 // Precache all build assets (injected by VitePWA)
 precacheAndRoute(self.__WB_MANIFEST);
 
