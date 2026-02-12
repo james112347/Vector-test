@@ -4,6 +4,8 @@ import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import InstallPrompt from '../InstallPrompt';
 import { useAdminNotifications } from '../../lib/useAdminNotifications';
+import { useSahhaAutoSync } from '../../lib/useSahhaAutoSync';
+import { useAuthState } from '../../contexts/AuthContext';
 
 const tooltipMessages = [
   'Hai un feedback da fornire?',
@@ -30,8 +32,13 @@ export function AppShell() {
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const { user } = useAuthState();
+
   // Poll for new feedback and notify admin
   useAdminNotifications();
+
+  // Auto-sync Sahha wearable data (every 15 min + on app resume)
+  useSahhaAutoSync(user?.id);
 
   const pickMessage = useCallback(() => {
     let idx = Math.floor(Math.random() * tooltipMessages.length);

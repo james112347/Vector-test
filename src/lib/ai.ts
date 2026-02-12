@@ -1,15 +1,57 @@
 import type { EnergyLog, UserProfile, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import type { DailyCheckinSummary } from './checkins';
+import { supabase } from './supabase';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-function getApiKey(): string | null {
-  return import.meta.env.VITE_GROQ_API_KEY || null;
+// Cache the API key in memory after first fetch
+let cachedApiKey: string | null | undefined = undefined;
+
+/**
+ * Get Groq API key: tries .env first (local dev), then Supabase app_config (production).
+ * Same logic as feedback.ts.
+ */
+async function getApiKey(): Promise<string | null> {
+  if (cachedApiKey !== undefined) return cachedApiKey;
+
+  const envKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+  if (envKey && envKey !== 'your_groq_api_key_here') {
+    cachedApiKey = envKey;
+    return cachedApiKey;
+  }
+
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'groq_api_key')
+        .single();
+      const key = data?.value || null;
+      cachedApiKey = key;
+      return key;
+    } catch {
+      console.warn('Could not fetch Groq API key from Supabase');
+    }
+  }
+
+  cachedApiKey = null;
+  return null;
 }
 
+/**
+ * Check if AI might be available.
+ * Returns true if env key is set OR Supabase is configured (key could be in app_config).
+ */
 export function isAIAvailable(): boolean {
-  const key = getApiKey();
-  return !!key && key !== 'your_groq_api_key_here';
+  // If we already fetched and cached the key, use that
+  if (cachedApiKey !== undefined) return !!cachedApiKey;
+  // Optimistic: env key is set
+  const envKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+  if (envKey && envKey !== 'your_groq_api_key_here') return true;
+  // Optimistic: Supabase is configured, key might be in app_config
+  if (supabase) return true;
+  return false;
 }
 
 interface AIInsight {
@@ -276,7 +318,7 @@ REGOLE CRITICHE:
 }
 
 export async function generateInsights(ctx: AIContext): Promise<AIAnalysis> {
-  const apiKey = getApiKey();
+  const apiKey = await getApiKey();
   if (!apiKey) {
     throw new Error('Chiave API Groq non configurata');
   }
