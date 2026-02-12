@@ -151,6 +151,20 @@ export interface SahhaBiomarkerLog {
 }
 
 // ---------------------------------------------------------------------------
+// Screen Time (tracciamento automatico tempo di utilizzo app)
+// ---------------------------------------------------------------------------
+
+export interface ScreenTimeLog {
+  id?: number;
+  userId: number;
+  date: string;         // YYYY-MM-DD
+  minutes: number;      // minuti attivi totali del giorno
+  sessions: number;     // numero di sessioni del giorno
+  longestSession: number; // sessione piu lunga in minuti
+  updatedAt: Date;
+}
+
+// ---------------------------------------------------------------------------
 // Sistema di Orientamento Energetico
 // ---------------------------------------------------------------------------
 

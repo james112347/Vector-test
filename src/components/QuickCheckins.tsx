@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent } from './ui/card';
 import {
-  Droplets, Coffee, Sun, Pill,
+  Droplets, Coffee, Sun, Pill, MonitorOff,
   Check, ChevronRight, Send,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
@@ -181,6 +181,7 @@ const COUNTERS: Array<{
   { type: 'caffeine', icon: Coffee, label: 'Caffe', color: '#92400e' },
   { type: 'water', icon: Droplets, label: 'Acqua', color: '#3b82f6', target: 8 },
   { type: 'supplement', icon: Pill, label: 'Integr.', color: '#8b5cf6' },
+  { type: 'screen_break', icon: MonitorOff, label: 'Pausa', color: '#06b6d4' },
 ];
 
 // ---------------------------------------------------------------------------

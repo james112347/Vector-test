@@ -14,6 +14,7 @@ import { getUnreadFeedbackCount } from '../lib/feedback';
 import { getAllUsers } from '../lib/auth';
 import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
+import ScreenTimeCard from '../components/ScreenTimeCard';
 import SmartHabitPrompt from '../components/SmartHabitPrompt';
 import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
@@ -335,6 +336,9 @@ export default function Dashboard() {
 
       {/* Quick Check-ins — in alto per accesso rapido */}
       {user?.id && <QuickCheckins userId={user.id} />}
+
+      {/* Screen Time — tempo di utilizzo app */}
+      {user?.id && <ScreenTimeCard userId={user.id} />}
 
       {/* Today's Energy */}
       {todayLog ? (
