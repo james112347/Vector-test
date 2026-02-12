@@ -91,7 +91,7 @@ export function AppShell() {
       </main>
       <BottomNav />
       {!isFeedbackPage && (
-        <div className="fixed right-4 z-40 flex items-end gap-2" style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}>
+        <div className="fixed right-4 z-40 flex items-end gap-2" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}>
           {/* Tooltip bubble */}
           {showTooltip && (
             <div className="relative animate-in slide-in-from-right fade-in duration-300">
