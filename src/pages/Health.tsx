@@ -801,7 +801,32 @@ function SetupWizard({
             </div>
 
             <div className="flex gap-3">
-              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">3</div>
+              <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold shrink-0">3</div>
+              <div>
+                <p className="text-sm font-medium">Scansiona il QR Code del progetto</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Apri Sahha e tocca <strong>"Join a Project"</strong> o <strong>"Scansiona QR"</strong>.
+                </p>
+                <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                        Hai bisogno di un altro utente Vector!
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        Chiedi a un utente gia registrato su Vector di aprirti il QR code.
+                        Lo trova in <strong>Impostazioni → Registrazione Sahha → "Mostra QR a un altro utente"</strong>.
+                        Inquadra il QR dal suo schermo con la fotocamera di Sahha sul tuo telefono.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">4</div>
               <div>
                 <p className="text-sm font-medium">Autorizza l'accesso ai dati</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -896,7 +921,32 @@ function SetupWizard({
             </div>
 
             <div className="flex gap-3">
-              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">4</div>
+              <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold shrink-0">4</div>
+              <div>
+                <p className="text-sm font-medium">Scansiona il QR Code del progetto</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Apri Sahha e tocca <strong>"Join a Project"</strong> o <strong>"Scansiona QR"</strong>.
+                </p>
+                <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                        Hai bisogno di un altro utente Vector!
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        Chiedi a un utente gia registrato su Vector di aprirti il QR code.
+                        Lo trova in <strong>Impostazioni → Registrazione Sahha → "Mostra QR a un altro utente"</strong>.
+                        Inquadra il QR dal suo schermo con la fotocamera di Sahha sul tuo telefono.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">5</div>
               <div>
                 <p className="text-sm font-medium">Autorizza l'accesso</p>
                 <p className="text-xs text-muted-foreground mt-0.5">

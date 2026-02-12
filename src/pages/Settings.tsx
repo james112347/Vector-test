@@ -522,6 +522,7 @@ function SahhaQRSection({ isAdmin }: { isAdmin: boolean }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [showFullscreen, setShowFullscreen] = useState(false);
+  const [showShareMode, setShowShareMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -579,41 +580,54 @@ function SahhaQRSection({ isAdmin }: { isAdmin: boolean }) {
             </div>
             <CardTitle className="text-lg">Registrazione Sahha</CardTitle>
           </div>
-          <CardDescription>Scansiona il QR per collegare il tuo account Sahha</CardDescription>
+          <CardDescription>QR per collegare l'account Sahha dei partecipanti</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {qrImage ? (
             <>
-              {/* Instructions */}
-              <div className="space-y-2.5">
-                <SahhaStep n={1}>
-                  Scarica l'app <strong>Sahha</strong> dal tuo store (
-                  <a href="https://apps.apple.com/app/sahha/id1615682279" target="_blank" rel="noopener noreferrer" className="text-primary underline">iOS</a>
-                  {' / '}
-                  <a href="https://play.google.com/store/apps/details?id=com.sahha.android" target="_blank" rel="noopener noreferrer" className="text-primary underline">Android</a>
-                  )
-                </SahhaStep>
-                <SahhaStep n={2}>
-                  Apri Sahha e tocca <strong>"Join a Project"</strong> o <strong>"Scansiona QR"</strong>
-                </SahhaStep>
-                <SahhaStep n={3}>
-                  Inquadra il codice QR qui sotto con la fotocamera di Sahha
-                </SahhaStep>
+              {/* Tip banner: show to another user */}
+              <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-1.5">
+                <div className="flex items-start gap-2.5">
+                  <svg className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                      Devi mostrare questo QR a un altro utente
+                    </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                      Un utente che deve registrarsi su Sahha deve inquadrare questo codice dal <strong>suo</strong> telefono con l'app Sahha.
+                      Tocca il pulsante qui sotto per mostrarglielo a schermo intero.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* QR Code */}
+              {/* Show to friend button */}
+              <Button
+                className="w-full h-11"
+                onClick={() => setShowShareMode(true)}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                Mostra QR a un altro utente
+              </Button>
+
+              {/* Compact QR preview */}
               <button
                 onClick={() => setShowFullscreen(true)}
-                className="w-full flex flex-col items-center py-3"
+                className="w-full flex flex-col items-center py-2"
               >
-                <div className="bg-white rounded-xl p-3 shadow-sm border border-border">
+                <div className="bg-white rounded-xl p-2 shadow-sm border border-border">
                   <img
                     src={qrImage}
                     alt="QR Code Sahha"
-                    className="w-48 h-48 object-contain"
+                    className="w-32 h-32 object-contain"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Tocca per ingrandire</p>
+                <p className="text-xs text-muted-foreground mt-1.5">Tocca per ingrandire</p>
               </button>
 
               {/* Admin controls */}
@@ -691,6 +705,84 @@ function SahhaQRSection({ isAdmin }: { isAdmin: boolean }) {
             >
               Chiudi
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Share Mode: guided fullscreen for showing QR to another user */}
+      {showShareMode && qrImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setShowShareMode(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-green-600 text-white px-5 py-4">
+              <h3 className="text-base font-semibold">Mostra questo QR all'altro utente</h3>
+              <p className="text-green-100 text-xs mt-1">
+                L'altro utente deve inquadrarlo con l'app Sahha dal suo telefono
+              </p>
+            </div>
+
+            {/* Steps for the OTHER user */}
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Istruzioni per l'altro utente:
+              </p>
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-bold shrink-0">1</span>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Scarica l'app <strong>Sahha</strong> sul tuo telefono (
+                    <a href="https://apps.apple.com/app/sahha/id1615682279" target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 underline">iOS</a>
+                    {' / '}
+                    <a href="https://play.google.com/store/apps/details?id=com.sahha.android" target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 underline">Android</a>)
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-bold shrink-0">2</span>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Apri Sahha e tocca <strong>"Join a Project"</strong> o <strong>"Scansiona QR"</strong>
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-bold shrink-0">3</span>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Inquadra il codice QR qui sotto con la fotocamera di Sahha
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* QR Code */}
+            <div className="flex justify-center px-5 pb-4">
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+                <img
+                  src={qrImage}
+                  alt="QR Code Sahha"
+                  className="w-56 h-56 object-contain"
+                />
+              </div>
+            </div>
+
+            {/* Hint */}
+            <div className="mx-5 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2.5">
+              <p className="text-xs text-amber-700 dark:text-amber-300 text-center">
+                Tieni fermo lo schermo mentre l'altro utente inquadra il QR
+              </p>
+            </div>
+
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setShowShareMode(false)}
+                className="w-full py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+              >
+                Chiudi
+              </button>
+            </div>
           </div>
         </div>
       )}
