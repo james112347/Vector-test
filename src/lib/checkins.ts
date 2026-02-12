@@ -86,6 +86,13 @@ export interface DailyCheckinSummary {
   mealQuality: number | null;      // 1-5 ultimo pasto
   focusLevel: number | null;       // 1-5 focus percepito
   activityDone: number | null;     // 1-5 livello attivita
+  stress: number | null;           // 1-5 livello stress
+  mood: number | null;             // 1-5 umore
+  nap: number | null;              // 1-5 pisolino (1=no, 5=45min+)
+  supplement: number;              // conta integratori
+  screenBreak: number;             // conta pause schermo
+  /** Orari specifici caffeina (HH:MM) per analisi pattern */
+  caffeineTimes: string[];
 }
 
 export async function getCheckinSummaries(userId: number, days = 7): Promise<DailyCheckinSummary[]> {
@@ -107,6 +114,11 @@ export async function getCheckinSummaries(userId: number, days = 7): Promise<Dai
     const sum = (type: CheckinType) =>
       items.filter(i => i.type === type).reduce((s, c) => s + c.value, 0);
 
+    // Orari caffeina
+    const caffeineTimes = items
+      .filter(i => i.type === 'caffeine')
+      .map(i => i.time);
+
     summaries.push({
       date,
       sleepQuality: last('sleep_quality'),
@@ -115,6 +127,12 @@ export async function getCheckinSummaries(userId: number, days = 7): Promise<Dai
       mealQuality: last('meal_time'),
       focusLevel: last('focus'),
       activityDone: last('activity_done'),
+      stress: last('stress'),
+      mood: last('mood'),
+      nap: last('nap'),
+      supplement: sum('supplement'),
+      screenBreak: sum('screen_break'),
+      caffeineTimes,
     });
   }
 

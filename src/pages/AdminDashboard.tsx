@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
@@ -6,6 +6,7 @@ import { useAuthState } from '../contexts/AuthContext';
 import { getAllUsers, adminResetPassword } from '../lib/auth';
 import { getAllFeedbacks, markFeedbackRead, replyToFeedback, deleteAttachments, type ChatMessage } from '../lib/feedback';
 import { getAllUserActivity, type UserActivity } from '../lib/useActivityTracker';
+import { runHybridAnalysis, getCachedHybridAnalysis, cacheHybridAnalysis, type HybridAnalysis } from '../lib/ai-hybrid';
 import { db } from '../db/db';
 import type { User, UserProfile, EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, UserFeedback } from '../db/schema';
 
@@ -137,12 +138,31 @@ export default function AdminDashboard() {
   const [resetMsg, setResetMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
+  const [hybridAnalysis, setHybridAnalysis] = useState<HybridAnalysis | null>(null);
+  const [hybridLoading, setHybridLoading] = useState(false);
+
+  const loadHybridAnalysis = useCallback(async () => {
+    if (!currentUser?.id) return;
+    const cached = getCachedHybridAnalysis();
+    if (cached) { setHybridAnalysis(cached); return; }
+    setHybridLoading(true);
+    try {
+      const result = await runHybridAnalysis(currentUser.id);
+      setHybridAnalysis(result);
+      cacheHybridAnalysis(result);
+    } catch { /* non-critical */ }
+    finally { setHybridLoading(false); }
+  }, [currentUser?.id]);
 
   useEffect(() => {
     loadAllData();
     getAllFeedbacks().then(setFeedbacks);
     getAllUserActivity().then(setActivityData);
   }, []);
+
+  useEffect(() => {
+    if (currentUser?.isAdmin) loadHybridAnalysis();
+  }, [currentUser?.isAdmin, loadHybridAnalysis]);
 
   async function loadAllData() {
     const users = await getAllUsers();
@@ -371,6 +391,156 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Hybrid Analysis — Suggerimenti per l'admin */}
+      {(hybridAnalysis || hybridLoading) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                Suggerimenti IA
+                {hybridAnalysis && (
+                  <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                    Qualita dati: {hybridAnalysis.dataQualityScore}/100
+                  </span>
+                )}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                disabled={hybridLoading}
+                onClick={() => {
+                  sessionStorage.removeItem('vector_hybrid_analysis');
+                  loadHybridAnalysis();
+                }}
+              >
+                {hybridLoading ? 'Analisi...' : 'Aggiorna'}
+              </Button>
+            </div>
+            <CardDescription>Suggerimenti generati dall'IA per migliorare precisione</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {hybridLoading && !hybridAnalysis && (
+              <div className="py-4 text-center">
+                <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-xs text-muted-foreground mt-2">Analisi ibrida in corso...</p>
+              </div>
+            )}
+            {hybridAnalysis && (
+              <>
+                {/* Data quality bar */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Qualita dati complessiva</span>
+                    <span className="font-bold">{hybridAnalysis.dataQualityScore}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${hybridAnalysis.dataQualityScore}%`,
+                        backgroundColor:
+                          hybridAnalysis.dataQualityScore >= 70 ? '#22c55e'
+                            : hybridAnalysis.dataQualityScore >= 40 ? '#f59e0b'
+                              : '#ef4444',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Data gaps */}
+                {hybridAnalysis.dataGaps.length > 0 && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Gap nei dati</p>
+                    {hybridAnalysis.dataGaps.map((gap, i) => (
+                      <p key={i} className="text-[11px] text-amber-700 dark:text-amber-300">- {gap}</p>
+                    ))}
+                  </div>
+                )}
+
+                {/* Correlations */}
+                {hybridAnalysis.correlations.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Correlazioni rilevate</p>
+                    <div className="space-y-1">
+                      {hybridAnalysis.correlations.slice(0, 5).map((c, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            c.strength === 'strong' ? 'bg-green-500' : c.strength === 'moderate' ? 'bg-amber-500' : 'bg-muted-foreground'
+                          }`} />
+                          <span className="text-muted-foreground">{c.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin suggestions */}
+                {hybridAnalysis.adminSuggestions.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Azioni consigliate</p>
+                    <div className="space-y-2">
+                      {hybridAnalysis.adminSuggestions.map((s, i) => {
+                        const priorityColors: Record<string, string> = {
+                          critical: 'border-red-500/30 bg-red-500/5',
+                          high: 'border-orange-500/20 bg-orange-500/5',
+                          medium: 'border-blue-500/20 bg-blue-500/5',
+                          low: 'border-border',
+                        };
+                        const priorityLabels: Record<string, string> = {
+                          critical: 'Critico', high: 'Alto', medium: 'Medio', low: 'Basso',
+                        };
+                        const catLabels: Record<string, string> = {
+                          data_quality: 'Dati', feature: 'Funzione', algorithm: 'Algoritmo',
+                          ux: 'UX', notification: 'Notifiche',
+                        };
+                        return (
+                          <div key={s.id || i} className={`rounded-lg border p-2.5 ${priorityColors[s.priority] || ''}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted">
+                                {priorityLabels[s.priority]}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {catLabels[s.category] || s.category}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium">{s.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
+                            {s.expectedImpact && (
+                              <p className="text-[10px] text-green-600 dark:text-green-400 mt-1">Impatto: {s.expectedImpact}</p>
+                            )}
+                            {s.actionRequired && (
+                              <p className="text-[10px] text-primary mt-0.5">Azione: {s.actionRequired}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Local patterns */}
+                {hybridAnalysis.localPatterns.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Pattern locali</p>
+                    <div className="space-y-1">
+                      {hybridAnalysis.localPatterns.map((p, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs">
+                          <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                            p.impact > 0 ? 'bg-green-500' : p.impact < -0.3 ? 'bg-red-500' : 'bg-amber-500'
+                          }`} />
+                          <span className="text-muted-foreground">{p.description} <span className="text-[10px]">(conf: {p.confidence})</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* User Activity Analytics */}
       {activityData.length > 0 && (

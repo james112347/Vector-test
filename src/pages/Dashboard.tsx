@@ -14,6 +14,7 @@ import { getUnreadFeedbackCount } from '../lib/feedback';
 import { getAllUsers } from '../lib/auth';
 import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
+import SmartHabitPrompt from '../components/SmartHabitPrompt';
 import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
 import {
@@ -329,6 +330,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Smart Habit Notifications — risposte rapide basate su abitudini */}
+      {user?.id && <SmartHabitPrompt userId={user.id} />}
+
+      {/* Quick Check-ins — in alto per accesso rapido */}
+      {user?.id && <QuickCheckins userId={user.id} />}
+
       {/* Today's Energy */}
       {todayLog ? (
         <Card>
@@ -360,9 +367,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
-
-      {/* Quick Check-ins */}
-      {user?.id && <QuickCheckins userId={user.id} />}
 
       {/* AI Insights */}
       {isAIAvailable() && weekLogs.length >= 2 && (

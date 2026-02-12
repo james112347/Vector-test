@@ -1,84 +1,134 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Moon, Droplets, Coffee, UtensilsCrossed, Target, Dumbbell } from 'lucide-react';
+import {
+  Moon, Droplets, Coffee, UtensilsCrossed, Target, Dumbbell,
+  AlertCircle, Smile, BedDouble, Pill, MonitorOff,
+  ChevronDown, ChevronUp, Clock,
+} from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 import type { LucideIcon } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// Each check-in is designed to feed the AI with actionable energy data
+// Config — ogni check-in alimenta l'IA con dati azionabili
 // ---------------------------------------------------------------------------
 
 interface CheckinConfig {
   type: CheckinType;
   label: string;
-  sublabel: string; // spiega PERCHE' viene tracciato
+  sublabel: string;
   icon: LucideIcon;
   color: string;
-  mode: 'scale' | 'counter' | 'options';
-  scaleLabels?: string[];   // per mode=scale (1-5)
-  options?: string[];        // per mode=options
-  target?: number;           // per mode=counter
+  mode: 'scale' | 'counter';
+  scaleLabels?: string[];
+  target?: number;
+  /** Sezione: 'quick' per barra rapida, 'detail' per sezione espansa */
+  section: 'quick' | 'detail';
 }
 
 const CHECKINS: CheckinConfig[] = [
+  // --- Quick bar (azioni rapide con un tap) ---
   {
-    type: 'sleep_quality',
-    label: 'Qualita sonno',
-    sublabel: 'Come hai dormito stanotte?',
-    icon: Moon,
-    color: '#8b5cf6',
-    mode: 'scale',
-    scaleLabels: ['Pessimo', 'Male', 'Sufficiente', 'Bene', 'Ottimo'],
+    type: 'caffeine', label: 'Caffe', sublabel: 'Tazzina bevuta adesso',
+    icon: Coffee, color: '#92400e', mode: 'counter', section: 'quick',
   },
   {
-    type: 'water',
-    label: 'Idratazione',
-    sublabel: 'Bicchieri d\'acqua oggi',
-    icon: Droplets,
-    color: '#3b82f6',
-    mode: 'counter',
-    target: 8,
+    type: 'water', label: 'Acqua', sublabel: 'Bicchiere bevuto',
+    icon: Droplets, color: '#3b82f6', mode: 'counter', target: 8, section: 'quick',
   },
   {
-    type: 'caffeine',
-    label: 'Caffeina',
-    sublabel: 'Tazzine/energy drink oggi',
-    icon: Coffee,
-    color: '#92400e',
-    mode: 'counter',
+    type: 'supplement', label: 'Integr.', sublabel: 'Integratore/vitamina',
+    icon: Pill, color: '#8b5cf6', mode: 'counter', section: 'quick',
   },
   {
-    type: 'meal_time',
-    label: 'Ultimo pasto',
-    sublabel: 'Qualita del tuo ultimo pasto',
-    icon: UtensilsCrossed,
-    color: '#22c55e',
-    mode: 'scale',
-    scaleLabels: ['Saltato', 'Scarso', 'Sufficiente', 'Buono', 'Nutriente'],
+    type: 'screen_break', label: 'Pausa', sublabel: 'Pausa schermo',
+    icon: MonitorOff, color: '#06b6d4', mode: 'counter', section: 'quick',
+  },
+  // --- Detail section (scale 1-5) ---
+  {
+    type: 'sleep_quality', label: 'Qualita sonno', sublabel: 'Come hai dormito stanotte?',
+    icon: Moon, color: '#8b5cf6', mode: 'scale',
+    scaleLabels: ['Pessimo', 'Male', 'Sufficiente', 'Bene', 'Ottimo'], section: 'detail',
   },
   {
-    type: 'focus',
-    label: 'Focus attuale',
-    sublabel: 'Quanto riesci a concentrarti ora?',
-    icon: Target,
-    color: '#f59e0b',
-    mode: 'scale',
-    scaleLabels: ['Zero', 'Basso', 'Medio', 'Buono', 'Massimo'],
+    type: 'mood', label: 'Umore', sublabel: 'Come ti senti adesso?',
+    icon: Smile, color: '#f59e0b', mode: 'scale',
+    scaleLabels: ['Pessimo', 'Giu', 'Neutro', 'Bene', 'Ottimo'], section: 'detail',
   },
   {
-    type: 'activity_done',
-    label: 'Attivita fisica',
-    sublabel: 'Movimento fatto oggi',
-    icon: Dumbbell,
-    color: '#ef4444',
-    mode: 'scale',
-    scaleLabels: ['Nessuna', 'Camminata', 'Leggera', 'Moderata', 'Intensa'],
+    type: 'stress', label: 'Stress', sublabel: 'Livello di stress attuale',
+    icon: AlertCircle, color: '#ef4444', mode: 'scale',
+    scaleLabels: ['Nessuno', 'Leggero', 'Moderato', 'Alto', 'Estremo'], section: 'detail',
+  },
+  {
+    type: 'meal_time', label: 'Ultimo pasto', sublabel: 'Qualita del tuo ultimo pasto',
+    icon: UtensilsCrossed, color: '#22c55e', mode: 'scale',
+    scaleLabels: ['Saltato', 'Scarso', 'Sufficiente', 'Buono', 'Nutriente'], section: 'detail',
+  },
+  {
+    type: 'focus', label: 'Focus', sublabel: 'Quanto riesci a concentrarti?',
+    icon: Target, color: '#f59e0b', mode: 'scale',
+    scaleLabels: ['Zero', 'Basso', 'Medio', 'Buono', 'Massimo'], section: 'detail',
+  },
+  {
+    type: 'activity_done', label: 'Attivita fisica', sublabel: 'Movimento fatto oggi',
+    icon: Dumbbell, color: '#ef4444', mode: 'scale',
+    scaleLabels: ['Nessuna', 'Camminata', 'Leggera', 'Moderata', 'Intensa'], section: 'detail',
+  },
+  {
+    type: 'nap', label: 'Pisolino', sublabel: 'Hai fatto un pisolino?',
+    icon: BedDouble, color: '#6366f1', mode: 'scale',
+    scaleLabels: ['No', '10min', '20min', '30min', '45min+'], section: 'detail',
   },
 ];
 
 // ---------------------------------------------------------------------------
-// Scale Input (1-5 professional bar)
+// Quick Tap Button (barra rapida — un tap per registrare)
+// ---------------------------------------------------------------------------
+
+function QuickTapButton({
+  config,
+  currentValue,
+  lastTime,
+  onTap,
+}: {
+  config: CheckinConfig;
+  currentValue: number;
+  lastTime: string | null;
+  onTap: () => void;
+}) {
+  const Icon = config.icon;
+  return (
+    <button
+      onClick={onTap}
+      className="flex flex-col items-center gap-1 p-2 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all min-w-[68px] relative"
+    >
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center"
+        style={{ backgroundColor: config.color + '15' }}
+      >
+        <Icon className="h-4 w-4" style={{ color: config.color }} />
+      </div>
+      <span className="text-[10px] font-medium">{config.label}</span>
+      {currentValue > 0 ? (
+        <span className="text-xs font-bold tabular-nums" style={{ color: config.color }}>
+          {currentValue}
+          {config.target ? <span className="text-[9px] text-muted-foreground font-normal">/{config.target}</span> : ''}
+        </span>
+      ) : (
+        <span className="text-[10px] text-muted-foreground">+1</span>
+      )}
+      {lastTime && (
+        <span className="text-[8px] text-muted-foreground flex items-center gap-0.5">
+          <Clock className="h-2 w-2" />{lastTime}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scale Input (compatto con feedback visivo)
 // ---------------------------------------------------------------------------
 
 function ScaleInput({
@@ -129,76 +179,30 @@ function ScaleInput({
   return (
     <button
       onClick={() => setOpen(true)}
-      className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-[0.98] transition-all w-full text-left"
+      className="flex items-center gap-3 p-2.5 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-[0.98] transition-all w-full text-left"
     >
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: config.color + '15' }}>
-        <Icon className="h-[18px] w-[18px]" style={{ color: config.color }} />
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: config.color + '15' }}>
+        <Icon className="h-4 w-4" style={{ color: config.color }} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{config.label}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{config.sublabel}</p>
       </div>
       {currentValue > 0 ? (
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <div className="flex gap-0.5">
             {[1, 2, 3, 4, 5].map(n => (
               <div
                 key={n}
-                className="w-1.5 h-4 rounded-sm transition-all"
-                style={{
-                  backgroundColor: n <= currentValue ? config.color : 'var(--muted)',
-                }}
+                className="w-1.5 h-3.5 rounded-sm transition-all"
+                style={{ backgroundColor: n <= currentValue ? config.color : 'var(--muted)' }}
               />
             ))}
           </div>
           <span className="text-xs font-bold tabular-nums" style={{ color: config.color }}>{currentValue}</span>
         </div>
       ) : (
-        <span className="text-xs text-muted-foreground shrink-0">Registra</span>
+        <span className="text-[10px] text-muted-foreground shrink-0">Registra</span>
       )}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Counter Input (water, caffeine)
-// ---------------------------------------------------------------------------
-
-function CounterInput({
-  config,
-  currentValue,
-  onAdd,
-}: {
-  config: CheckinConfig;
-  currentValue: number;
-  onAdd: () => void;
-}) {
-  const Icon = config.icon;
-  const pct = config.target ? Math.min((currentValue / config.target) * 100, 100) : 0;
-
-  return (
-    <button
-      onClick={onAdd}
-      className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-[0.98] transition-all w-full text-left"
-    >
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: config.color + '15' }}>
-        <Icon className="h-[18px] w-[18px]" style={{ color: config.color }} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{config.label}</p>
-        <p className="text-[10px] text-muted-foreground">{config.sublabel}</p>
-      </div>
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="text-lg font-bold tabular-nums" style={{ color: config.color }}>
-          {currentValue}
-          {config.target && <span className="text-xs text-muted-foreground font-normal">/{config.target}</span>}
-        </span>
-        {config.target && (
-          <div className="w-12 h-1 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: config.color }} />
-          </div>
-        )}
-      </div>
     </button>
   );
 }
@@ -209,6 +213,7 @@ function CounterInput({
 
 export default function QuickCheckins({ userId }: { userId: number }) {
   const [checkins, setCheckins] = useState<QuickCheckin[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   const loadCheckins = useCallback(async () => {
     const items = await getTodayCheckins(userId);
@@ -217,7 +222,6 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   useEffect(() => { loadCheckins(); }, [loadCheckins]);
 
-  // Compute current values from today's checkins
   const getValue = (type: CheckinType): number => {
     const items = checkins.filter(c => c.type === type);
     if (items.length === 0) return 0;
@@ -225,8 +229,13 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     if (config?.mode === 'counter') {
       return items.reduce((s, c) => s + c.value, 0);
     }
-    // For scale types, return last value
     return items[items.length - 1].value;
+  };
+
+  const getLastTime = (type: CheckinType): string | null => {
+    const items = checkins.filter(c => c.type === type);
+    if (items.length === 0) return null;
+    return items[items.length - 1].time;
   };
 
   const handleScale = async (type: CheckinType, value: number) => {
@@ -239,33 +248,72 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     await loadCheckins();
   };
 
+  const quickItems = CHECKINS.filter(c => c.section === 'quick');
+  const detailItems = CHECKINS.filter(c => c.section === 'detail');
+  const allCount = CHECKINS.length;
   const filledCount = CHECKINS.filter(c => getValue(c.type) > 0).length;
 
   return (
     <Card>
       <CardHeader className="pb-1">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Check-in giornaliero</CardTitle>
-          <span className="text-[10px] text-muted-foreground">{filledCount}/{CHECKINS.length} completati</span>
+          <CardTitle className="text-base">Check-in rapido</CardTitle>
+          <span className="text-[10px] text-muted-foreground">
+            {filledCount}/{allCount}
+          </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {CHECKINS.map(config =>
-          config.mode === 'counter' ? (
-            <CounterInput
+      <CardContent className="space-y-3">
+        {/* Quick bar — azioni con un tap */}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+          {quickItems.map(config => (
+            <QuickTapButton
               key={config.type}
               config={config}
               currentValue={getValue(config.type)}
-              onAdd={() => handleCounter(config.type)}
+              lastTime={getLastTime(config.type)}
+              onTap={() => handleCounter(config.type)}
             />
+          ))}
+        </div>
+
+        {/* Progress dots for quick bar */}
+        {quickItems.some(c => getValue(c.type) > 0) && (
+          <div className="flex items-center gap-1 justify-center">
+            {quickItems.map(c => (
+              <div
+                key={c.type}
+                className="w-1.5 h-1.5 rounded-full transition-all"
+                style={{ backgroundColor: getValue(c.type) > 0 ? c.color : 'var(--muted)' }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Toggle detail section */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+        >
+          {expanded ? (
+            <>Nascondi dettagli <ChevronUp className="h-3.5 w-3.5" /></>
           ) : (
-            <ScaleInput
-              key={config.type}
-              config={config}
-              currentValue={getValue(config.type)}
-              onSelect={(v) => handleScale(config.type, v)}
-            />
-          )
+            <>Valutazioni dettagliate <ChevronDown className="h-3.5 w-3.5" /></>
+          )}
+        </button>
+
+        {/* Detail section — scale inputs */}
+        {expanded && (
+          <div className="space-y-2">
+            {detailItems.map(config => (
+              <ScaleInput
+                key={config.type}
+                config={config}
+                currentValue={getValue(config.type)}
+                onSelect={(v) => handleScale(config.type, v)}
+              />
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
