@@ -9,6 +9,7 @@ import type {
   SahhaProfile,
   SahhaScoreLog,
   SahhaBiomarkerLog,
+  UserFeedback,
 } from './schema';
 
 export class VectorDB extends Dexie {
@@ -21,6 +22,7 @@ export class VectorDB extends Dexie {
   sahhaProfiles!: Table<SahhaProfile>;
   sahhaScores!: Table<SahhaScoreLog>;
   sahhaBiomarkers!: Table<SahhaBiomarkerLog>;
+  feedbacks!: Table<UserFeedback>;
 
   constructor() {
     super('VectorDB');
@@ -90,6 +92,18 @@ export class VectorDB extends Dexie {
       sahhaProfiles: '++id, &userId, externalId',
       sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
       sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
+    });
+    this.version(8).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+      energyLogs: '++id, userId, date, [userId+date]',
+      userProfiles: '++id, &userId',
+      quickCheckins: '++id, userId, date, type, [userId+date], [userId+date+type]',
+      sahhaProfiles: '++id, &userId, externalId',
+      sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
+      sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
+      feedbacks: '++id, userId, status, createdAt',
     });
   }
 }

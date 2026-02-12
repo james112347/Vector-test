@@ -118,6 +118,25 @@ export interface SahhaScoreLog {
   fetchedAt: Date;
 }
 
+// ---------------------------------------------------------------------------
+// User Feedback (AI-assisted feedback to admin)
+// ---------------------------------------------------------------------------
+
+export type FeedbackStatus = 'draft' | 'sent' | 'read';
+
+export interface UserFeedback {
+  id?: number;
+  userId: number;
+  userEmail: string;
+  category: 'bug' | 'feature' | 'improvement' | 'support' | 'other';
+  message: string;       // The final formulated feedback
+  chatHistory: string;   // JSON-stringified chat messages for context
+  status: FeedbackStatus;
+  adminReply?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface SahhaBiomarkerLog {
   id?: number;
   userId: number;

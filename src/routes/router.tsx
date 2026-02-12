@@ -11,6 +11,7 @@ import Health from '../pages/Health';
 import Settings from '../pages/Settings';
 import AdminDashboard from '../pages/AdminDashboard';
 import ProfileEdit from '../pages/ProfileEdit';
+import FeedbackChat from '../pages/FeedbackChat';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
           { path: '/settings', element: <Settings /> },
           { path: '/profile', element: <ProfileEdit /> },
           { path: '/admin', element: <AdminDashboard /> },
+          { path: '/feedback', element: <FeedbackChat /> },
         ],
       },
     ],

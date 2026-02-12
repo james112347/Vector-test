@@ -4,8 +4,9 @@ import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
 import { useAuthState } from '../contexts/AuthContext';
 import { getAllUsers } from '../lib/auth';
+import { getAllFeedbacks, markFeedbackRead, replyToFeedback } from '../lib/feedback';
 import { db } from '../db/db';
-import type { User, UserProfile, EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
+import type { User, UserProfile, EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, UserFeedback } from '../db/schema';
 
 interface UserData {
   user: User;
@@ -113,11 +114,15 @@ function getAvatarColor(email: string): string {
 export default function AdminDashboard() {
   const { user: currentUser } = useAuthState();
   const [usersData, setUsersData] = useState<UserData[]>([]);
+  const [feedbacks, setFeedbacks] = useState<UserFeedback[]>([]);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState('');
   const [loading, setLoading] = useState(true);
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
 
   useEffect(() => {
     loadAllData();
+    getAllFeedbacks().then(setFeedbacks);
   }, []);
 
   async function loadAllData() {
@@ -204,6 +209,123 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold">Dashboard Utenti</h1>
         <p className="text-muted-foreground mt-1 text-sm">Panoramica dati degli utenti</p>
       </div>
+
+      {/* Feedback Section */}
+      {feedbacks.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                Feedback
+                {feedbacks.filter(f => f.status === 'sent').length > 0 && (
+                  <span className="text-xs bg-red-500 text-white rounded-full px-2 py-0.5">
+                    {feedbacks.filter(f => f.status === 'sent').length} nuovi
+                  </span>
+                )}
+              </CardTitle>
+            </div>
+            <CardDescription>Feedback e segnalazioni degli utenti</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {feedbacks.map(fb => {
+              const catColors: Record<string, string> = {
+                bug: 'bg-red-500/10 text-red-600 dark:text-red-400',
+                feature: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                improvement: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                support: 'bg-green-500/10 text-green-600 dark:text-green-400',
+                other: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+              };
+              const catLabels: Record<string, string> = {
+                bug: 'Bug', feature: 'Funzione', improvement: 'Miglioramento', support: 'Supporto', other: 'Altro',
+              };
+              const isUnread = fb.status === 'sent';
+              return (
+                <div
+                  key={fb.id}
+                  className={`rounded-lg border p-3 space-y-2 ${isUnread ? 'border-primary/30 bg-primary/5' : 'border-border'}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${catColors[fb.category]}`}>
+                        {catLabels[fb.category]}
+                      </span>
+                      <span className="text-xs text-muted-foreground truncate">{fb.userEmail}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {new Date(fb.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </div>
+                  <p className="text-sm">{fb.message}</p>
+                  {fb.adminReply && (
+                    <div className="rounded bg-muted p-2">
+                      <p className="text-[10px] font-medium text-muted-foreground mb-0.5">La tua risposta</p>
+                      <p className="text-xs">{fb.adminReply}</p>
+                    </div>
+                  )}
+                  {replyingTo === fb.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        placeholder="Scrivi una risposta..."
+                        rows={2}
+                        className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="h-8 flex-1"
+                          disabled={!replyText.trim()}
+                          onClick={async () => {
+                            await replyToFeedback(fb.id!, replyText.trim());
+                            setReplyingTo(null);
+                            setReplyText('');
+                            setFeedbacks(await getAllFeedbacks());
+                          }}
+                        >
+                          Invia
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                        >
+                          Annulla
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => { setReplyingTo(fb.id!); setReplyText(''); }}
+                      >
+                        Rispondi
+                      </Button>
+                      {isUnread && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs"
+                          onClick={async () => {
+                            await markFeedbackRead(fb.id!);
+                            setFeedbacks(await getAllFeedbacks());
+                          }}
+                        >
+                          Segna come letto
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
