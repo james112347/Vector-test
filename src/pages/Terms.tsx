@@ -1,23 +1,35 @@
-import { Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
 
 export default function Terms() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fromSettings = location.state?.from === 'settings';
+
+  const handleBack = () => {
+    if (fromSettings) {
+      navigate('/settings');
+    } else {
+      navigate('/register');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="mb-6">
-          <Link to="/register">
-            <Button variant="outline">← Torna alla Registrazione</Button>
-          </Link>
+          <Button variant="outline" onClick={handleBack}>
+            {fromSettings ? '← Torna alle Impostazioni' : '← Torna alla Registrazione'}
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-3xl">Termini e Condizioni</CardTitle>
             <p className="text-sm text-muted-foreground mt-2">
-              Ultimo aggiornamento: 11 febbraio 2026
+              Ultimo aggiornamento: 12 febbraio 2026
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -40,7 +52,7 @@ export default function Terms() {
               </p>
               <ul className="list-disc list-inside space-y-2 text-muted-foreground">
                 <li>I dati principali sono conservati localmente sul tuo dispositivo tramite IndexedDB</li>
-                <li>Alcuni dati (email, stato approvazione) vengono sincronizzati con il nostro server per la gestione degli account</li>
+                <li>I dati vengono sincronizzati con il nostro server per consentire l'accesso da piu dispositivi (es. browser, segnalibro, schermata Home)</li>
                 <li>I dati sanitari raccolti tramite dispositivi wearable vengono elaborati da Sahha, un servizio terzo conforme alle normative sulla salute</li>
                 <li>Mantieni la piena proprieta dei tuoi dati</li>
                 <li>Puoi esportare o eliminare i tuoi dati in qualsiasi momento</li>
@@ -75,6 +87,7 @@ export default function Terms() {
                 <li>Livelli di energia: fisica, mentale ed emotiva (scala 1-10)</li>
                 <li>Ore di lavoro/studio previste per la giornata</li>
                 <li>Note giornaliere sullo stato di benessere</li>
+                <li>Check-in rapidi: qualita del sonno, acqua, caffeina, pasti, focus, attivita</li>
                 <li>Storico e trend nel tempo</li>
               </ul>
 
@@ -88,6 +101,23 @@ export default function Terms() {
                 <li><strong>Segni vitali:</strong> frequenza cardiaca a riposo, HRV, saturazione ossigeno, frequenza respiratoria</li>
                 <li><strong>Corpo:</strong> peso, indice di massa corporea, VO2 Max</li>
                 <li><strong>Scores di benessere:</strong> punteggi calcolati per sonno, attivita, benessere, prontezza e salute mentale</li>
+              </ul>
+            </section>
+
+            <Separator />
+
+            <section>
+              <h2 className="text-xl font-semibold mb-3">Sincronizzazione e Accesso Multi-Dispositivo</h2>
+              <p className="text-muted-foreground leading-relaxed mb-3">
+                Per consentirti di accedere ai tuoi dati da qualsiasi dispositivo
+                (browser, segnalibro sulla schermata Home, PWA), i tuoi dati vengono
+                sincronizzati automaticamente con il nostro server cloud (Supabase).
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+                <li>Le credenziali di accesso vengono sincronizzate in modo sicuro (hash della password, mai in chiaro)</li>
+                <li>I dati del profilo, le registrazioni energetiche e i check-in vengono sincronizzati per consentire l'accesso da segnalibro e schermata Home</li>
+                <li>La sincronizzazione avviene automaticamente ad ogni accesso e ad ogni salvataggio</li>
+                <li>I dati sincronizzati sono protetti da politiche di sicurezza a livello di riga (RLS)</li>
               </ul>
             </section>
 
@@ -146,8 +176,8 @@ export default function Terms() {
                   al profilo associato al tuo account
                 </li>
                 <li>
-                  <strong>Supabase:</strong> per la sincronizzazione degli account tra dispositivi
-                  e la gestione delle approvazioni utente
+                  <strong>Supabase:</strong> per la sincronizzazione degli account e dei dati
+                  tra dispositivi, la gestione delle approvazioni utente e il backup cloud
                 </li>
                 <li>
                   <strong>Funzionalita AI (opzionali):</strong> per l'analisi dei pattern energetici.
@@ -170,9 +200,9 @@ export default function Terms() {
 
             <div className="mt-8 p-4 bg-muted rounded-lg">
               <p className="text-sm text-center text-muted-foreground">
-                Cliccando "Registrati" nella pagina di registrazione, confermi di aver
-                letto, compreso e accettato questi Termini e Condizioni, inclusa la
-                raccolta dei dati del profilo personale e dei dati sanitari.
+                {fromSettings
+                  ? 'Continuando ad utilizzare Vector, confermi di aver letto e compreso questi Termini e Condizioni.'
+                  : 'Cliccando "Registrati" nella pagina di registrazione, confermi di aver letto, compreso e accettato questi Termini e Condizioni, inclusa la raccolta dei dati del profilo personale e dei dati sanitari.'}
               </p>
             </div>
           </CardContent>

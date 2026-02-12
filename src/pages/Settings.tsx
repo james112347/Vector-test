@@ -254,6 +254,16 @@ export default function Settings() {
               Istruzioni
             </Button>
           </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Termini e Condizioni</p>
+              <p className="text-sm text-muted-foreground">Privacy, dati raccolti e diritti</p>
+            </div>
+            <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={() => navigate('/terms', { state: { from: 'settings' } })}>
+              Consulta
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
