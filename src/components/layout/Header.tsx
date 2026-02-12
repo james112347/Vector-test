@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Moon, Sun, LogOut, User, Pencil } from 'lucide-react';
+import { Moon, Sun, LogOut, User } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useDarkMode } from '../../lib/useDarkMode';
 import { useAuth } from '../../contexts/AuthContext';
@@ -150,8 +150,8 @@ export function Header() {
             }}
             className="mt-3 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
           >
-            <Pencil className="h-3.5 w-3.5" />
-            Modifica profilo
+            <User className="h-3.5 w-3.5" />
+            Vedi profilo
           </button>
         </div>
       )}

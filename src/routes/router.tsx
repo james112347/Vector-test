@@ -10,6 +10,7 @@ import History from '../pages/History';
 import Health from '../pages/Health';
 import Settings from '../pages/Settings';
 import AdminDashboard from '../pages/AdminDashboard';
+import Profile from '../pages/Profile';
 import ProfileEdit from '../pages/ProfileEdit';
 import FeedbackChat from '../pages/FeedbackChat';
 import Orientation from '../pages/Orientation';
@@ -31,7 +32,8 @@ export const router = createBrowserRouter([
           { path: '/history', element: <History /> },
           { path: '/health', element: <Health /> },
           { path: '/settings', element: <Settings /> },
-          { path: '/profile', element: <ProfileEdit /> },
+          { path: '/profile', element: <Profile /> },
+          { path: '/profile/edit', element: <ProfileEdit /> },
           { path: '/admin', element: <AdminDashboard /> },
           { path: '/feedback', element: <FeedbackChat /> },
           { path: '/orientation', element: <Orientation /> },

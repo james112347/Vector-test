@@ -28,7 +28,7 @@ export default function ProfileEdit() {
     <Onboarding
       editMode
       initialProfile={profile}
-      onComplete={() => navigate('/')}
+      onComplete={() => navigate('/profile')}
     />
   );
 }
