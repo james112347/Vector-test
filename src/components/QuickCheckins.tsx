@@ -1,15 +1,14 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent } from './ui/card';
 import {
-  Droplets, Coffee,
-  Smile, Frown, Meh, Sun, Zap, Pill,
-  Check, ChevronRight,
+  Droplets, Coffee, Sun, Pill,
+  Check, ChevronRight, Send,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 
 // ---------------------------------------------------------------------------
-// Fase del giorno -> domande contestuali smart
+// Fase del giorno -> mapping percentuale smart
 // ---------------------------------------------------------------------------
 
 type TimePhase = 'morning' | 'midday' | 'afternoon' | 'evening';
@@ -22,19 +21,37 @@ function getTimePhase(): TimePhase {
   return 'evening';
 }
 
-const PHASE_CONFIG: Record<TimePhase, {
+/** Converte percentuale 0-100 in valore 1-5 arrotondato */
+function pctTo5(pct: number): number {
+  return Math.max(1, Math.min(5, Math.round(1 + (pct / 100) * 4)));
+}
+
+/** Inverso: 100% -> 1 (basso stress), 0% -> 5 (alto stress) */
+function pctTo5Inv(pct: number): number {
+  return pctTo5(100 - pct);
+}
+
+/** Emoji e label in base alla percentuale */
+function getEmojiForPct(pct: number): { emoji: string; label: string; color: string } {
+  if (pct <= 15) return { emoji: '😩', label: 'Pessimo', color: '#dc2626' };
+  if (pct <= 30) return { emoji: '😟', label: 'Male', color: '#ef4444' };
+  if (pct <= 45) return { emoji: '😐', label: 'Cosi cosi', color: '#f59e0b' };
+  if (pct <= 60) return { emoji: '🙂', label: 'Discreto', color: '#eab308' };
+  if (pct <= 75) return { emoji: '😊', label: 'Bene', color: '#22c55e' };
+  if (pct <= 90) return { emoji: '😄', label: 'Molto bene', color: '#16a34a' };
+  return { emoji: '🔥', label: 'Alla grande!', color: '#3b82f6' };
+}
+
+interface PhaseConfig {
   greeting: string;
-  /** Domanda principale con risposte che salvano MULTIPLI check-in */
   mainQuestion: string;
-  /** Risposte rapide: ogni risposta salva piu check-in contemporaneamente */
-  answers: Array<{
+  /** Tipi di check-in che il % mappa automaticamente */
+  maps: Array<{
+    type: CheckinType;
     label: string;
-    icon: typeof Smile;
-    color: string;
-    /** Check-in che vengono salvati con questa risposta */
-    saves: Array<{ type: CheckinType; value: number }>;
+    inverse?: boolean; // true = alto % -> basso valore (es. stress)
   }>;
-  /** Domande follow-up opzionali (max 1-2) */
+  /** Follow-up dopo il slider */
   followUps: Array<{
     question: string;
     condition?: (checkins: QuickCheckin[]) => boolean;
@@ -43,48 +60,16 @@ const PHASE_CONFIG: Record<TimePhase, {
       saves: Array<{ type: CheckinType; value: number }>;
     }>;
   }>;
-}> = {
+}
+
+const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
   morning: {
     greeting: 'Buongiorno',
     mainQuestion: 'Come hai dormito e come ti senti?',
-    answers: [
-      {
-        label: 'Male, stanco',
-        icon: Frown,
-        color: '#ef4444',
-        saves: [
-          { type: 'sleep_quality', value: 2 },
-          { type: 'mood', value: 2 },
-        ],
-      },
-      {
-        label: 'Cosi cosi',
-        icon: Meh,
-        color: '#f59e0b',
-        saves: [
-          { type: 'sleep_quality', value: 3 },
-          { type: 'mood', value: 3 },
-        ],
-      },
-      {
-        label: 'Bene, riposato',
-        icon: Smile,
-        color: '#22c55e',
-        saves: [
-          { type: 'sleep_quality', value: 4 },
-          { type: 'mood', value: 4 },
-        ],
-      },
-      {
-        label: 'Alla grande!',
-        icon: Zap,
-        color: '#3b82f6',
-        saves: [
-          { type: 'sleep_quality', value: 5 },
-          { type: 'mood', value: 5 },
-          { type: 'stress', value: 1 },
-        ],
-      },
+    maps: [
+      { type: 'sleep_quality', label: 'Sonno' },
+      { type: 'mood', label: 'Umore' },
+      { type: 'stress', label: 'Stress', inverse: true },
     ],
     followUps: [
       {
@@ -100,47 +85,10 @@ const PHASE_CONFIG: Record<TimePhase, {
   midday: {
     greeting: 'Meta giornata',
     mainQuestion: 'Come sta andando?',
-    answers: [
-      {
-        label: 'Fatico molto',
-        icon: Frown,
-        color: '#ef4444',
-        saves: [
-          { type: 'mood', value: 2 },
-          { type: 'stress', value: 4 },
-          { type: 'focus', value: 2 },
-        ],
-      },
-      {
-        label: 'Un po\' stanco',
-        icon: Meh,
-        color: '#f59e0b',
-        saves: [
-          { type: 'mood', value: 3 },
-          { type: 'stress', value: 3 },
-          { type: 'focus', value: 3 },
-        ],
-      },
-      {
-        label: 'Tutto ok',
-        icon: Smile,
-        color: '#22c55e',
-        saves: [
-          { type: 'mood', value: 4 },
-          { type: 'stress', value: 2 },
-          { type: 'focus', value: 4 },
-        ],
-      },
-      {
-        label: 'Produttivo!',
-        icon: Zap,
-        color: '#3b82f6',
-        saves: [
-          { type: 'mood', value: 5 },
-          { type: 'stress', value: 1 },
-          { type: 'focus', value: 5 },
-        ],
-      },
+    maps: [
+      { type: 'mood', label: 'Umore' },
+      { type: 'focus', label: 'Focus' },
+      { type: 'stress', label: 'Stress', inverse: true },
     ],
     followUps: [
       {
@@ -156,47 +104,10 @@ const PHASE_CONFIG: Record<TimePhase, {
   afternoon: {
     greeting: 'Buon pomeriggio',
     mainQuestion: 'Come ti senti ora?',
-    answers: [
-      {
-        label: 'Scarico',
-        icon: Frown,
-        color: '#ef4444',
-        saves: [
-          { type: 'mood', value: 2 },
-          { type: 'focus', value: 2 },
-          { type: 'stress', value: 4 },
-        ],
-      },
-      {
-        label: 'Calo energia',
-        icon: Meh,
-        color: '#f59e0b',
-        saves: [
-          { type: 'mood', value: 3 },
-          { type: 'focus', value: 3 },
-          { type: 'stress', value: 3 },
-        ],
-      },
-      {
-        label: 'Bene',
-        icon: Smile,
-        color: '#22c55e',
-        saves: [
-          { type: 'mood', value: 4 },
-          { type: 'focus', value: 4 },
-          { type: 'stress', value: 2 },
-        ],
-      },
-      {
-        label: 'Carico!',
-        icon: Zap,
-        color: '#3b82f6',
-        saves: [
-          { type: 'mood', value: 5 },
-          { type: 'focus', value: 5 },
-          { type: 'stress', value: 1 },
-        ],
-      },
+    maps: [
+      { type: 'mood', label: 'Umore' },
+      { type: 'focus', label: 'Focus' },
+      { type: 'stress', label: 'Stress', inverse: true },
     ],
     followUps: [
       {
@@ -211,44 +122,10 @@ const PHASE_CONFIG: Record<TimePhase, {
   },
   evening: {
     greeting: 'Buona sera',
-    mainQuestion: 'Come e\' andata oggi?',
-    answers: [
-      {
-        label: 'Giornata no',
-        icon: Frown,
-        color: '#ef4444',
-        saves: [
-          { type: 'mood', value: 2 },
-          { type: 'stress', value: 4 },
-        ],
-      },
-      {
-        label: 'Nella media',
-        icon: Meh,
-        color: '#f59e0b',
-        saves: [
-          { type: 'mood', value: 3 },
-          { type: 'stress', value: 3 },
-        ],
-      },
-      {
-        label: 'Buona',
-        icon: Smile,
-        color: '#22c55e',
-        saves: [
-          { type: 'mood', value: 4 },
-          { type: 'stress', value: 2 },
-        ],
-      },
-      {
-        label: 'Ottima!',
-        icon: Zap,
-        color: '#3b82f6',
-        saves: [
-          { type: 'mood', value: 5 },
-          { type: 'stress', value: 1 },
-        ],
-      },
+    mainQuestion: "Com'e' andata oggi?",
+    maps: [
+      { type: 'mood', label: 'Umore' },
+      { type: 'stress', label: 'Stress', inverse: true },
     ],
     followUps: [
       {
@@ -265,7 +142,7 @@ const PHASE_CONFIG: Record<TimePhase, {
 };
 
 // ---------------------------------------------------------------------------
-// Contatori inline (caffe, acqua, integratori) — sempre visibili
+// Contatori inline
 // ---------------------------------------------------------------------------
 
 const COUNTERS: Array<{
@@ -281,6 +158,119 @@ const COUNTERS: Array<{
 ];
 
 // ---------------------------------------------------------------------------
+// Slider percentuale touch-friendly
+// ---------------------------------------------------------------------------
+
+function PercentSlider({
+  value,
+  onChange,
+  onConfirm,
+  maps,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  onConfirm: () => void;
+  maps: PhaseConfig['maps'];
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const emojiInfo = getEmojiForPct(value);
+
+  const updateFromEvent = (clientX: number) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    onChange(Math.round(pct));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    updateFromEvent(e.clientX);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    updateFromEvent(e.clientX);
+  };
+
+  const handlePointerUp = () => {
+    dragging.current = false;
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Emoji + Percentuale */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl" role="img">{emojiInfo.emoji}</span>
+          <span className="text-sm font-medium" style={{ color: emojiInfo.color }}>
+            {emojiInfo.label}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold tabular-nums" style={{ color: emojiInfo.color }}>
+            {value}%
+          </span>
+          <button
+            onClick={onConfirm}
+            className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all"
+            style={{ backgroundColor: emojiInfo.color }}
+          >
+            <Send className="h-3.5 w-3.5 text-white" />
+          </button>
+        </div>
+      </div>
+
+      {/* Track slider */}
+      <div
+        ref={trackRef}
+        className="relative h-10 rounded-xl cursor-pointer touch-none select-none"
+        style={{
+          background: 'linear-gradient(90deg, #dc2626 0%, #f59e0b 35%, #22c55e 65%, #3b82f6 100%)',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        {/* Thumb */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white border-2 shadow-md transition-[left] duration-75"
+          style={{
+            left: `calc(${value}% - 14px)`,
+            borderColor: emojiInfo.color,
+          }}
+        />
+        {/* Tick marks */}
+        <div className="absolute inset-0 flex items-end justify-between px-3 pb-1 pointer-events-none">
+          <span className="text-[8px] text-white/60 font-medium">0</span>
+          <span className="text-[8px] text-white/60 font-medium">25</span>
+          <span className="text-[8px] text-white/60 font-medium">50</span>
+          <span className="text-[8px] text-white/60 font-medium">75</span>
+          <span className="text-[8px] text-white/60 font-medium">100</span>
+        </div>
+      </div>
+
+      {/* Preview mapping: cosa viene salvato */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {maps.map(m => {
+          const val = m.inverse ? pctTo5Inv(value) : pctTo5(value);
+          return (
+            <span
+              key={m.type}
+              className="text-[10px] px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground"
+            >
+              {m.label} <strong className="text-foreground">{val}/5</strong>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Componente principale
 // ---------------------------------------------------------------------------
 
@@ -288,6 +278,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [checkins, setCheckins] = useState<QuickCheckin[]>([]);
   const [step, setStep] = useState<'main' | 'followup' | 'done'>('main');
   const [followUpIdx, setFollowUpIdx] = useState(0);
+  const [sliderValue, setSliderValue] = useState(50);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -301,7 +292,6 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   // Controlla se l'utente ha gia risposto alla domanda di questa fase
   const hasAnsweredMain = useMemo(() => {
-    // Se ha gia registrato mood in questa fase oraria, consideriamo completato
     const phaseStart = phase === 'morning' ? 5 : phase === 'midday' ? 11 : phase === 'afternoon' ? 14 : 18;
     return checkins.some(c => {
       if (c.type !== 'mood') return false;
@@ -327,9 +317,14 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     await loadCheckins();
   };
 
-  const handleMainAnswer = async (saves: Array<{ type: CheckinType; value: number }>) => {
+  /** Converte il valore slider in tutti i check-in mappati e salva */
+  const handleSliderConfirm = async () => {
+    const saves = config.maps.map(m => ({
+      type: m.type,
+      value: m.inverse ? pctTo5Inv(sliderValue) : pctTo5(sliderValue),
+    }));
     await saveMultiple(saves);
-    // Check se ci sono follow-up applicabili
+
     const applicableFollowUps = config.followUps.filter(
       f => !f.condition || f.condition(checkins),
     );
@@ -358,13 +353,12 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     await loadCheckins();
   };
 
-  // Conta dati raccolti oggi
   const typesRecorded = new Set(checkins.map(c => c.type)).size;
 
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
-        {/* Contatori inline — sempre visibili, compatti */}
+        {/* Contatori inline — sempre visibili */}
         <div className="flex items-center justify-around px-3 py-2.5 border-b border-border bg-muted/20">
           {COUNTERS.map(counter => {
             const Icon = counter.icon;
@@ -388,9 +382,9 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           })}
         </div>
 
-        {/* Domanda contestuale */}
+        {/* Slider percentuale contestuale */}
         {step === 'main' && (
-          <div className="px-4 py-3 space-y-2.5">
+          <div className="px-4 py-3 space-y-2">
             <div className="flex items-center gap-2">
               <Sun className="h-4 w-4 text-amber-500" />
               <div>
@@ -398,24 +392,12 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                 <p className="text-sm font-semibold">{config.mainQuestion}</p>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {config.answers.map((ans, i) => {
-                const Icon = ans.icon;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleMainAnswer(ans.saves)}
-                    className="flex flex-col items-center gap-1 p-2 rounded-xl border border-border hover:border-transparent active:scale-95 transition-all"
-                    style={{ ['--hover-bg' as string]: ans.color + '15' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = ans.color + '12')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-                  >
-                    <Icon className="h-5 w-5" style={{ color: ans.color }} />
-                    <span className="text-[10px] font-medium text-center leading-tight">{ans.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <PercentSlider
+              value={sliderValue}
+              onChange={setSliderValue}
+              onConfirm={handleSliderConfirm}
+              maps={config.maps}
+            />
           </div>
         )}
 
@@ -454,10 +436,10 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
             </div>
             <p className="text-xs text-muted-foreground flex-1">
-              Check-in completato - {typesRecorded} parametri raccolti
+              Check-in completato — {typesRecorded} parametri raccolti
             </p>
             <button
-              onClick={() => setStep('main')}
+              onClick={() => { setStep('main'); setSliderValue(50); }}
               className="text-[10px] text-primary font-medium hover:underline"
             >
               Aggiorna
