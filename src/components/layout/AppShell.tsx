@@ -1,15 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import InstallPrompt from '../InstallPrompt';
 import { useAdminNotifications } from '../../lib/useAdminNotifications';
 
-const TOOLTIP_KEY = 'vector_chat_tooltip_seen';
 const tooltipMessages = [
+  'Hai un feedback da fornire?',
+  'Bisogno di assistenza?',
+  'Come va l\'esperienza con Vector?',
+  'Segnala un problema o suggerisci qualcosa!',
+  'Hai trovato un bug? Faccelo sapere!',
+  'Qualcosa da migliorare? Scrivici!',
   'Hai bisogno di aiuto?',
-  'Lascia un feedback per migliorare l\'app!',
+  'La tua opinione conta, lascia un feedback!',
 ];
+
+const TOOLTIP_SHOW_DURATION = 6000;   // visible for 6s
+const TOOLTIP_FIRST_DELAY = 8000;     // first popup after 8s
+const TOOLTIP_INTERVAL = 120000;      // repeat every 2 minutes
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -17,24 +26,52 @@ export function AppShell() {
   const isFeedbackPage = location.pathname === '/feedback';
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipText, setTooltipText] = useState('');
+  const lastIndexRef = useRef(-1);
+  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Poll for new feedback and notify admin
   useAdminNotifications();
 
+  const pickMessage = useCallback(() => {
+    let idx = Math.floor(Math.random() * tooltipMessages.length);
+    // Avoid repeating the same message twice in a row
+    if (idx === lastIndexRef.current && tooltipMessages.length > 1) {
+      idx = (idx + 1) % tooltipMessages.length;
+    }
+    lastIndexRef.current = idx;
+    return tooltipMessages[idx];
+  }, []);
+
+  const showPopup = useCallback(() => {
+    setTooltipText(pickMessage());
+    setShowTooltip(true);
+    // Auto-dismiss after TOOLTIP_SHOW_DURATION
+    timeoutRef.current = setTimeout(() => setShowTooltip(false), TOOLTIP_SHOW_DURATION);
+  }, [pickMessage]);
+
   useEffect(() => {
-    if (isFeedbackPage) return;
-    const seen = sessionStorage.getItem(TOOLTIP_KEY);
-    if (seen) return;
-    const timer = setTimeout(() => {
-      setTooltipText(tooltipMessages[Math.floor(Math.random() * tooltipMessages.length)]);
-      setShowTooltip(true);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [isFeedbackPage]);
+    if (isFeedbackPage) {
+      setShowTooltip(false);
+      return;
+    }
+
+    // First popup after a short delay
+    const firstTimer = setTimeout(showPopup, TOOLTIP_FIRST_DELAY);
+
+    // Then repeat periodically
+    intervalRef.current = setInterval(showPopup, TOOLTIP_INTERVAL);
+
+    return () => {
+      clearTimeout(firstTimer);
+      clearInterval(intervalRef.current);
+      clearTimeout(timeoutRef.current);
+    };
+  }, [isFeedbackPage, showPopup]);
 
   const dismissTooltip = () => {
     setShowTooltip(false);
-    sessionStorage.setItem(TOOLTIP_KEY, '1');
+    clearTimeout(timeoutRef.current);
   };
 
   return (
