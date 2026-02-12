@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from './ui/card';
 import {
   Moon, Sun, Brain, Heart, Zap, Coffee, Droplets, Pill,
-  MonitorOff, Check, ChevronRight, Activity, Frown, Meh,
-  Smile, SmilePlus, Sparkles, CloudSun, Sunset, CloudMoon,
-  UtensilsCrossed,
+  MonitorOff, Check, ChevronRight, Activity, CloudSun,
+  Sunset, CloudMoon, UtensilsCrossed,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
@@ -18,9 +17,10 @@ type TimePhase = 'morning' | 'midday' | 'afternoon' | 'evening';
 interface RatingOption {
   value: number;
   label: string;
-  icon: typeof Frown;
   color: string;
   bg: string;
+  border: string;
+  textSelected: string;
 }
 
 interface CheckinQuestion {
@@ -43,6 +43,17 @@ interface PhaseConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Milliliters per glass of water */
+const ML_PER_GLASS = 250;
+/** Target glasses of water per day */
+const WATER_TARGET = 8;
+/** Approximate mg of caffeine per espresso */
+const MG_PER_ESPRESSO = 80;
+
+// ---------------------------------------------------------------------------
 // Time phase detection
 // ---------------------------------------------------------------------------
 
@@ -55,40 +66,40 @@ function getTimePhase(): TimePhase {
 }
 
 // ---------------------------------------------------------------------------
-// Default 1-5 rating scale
+// Rating scales - clean numbered buttons with text labels, no emoji icons
 // ---------------------------------------------------------------------------
 
 const DEFAULT_RATINGS: RatingOption[] = [
-  { value: 1, label: 'Male',   icon: Frown,     color: 'text-red-500',    bg: 'bg-red-500' },
-  { value: 2, label: 'Poco',   icon: Frown,     color: 'text-orange-500', bg: 'bg-orange-500' },
-  { value: 3, label: 'Cosi',   icon: Meh,       color: 'text-amber-500',  bg: 'bg-amber-500' },
-  { value: 4, label: 'Bene',   icon: Smile,     color: 'text-emerald-500',bg: 'bg-emerald-500' },
-  { value: 5, label: 'Ottimo', icon: SmilePlus,  color: 'text-green-600',  bg: 'bg-green-600' },
+  { value: 1, label: 'Male',   color: 'text-red-500',     bg: 'bg-red-500',     border: 'border-red-300 dark:border-red-700',       textSelected: 'text-white' },
+  { value: 2, label: 'Poco',   color: 'text-orange-500',  bg: 'bg-orange-500',  border: 'border-orange-300 dark:border-orange-700', textSelected: 'text-white' },
+  { value: 3, label: 'Medio',  color: 'text-amber-500',   bg: 'bg-amber-500',   border: 'border-amber-300 dark:border-amber-700',   textSelected: 'text-white' },
+  { value: 4, label: 'Bene',   color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-300 dark:border-emerald-700', textSelected: 'text-white' },
+  { value: 5, label: 'Ottimo', color: 'text-green-600',   bg: 'bg-green-600',   border: 'border-green-300 dark:border-green-700',   textSelected: 'text-white' },
 ];
 
-/** Inverse scale: 1=high(bad), 5=low(good) — used for stress */
+/** Inverse scale: 1=high(bad), 5=low(good) -- used for stress */
 const INVERSE_RATINGS: RatingOption[] = [
-  { value: 1, label: 'Alto',      icon: Zap,       color: 'text-red-500',    bg: 'bg-red-500' },
-  { value: 2, label: 'Medio-alto',icon: Zap,       color: 'text-orange-500', bg: 'bg-orange-500' },
-  { value: 3, label: 'Medio',     icon: Meh,       color: 'text-amber-500',  bg: 'bg-amber-500' },
-  { value: 4, label: 'Basso',     icon: Smile,     color: 'text-emerald-500',bg: 'bg-emerald-500' },
-  { value: 5, label: 'Minimo',    icon: Sparkles,  color: 'text-green-600',  bg: 'bg-green-600' },
+  { value: 1, label: 'Alto',   color: 'text-red-500',     bg: 'bg-red-500',     border: 'border-red-300 dark:border-red-700',       textSelected: 'text-white' },
+  { value: 2, label: 'Medio+', color: 'text-orange-500',  bg: 'bg-orange-500',  border: 'border-orange-300 dark:border-orange-700', textSelected: 'text-white' },
+  { value: 3, label: 'Medio',  color: 'text-amber-500',   bg: 'bg-amber-500',   border: 'border-amber-300 dark:border-amber-700',   textSelected: 'text-white' },
+  { value: 4, label: 'Basso',  color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-300 dark:border-emerald-700', textSelected: 'text-white' },
+  { value: 5, label: 'Minimo', color: 'text-green-600',   bg: 'bg-green-600',   border: 'border-green-300 dark:border-green-700',   textSelected: 'text-white' },
 ];
 
 const MEAL_RATINGS: RatingOption[] = [
-  { value: 1, label: 'Saltato',  icon: Frown,    color: 'text-red-500',    bg: 'bg-red-500' },
-  { value: 2, label: 'Snack',    icon: Frown,    color: 'text-orange-500', bg: 'bg-orange-500' },
-  { value: 3, label: 'Veloce',   icon: Meh,      color: 'text-amber-500',  bg: 'bg-amber-500' },
-  { value: 4, label: 'Buono',    icon: Smile,    color: 'text-emerald-500',bg: 'bg-emerald-500' },
-  { value: 5, label: 'Completo', icon: SmilePlus, color: 'text-green-600',  bg: 'bg-green-600' },
+  { value: 1, label: 'Saltato',  color: 'text-red-500',     bg: 'bg-red-500',     border: 'border-red-300 dark:border-red-700',       textSelected: 'text-white' },
+  { value: 2, label: 'Snack',    color: 'text-orange-500',  bg: 'bg-orange-500',  border: 'border-orange-300 dark:border-orange-700', textSelected: 'text-white' },
+  { value: 3, label: 'Veloce',   color: 'text-amber-500',   bg: 'bg-amber-500',   border: 'border-amber-300 dark:border-amber-700',   textSelected: 'text-white' },
+  { value: 4, label: 'Buono',    color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-300 dark:border-emerald-700', textSelected: 'text-white' },
+  { value: 5, label: 'Completo', color: 'text-green-600',   bg: 'bg-green-600',   border: 'border-green-300 dark:border-green-700',   textSelected: 'text-white' },
 ];
 
 const ACTIVITY_RATINGS: RatingOption[] = [
-  { value: 1, label: 'Nessuna',  icon: Frown,    color: 'text-red-500',    bg: 'bg-red-500' },
-  { value: 2, label: 'Leggera',  icon: Meh,      color: 'text-orange-500', bg: 'bg-orange-500' },
-  { value: 3, label: 'Moderata', icon: Meh,      color: 'text-amber-500',  bg: 'bg-amber-500' },
-  { value: 4, label: 'Buona',    icon: Smile,    color: 'text-emerald-500',bg: 'bg-emerald-500' },
-  { value: 5, label: 'Intensa',  icon: SmilePlus, color: 'text-green-600',  bg: 'bg-green-600' },
+  { value: 1, label: 'Nessuna',  color: 'text-red-500',     bg: 'bg-red-500',     border: 'border-red-300 dark:border-red-700',       textSelected: 'text-white' },
+  { value: 2, label: 'Leggera',  color: 'text-orange-500',  bg: 'bg-orange-500',  border: 'border-orange-300 dark:border-orange-700', textSelected: 'text-white' },
+  { value: 3, label: 'Moderata', color: 'text-amber-500',   bg: 'bg-amber-500',   border: 'border-amber-300 dark:border-amber-700',   textSelected: 'text-white' },
+  { value: 4, label: 'Buona',    color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-300 dark:border-emerald-700', textSelected: 'text-white' },
+  { value: 5, label: 'Intensa',  color: 'text-green-600',   bg: 'bg-green-600',   border: 'border-green-300 dark:border-green-700',   textSelected: 'text-white' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -230,21 +241,64 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// Quick counters config
+// Quick counters config -- with measurement units
 // ---------------------------------------------------------------------------
 
-const COUNTERS: Array<{
+interface CounterConfig {
   type: CheckinType;
   icon: typeof Coffee;
   label: string;
+  unit: string;
   color: string;
   activeColor: string;
   target?: number;
-}> = [
-  { type: 'caffeine',     icon: Coffee,     label: 'Caffe',   color: 'text-amber-700 dark:text-amber-500',  activeColor: 'bg-amber-100 dark:bg-amber-900/30' },
-  { type: 'water',        icon: Droplets,   label: 'Acqua',   color: 'text-blue-500',   activeColor: 'bg-blue-100 dark:bg-blue-900/30',   target: 8 },
-  { type: 'supplement',   icon: Pill,        label: 'Integr.', color: 'text-violet-500', activeColor: 'bg-violet-100 dark:bg-violet-900/30' },
-  { type: 'screen_break', icon: MonitorOff,  label: 'Pausa',   color: 'text-cyan-500',   activeColor: 'bg-cyan-100 dark:bg-cyan-900/30' },
+  /** Value per tap in relevant unit (for display) */
+  unitPerTap: number;
+  unitSuffix: string;
+}
+
+const COUNTERS: CounterConfig[] = [
+  {
+    type: 'caffeine',
+    icon: Coffee,
+    label: 'Caffeina',
+    unit: '1 tazzina',
+    color: 'text-amber-700 dark:text-amber-500',
+    activeColor: 'bg-amber-100 dark:bg-amber-900/30',
+    unitPerTap: MG_PER_ESPRESSO,
+    unitSuffix: 'mg',
+  },
+  {
+    type: 'water',
+    icon: Droplets,
+    label: 'Acqua',
+    unit: `${ML_PER_GLASS}ml/bicch.`,
+    color: 'text-blue-500',
+    activeColor: 'bg-blue-100 dark:bg-blue-900/30',
+    target: WATER_TARGET,
+    unitPerTap: ML_PER_GLASS,
+    unitSuffix: 'ml',
+  },
+  {
+    type: 'supplement',
+    icon: Pill,
+    label: 'Integratori',
+    unit: '',
+    color: 'text-violet-500',
+    activeColor: 'bg-violet-100 dark:bg-violet-900/30',
+    unitPerTap: 1,
+    unitSuffix: '',
+  },
+  {
+    type: 'screen_break',
+    icon: MonitorOff,
+    label: 'Pause schermo',
+    unit: '',
+    color: 'text-cyan-500',
+    activeColor: 'bg-cyan-100 dark:bg-cyan-900/30',
+    unitPerTap: 1,
+    unitSuffix: '',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -263,7 +317,27 @@ const ALL_TRACKED_TYPES: Array<{ type: CheckinType; label: string }> = [
 ];
 
 // ---------------------------------------------------------------------------
-// RatingButton sub-component
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Format water volume: show liters when >= 1000ml, otherwise ml */
+function formatWaterVolume(glasses: number): string {
+  const ml = glasses * ML_PER_GLASS;
+  if (ml >= 1000) {
+    const liters = (ml / 1000).toFixed(1).replace('.0', '');
+    return `${liters}L`;
+  }
+  return `${ml}ml`;
+}
+
+/** Format caffeine: show approximate total mg */
+function formatCaffeine(cups: number): string {
+  const mg = cups * MG_PER_ESPRESSO;
+  return `~${mg}mg`;
+}
+
+// ---------------------------------------------------------------------------
+// RatingButton sub-component -- clean numbered circles, no emoji icons
 // ---------------------------------------------------------------------------
 
 function RatingButton({
@@ -275,33 +349,101 @@ function RatingButton({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const Icon = option.icon;
-
   return (
     <button
       onClick={onSelect}
       className={`
-        flex flex-col items-center gap-1 py-2 px-1 rounded-xl
+        flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl
         transition-all duration-150 active:scale-95 flex-1 min-w-0
+        border
         ${selected
-          ? `${option.bg} text-white shadow-sm`
-          : 'bg-muted/40 hover:bg-muted/70 text-muted-foreground'
+          ? `${option.bg} ${option.textSelected} shadow-sm border-transparent`
+          : `bg-muted/30 hover:bg-muted/60 text-muted-foreground ${option.border}`
         }
       `}
     >
+      {/* Numbered circle */}
       <div className={`
-        w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+        w-9 h-9 rounded-full flex items-center justify-center
+        text-sm font-bold tracking-tight
         ${selected
-          ? 'bg-white/20 text-white'
-          : `bg-background ${option.color}`
+          ? 'bg-white/25 text-white'
+          : `bg-background shadow-sm ${option.color}`
         }
       `}>
         {option.value}
       </div>
-      <Icon className={`h-3.5 w-3.5 ${selected ? 'text-white/80' : option.color}`} />
-      <span className={`text-[10px] font-medium leading-tight ${selected ? 'text-white/90' : ''}`}>
+      {/* Text label */}
+      <span className={`
+        text-[10px] font-semibold leading-tight tracking-wide uppercase
+        ${selected ? 'text-white/90' : 'text-muted-foreground'}
+      `}>
         {option.label}
       </span>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CounterButton sub-component -- with measurement context
+// ---------------------------------------------------------------------------
+
+function CounterButton({
+  counter,
+  value,
+  onTap,
+}: {
+  counter: CounterConfig;
+  value: number;
+  onTap: () => void;
+}) {
+  const Icon = counter.icon;
+  const hasValue = value > 0;
+
+  // Build the measurement display string
+  let measurementText = '';
+  if (counter.type === 'water' && hasValue) {
+    measurementText = formatWaterVolume(value);
+  } else if (counter.type === 'caffeine' && hasValue) {
+    measurementText = formatCaffeine(value);
+  }
+
+  return (
+    <button
+      onClick={onTap}
+      className={`
+        flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg
+        transition-all active:scale-95 min-w-0
+        ${hasValue ? counter.activeColor : 'hover:bg-muted/50'}
+      `}
+    >
+      {/* Icon + count row */}
+      <div className="flex items-center gap-1.5">
+        <Icon className={`h-3.5 w-3.5 ${counter.color}`} />
+        <span className={`text-xs font-bold tabular-nums ${counter.color}`}>
+          {value}
+        </span>
+        {counter.target != null && (
+          <span className="text-[9px] text-muted-foreground">/{counter.target}</span>
+        )}
+      </div>
+
+      {/* Label */}
+      <span className="text-[9px] text-muted-foreground font-medium leading-tight">
+        {counter.label}
+      </span>
+
+      {/* Measurement context */}
+      {measurementText && (
+        <span className="text-[8px] text-muted-foreground/70 font-medium tabular-nums">
+          ({measurementText})
+        </span>
+      )}
+      {counter.unit && !measurementText && (
+        <span className="text-[8px] text-muted-foreground/60 font-normal">
+          {counter.unit}
+        </span>
+      )}
     </button>
   );
 }
@@ -430,7 +572,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               <span className="text-sm font-semibold text-foreground">
                 {config.greeting}
               </span>
-              <span className="text-xs text-muted-foreground ml-auto">
+              <span className="text-xs text-muted-foreground ml-auto tabular-nums">
                 {currentIdx + 1}/{activeQuestions.length}
               </span>
             </div>
@@ -446,7 +588,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               </p>
             </div>
 
-            {/* 5-point tap rating */}
+            {/* 5-point tap rating -- clean numbered buttons */}
             <div className="flex gap-1.5">
               {ratings.map((opt) => (
                 <RatingButton
@@ -499,35 +641,22 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           </div>
         )}
 
-        {/* ---- Quick counters ---- */}
-        <div className="flex items-center justify-around px-3 py-2 border-t border-border">
+        {/* ---- Quick counters with measurement units ---- */}
+        <div className="flex items-start justify-around px-3 py-2.5 border-t border-border">
           {COUNTERS.map(counter => {
-            const Icon = counter.icon;
             const val = getCounterValue(counter.type);
-            const hasValue = val > 0;
             return (
-              <button
+              <CounterButton
                 key={counter.type}
-                onClick={() => handleCounter(counter.type)}
-                className={`
-                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg
-                  transition-all active:scale-95
-                  ${hasValue ? counter.activeColor : 'hover:bg-muted/50'}
-                `}
-              >
-                <Icon className={`h-3.5 w-3.5 ${counter.color}`} />
-                <span className={`text-xs font-bold tabular-nums ${counter.color}`}>
-                  {val}
-                </span>
-                {counter.target && (
-                  <span className="text-[9px] text-muted-foreground">/{counter.target}</span>
-                )}
-              </button>
+                counter={counter}
+                value={val}
+                onTap={() => handleCounter(counter.type)}
+              />
             );
           })}
         </div>
 
-        {/* ---- Completion tracker ---- */}
+        {/* ---- Completion tracker -- filled/empty circles with text ---- */}
         <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border bg-muted/20 flex-wrap">
           {ALL_TRACKED_TYPES.map(({ type, label }) => {
             const done = allLoggedTypes.has(type);

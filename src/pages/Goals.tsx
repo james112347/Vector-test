@@ -36,8 +36,6 @@ import {
   Pause,
   Play,
   Trash2,
-  Flame,
-  Trophy,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -253,8 +251,10 @@ function GoalCard({
 
           {/* Streak */}
           {goal.streak > 0 && (
-            <div className="flex items-center gap-1 mt-1.5">
-              <Flame className="h-3.5 w-3.5 text-orange-500" />
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                streak {goal.streak}d
+              </span>
               <span className="text-xs text-orange-600 dark:text-orange-400 font-semibold">
                 {goal.streak} giorni di fila
               </span>
@@ -466,7 +466,7 @@ function CreateGoalForm({
   onSubmit: (input: CreateGoalInput) => void;
   onCancel: () => void;
 }) {
-  const [mode, setMode] = useState<'template' | 'custom'>('template');
+  const [mode, setMode] = useState<'quick' | 'template' | 'custom'>('quick');
   const [wish, setWish] = useState('');
   const [outcome, setOutcome] = useState('');
   const [obstacle, setObstacle] = useState('');
@@ -475,6 +475,12 @@ function CreateGoalForm({
   const [timeframe, setTimeframe] = useState<GoalTimeframe>('daily');
   const [targetValue, setTargetValue] = useState('');
   const [targetUnit, setTargetUnit] = useState('');
+
+  // Quick goal input
+  const [quickGoalText, setQuickGoalText] = useState('');
+  const [quickBreakdown, setQuickBreakdown] = useState<GoalSetupAdvice | null>(null);
+  const [quickMiniSteps, setQuickMiniSteps] = useState<string[]>([]);
+  const [quickLoading, setQuickLoading] = useState(false);
 
   // AI advice
   const [aiAdvice, setAiAdvice] = useState<GoalSetupAdvice | null>(null);
@@ -489,6 +495,39 @@ function CreateGoalForm({
     setTimeframe(t.timeframe);
     if (t.targetValue) setTargetValue(String(t.targetValue));
     if (t.targetUnit) setTargetUnit(t.targetUnit);
+    setMode('custom');
+  };
+
+  // Quick goal: AI breakdown
+  const handleQuickBreakdown = async () => {
+    if (!quickGoalText.trim()) return;
+    setQuickLoading(true);
+    try {
+      const advice = await generateGoalSetupAdvice(userId, {
+        wish: quickGoalText.trim(),
+      });
+      if (advice) {
+        setQuickBreakdown(advice);
+        // Extract mini-steps from implementation tips
+        setQuickMiniSteps(advice.implementationTips.length > 0 ? advice.implementationTips : []);
+        // Pre-fill WOOP fields from AI
+        setWish(quickGoalText.trim());
+        if (advice.improvedPlan) setPlan(advice.improvedPlan);
+        if (advice.suggestedTarget != null) setTargetValue(String(advice.suggestedTarget));
+        if (advice.suggestedUnit) setTargetUnit(advice.suggestedUnit);
+        // Infer category from energy cost and tips
+        // Keep current category unless we have a better signal
+        setAiAdvice(advice);
+      }
+    } catch {
+      // AI not available
+    } finally {
+      setQuickLoading(false);
+    }
+  };
+
+  const handleQuickAccept = () => {
+    // Move to custom mode with pre-filled fields
     setMode('custom');
   };
 
@@ -525,6 +564,172 @@ function CreateGoalForm({
     });
   };
 
+  // Mode selector (shared across all modes)
+  const modeSelector = (
+    <div className="flex gap-1 rounded-lg bg-muted p-0.5">
+      {([
+        { key: 'quick' as const, label: 'Obiettivo rapido' },
+        { key: 'template' as const, label: 'Da template' },
+        { key: 'custom' as const, label: 'Personalizzato' },
+      ]).map(m => (
+        <button
+          key={m.key}
+          onClick={() => setMode(m.key)}
+          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            mode === m.key
+              ? 'bg-background shadow text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode === 'quick') {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Obiettivo rapido
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {modeSelector}
+
+          <div>
+            <Label className="text-xs font-semibold">Scrivi il tuo obiettivo</Label>
+            <Input
+              value={quickGoalText}
+              onChange={e => setQuickGoalText(e.target.value)}
+              placeholder="es. Completare MVP app, Perdere 5kg, Leggere 1 libro al mese..."
+              className="mt-1 h-9 text-sm"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && quickGoalText.trim()) handleQuickBreakdown();
+              }}
+            />
+          </div>
+
+          <Button
+            size="sm"
+            className="w-full text-xs h-9"
+            onClick={handleQuickBreakdown}
+            disabled={!quickGoalText.trim() || quickLoading}
+          >
+            {quickLoading ? (
+              <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisi in corso...</>
+            ) : (
+              <><Sparkles className="h-3 w-3 mr-1" /> Scomponi con IA</>
+            )}
+          </Button>
+
+          {/* AI Breakdown Results */}
+          {quickBreakdown && (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 space-y-2">
+                <p className="text-xs font-semibold text-primary flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5" /> Analisi IA
+                </p>
+
+                {/* Suggested category & timeframe */}
+                <div className="flex gap-2 flex-wrap">
+                  {quickBreakdown.estimatedEnergyCost && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-medium">
+                      Energia: {quickBreakdown.estimatedEnergyCost}
+                    </span>
+                  )}
+                  {quickBreakdown.optimalTimeOfDay && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-medium">
+                      Orario: {quickBreakdown.optimalTimeOfDay}
+                    </span>
+                  )}
+                  {quickBreakdown.expectedTimeline && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-medium">
+                      Timeline: {quickBreakdown.expectedTimeline}
+                    </span>
+                  )}
+                </div>
+
+                {/* Mini-steps */}
+                {quickMiniSteps.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-medium mb-1">Mini-passi suggeriti:</p>
+                    <ul className="space-y-1">
+                      {quickMiniSteps.map((step, i) => (
+                        <li key={i} className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
+                          <span className="text-primary font-bold mt-px shrink-0">{i + 1}.</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Improved plan */}
+                {quickBreakdown.improvedPlan && (
+                  <div>
+                    <p className="text-[10px] font-medium">Piano Se-Allora:</p>
+                    <p className="text-[10px] text-muted-foreground italic">{quickBreakdown.improvedPlan}</p>
+                  </div>
+                )}
+
+                {/* Conflicts */}
+                {quickBreakdown.conflicts.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-3 w-3 text-red-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] font-medium text-red-600 dark:text-red-400">Conflitti</p>
+                      {quickBreakdown.conflicts.map((c, i) => (
+                        <p key={i} className="text-[10px] text-muted-foreground">- {c}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pre-filled fields preview */}
+              <div className="rounded-lg border border-border p-3 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Campi pre-compilati dall'IA
+                </p>
+                <div className="space-y-1 text-xs">
+                  <p><span className="font-medium">Obiettivo:</span> {wish}</p>
+                  {plan && <p><span className="font-medium">Piano:</span> <span className="italic">{plan}</span></p>}
+                  {targetValue && <p><span className="font-medium">Target:</span> {targetValue} {targetUnit}</p>}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Puoi modificare tutto nel passo successivo.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 text-xs h-9"
+                  onClick={handleQuickAccept}
+                >
+                  Continua e personalizza
+                </Button>
+                <Button size="sm" variant="ghost" className="text-xs" onClick={onCancel}>
+                  Annulla
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancel if no breakdown yet */}
+          {!quickBreakdown && (
+            <Button size="sm" variant="ghost" className="text-xs w-full" onClick={onCancel}>
+              Annulla
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (mode === 'template') {
     return (
       <Card>
@@ -535,6 +740,8 @@ function CreateGoalForm({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
+          {modeSelector}
+
           {GOAL_TEMPLATES.map((t, i) => (
             <button
               key={i}
@@ -554,14 +761,9 @@ function CreateGoalForm({
             </button>
           ))}
 
-          <div className="pt-2 flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => setMode('custom')}>
-              Crea personalizzato
-            </Button>
-            <Button size="sm" variant="ghost" className="text-xs" onClick={onCancel}>
-              Annulla
-            </Button>
-          </div>
+          <Button size="sm" variant="ghost" className="text-xs w-full" onClick={onCancel}>
+            Annulla
+          </Button>
         </CardContent>
       </Card>
     );
@@ -576,6 +778,7 @@ function CreateGoalForm({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {modeSelector}
         <p className="text-xs text-muted-foreground">
           Il metodo WOOP: Desiderio, Risultato, Ostacolo, Piano. Scientificamente provato (ES: 0.28-0.47).
         </p>
@@ -814,7 +1017,7 @@ export default function Goals() {
         )}
       </div>
       <p className="text-sm text-muted-foreground -mt-2">
-        WOOP + IA: obiettivi intelligenti calibrati sulla tua energia
+        Definisci obiettivi, Vector li calibra sulla tua energia
       </p>
 
       {/* Energy budget */}
@@ -879,7 +1082,7 @@ export default function Goals() {
         !showCreate && (
           <Card>
             <CardContent className="py-8 text-center space-y-3">
-              <Trophy className="h-10 w-10 mx-auto text-muted-foreground" />
+              <Target className="h-10 w-10 mx-auto text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
                 {filter === 'completed'
                   ? 'Nessun obiettivo completato ancora'

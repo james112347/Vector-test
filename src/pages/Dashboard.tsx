@@ -367,8 +367,8 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
             <span>{topRec.durationMin} min</span>
             <span>{CATEGORY_LABELS[topRec.activity.category]}</span>
-            <span>Intensit&agrave; {Math.round(topRec.intensity * 100)}%</span>
-            <span className="ml-auto text-primary font-medium">Vedi guida &rarr;</span>
+            <span>Intensita {Math.round(topRec.intensity * 100)}%</span>
+            <span className="ml-auto text-primary font-medium">Vedi guida</span>
           </div>
         </button>
       )}
@@ -422,7 +422,7 @@ export default function Dashboard() {
             </div>
             {todayLog.notes && (
               <p className="text-xs text-muted-foreground mt-3 text-center italic">
-                &ldquo;{todayLog.notes}&rdquo;
+                &quot;{todayLog.notes}&quot;
               </p>
             )}
           </CardContent>
@@ -431,7 +431,7 @@ export default function Dashboard() {
         <Card>
           <CardContent className="py-8 text-center space-y-3">
             <p className="text-muted-foreground text-sm">
-              Non hai ancora registrato l&apos;energia di oggi
+              Non hai ancora registrato l'energia di oggi
             </p>
             <Button size="sm" onClick={() => navigate('/log')}>
               Registra ora

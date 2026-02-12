@@ -164,8 +164,21 @@ export function estimateChronotype(profile: UserProfile | null): Chronotype {
   const schedule = profile.workSchedule;
   const activity = profile.activityLevel;
 
-  // Direct mapping from declared pattern
-  if (pattern === 'morning') return age > 50 || sleepHours <= 6.5 ? 'lion' : 'lion';
+  // Use actual wake/bed times from profile routine when available
+  if (profile.typicalWakeTime && profile.typicalBedTime) {
+    const wake = timeToDecimal(profile.typicalWakeTime);
+    const bed = timeToDecimal(profile.typicalBedTime);
+    // Early riser (before 6am) + early bed (before 22) = lion
+    if (wake <= 6 && bed <= 22) return 'lion';
+    // Late riser (after 9am) + late bed (after midnight) = wolf
+    if (wake >= 9 && (bed >= 24 || bed < 2)) return 'wolf';
+    // Irregular sleep (short duration, light sleeper) = dolphin
+    const sleepDuration = bed > wake ? (24 - bed + wake) : (wake - bed);
+    if (sleepDuration < 6 && (schedule === 'irregular' || schedule === 'shifts')) return 'dolphin';
+  }
+
+  // Direct mapping from declared pattern (legacy)
+  if (pattern === 'morning') return 'lion';
   if (pattern === 'evening') return 'wolf';
   if (pattern === 'variable' || schedule === 'irregular' || schedule === 'shifts') {
     return sleepHours < 6 ? 'dolphin' : 'bear';
@@ -246,47 +259,68 @@ interface DetectedRoutine {
 
 function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
   const params = CHRONO_PARAMS[chronotype];
+  const profile = data.profile;
 
-  // Detect wake time from earliest checkin today
+  // 1. Wake time: prefer profile data > checkin detection > chronotype default
   let wakeTime = params.typicalWake;
-  if (data.todayCheckins.length > 0) {
+  if (profile?.typicalWakeTime) {
+    wakeTime = timeToDecimal(profile.typicalWakeTime);
+  } else if (data.todayCheckins.length > 0) {
     const sorted = [...data.todayCheckins].sort((a, b) => a.time.localeCompare(b.time));
     const earliest = timeToDecimal(sorted[0].time);
-    // Earliest checkin is likely shortly after waking
     if (earliest >= 4 && earliest <= 13) {
-      wakeTime = Math.max(earliest - 0.25, 4); // assume woke ~15min before first checkin
+      wakeTime = Math.max(earliest - 0.25, 4);
     }
   }
 
-  // Detect meal times from food scanner + meal_time checkins
+  // 2. Meal times: combine profile defaults + actual checkin/food data
   const mealTimes: number[] = [];
   const mealGIs: number[] = [];
 
+  // Use profile meal times as baseline (if user ate at all, timing is approximate)
+  const profileMealDefaults: number[] = [];
+  if (profile?.lunchTime) profileMealDefaults.push(timeToDecimal(profile.lunchTime));
+  if (profile?.dinnerTime) profileMealDefaults.push(timeToDecimal(profile.dinnerTime));
+
+  // Actual food logs override profile defaults
   for (const food of data.todayFoodLogs) {
     const t = timeToDecimal(food.time);
     mealTimes.push(t);
-    // Estimate glycemic load from macro ratio
-    // High carb:fat ratio → higher GI response
     const total = food.totalCarbs + food.totalFat + food.totalProtein;
     const carbRatio = total > 0 ? food.totalCarbs / total : 0.5;
-    const gi = clamp(carbRatio * 1.2, 0, 1); // rough GI estimate
+    const gi = clamp(carbRatio * 1.2, 0, 1);
     mealGIs.push(gi);
   }
 
-  // Also check meal_time checkins for timing
+  // Meal checkins
   const mealCheckins = data.todayCheckins.filter(c => c.type === 'meal_time');
   for (const mc of mealCheckins) {
     const t = timeToDecimal(mc.time);
     if (!mealTimes.some(mt => Math.abs(mt - t) < 0.5)) {
       mealTimes.push(t);
-      mealGIs.push(0.5); // default moderate GI
+      mealGIs.push(0.5);
     }
   }
 
-  // Work start estimate
-  const workStart = wakeTime + 1.5; // typically 1.5h after wake
+  // If no actual meal data today but profile has meal times, use those
+  // (predicts post-prandial dips even before the meal is logged)
+  const now = new Date();
+  const currentHour = now.getHours() + now.getMinutes() / 60;
+  if (mealTimes.length === 0) {
+    for (const defaultTime of profileMealDefaults) {
+      if (defaultTime <= currentHour) {
+        mealTimes.push(defaultTime);
+        mealGIs.push(0.5);
+      }
+    }
+  }
 
-  // Last activity time
+  // 3. Work start: prefer profile > heuristic
+  const workStart = profile?.workStartTime
+    ? timeToDecimal(profile.workStartTime)
+    : wakeTime + 1.5;
+
+  // 4. Last activity time
   const actCheckins = data.todayCheckins.filter(c => c.type === 'activity_done');
   const lastAct = actCheckins.length > 0
     ? timeToDecimal(actCheckins[actCheckins.length - 1].time)
