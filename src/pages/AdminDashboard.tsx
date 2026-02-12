@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../co
 import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
 import { useAuthState } from '../contexts/AuthContext';
-import { getAllUsers } from '../lib/auth';
+import { getAllUsers, adminResetPassword } from '../lib/auth';
 import { getAllFeedbacks, markFeedbackRead, replyToFeedback } from '../lib/feedback';
 import { db } from '../db/db';
 import type { User, UserProfile, EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, UserFeedback } from '../db/schema';
@@ -117,6 +117,9 @@ export default function AdminDashboard() {
   const [feedbacks, setFeedbacks] = useState<UserFeedback[]>([]);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [resetPasswordFor, setResetPasswordFor] = useState<string | null>(null);
+  const [tempPassword, setTempPassword] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
 
@@ -605,6 +608,63 @@ export default function AdminDashboard() {
                         Nessun dato disponibile per questo utente
                       </p>
                     )}
+
+                    {/* Admin: Reset Password */}
+                    <Separator />
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Azioni admin</h4>
+                      {resetPasswordFor === user.email ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={tempPassword}
+                            onChange={e => setTempPassword(e.target.value)}
+                            placeholder="Nuova password temporanea"
+                            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                          {resetMsg && (
+                            <p className={`text-xs ${resetMsg.includes('Errore') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {resetMsg}
+                            </p>
+                          )}
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="h-8 flex-1"
+                              disabled={!tempPassword.trim() || tempPassword.length < 6}
+                              onClick={async () => {
+                                try {
+                                  await adminResetPassword(user.email, tempPassword);
+                                  setResetMsg('Password aggiornata! Comunica la nuova password all\'utente.');
+                                  setTempPassword('');
+                                } catch (e) {
+                                  setResetMsg(`Errore: ${(e as Error).message}`);
+                                }
+                              }}
+                            >
+                              Conferma reset
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => { setResetPasswordFor(null); setTempPassword(''); setResetMsg(''); }}
+                            >
+                              Annulla
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => { setResetPasswordFor(user.email); setResetMsg(''); }}
+                        >
+                          Reset password
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
               </CardContent>

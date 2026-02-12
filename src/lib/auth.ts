@@ -360,6 +360,35 @@ export async function getPendingUsersCount(): Promise<number> {
 }
 
 /**
+ * Reset a user's password by email.
+ * Works locally — the user must be on the device where the account exists.
+ * Clears existing sessions so the user must log in again.
+ */
+export async function resetUserPassword(email: string, newPassword: string): Promise<void> {
+  const user = await db.users.where('email').equals(email).first();
+  if (!user) {
+    throw new Error('Nessun account trovato con questa email su questo dispositivo.');
+  }
+  const passwordHash = await hashPassword(newPassword);
+  await db.users.update(user.id!, { passwordHash, updatedAt: new Date() });
+  await db.sessions.where('userId').equals(user.id!).delete();
+}
+
+/**
+ * Admin: reset a user's password to a temporary value.
+ * Only works if the user account exists locally.
+ */
+export async function adminResetPassword(email: string, tempPassword: string): Promise<void> {
+  const user = await db.users.where('email').equals(email).first();
+  if (!user) {
+    throw new Error('Account non presente localmente. Il reset funziona solo sullo stesso dispositivo.');
+  }
+  const passwordHash = await hashPassword(tempPassword);
+  await db.users.update(user.id!, { passwordHash, updatedAt: new Date() });
+  await db.sessions.where('userId').equals(user.id!).delete();
+}
+
+/**
  * Reset entire database (clears all users, sessions, preferences).
  * Used when user needs to start fresh.
  */
