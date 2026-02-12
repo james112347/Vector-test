@@ -149,3 +149,9 @@ export interface SahhaBiomarkerLog {
   endDateTime: string;
   fetchedAt: Date;
 }
+
+// ---------------------------------------------------------------------------
+// Sistema di Orientamento Energetico
+// ---------------------------------------------------------------------------
+
+export type { OrientationLog, UserActivity, OrientationPreferences } from '../lib/energy-orientation/types';

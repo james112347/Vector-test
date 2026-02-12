@@ -12,6 +12,7 @@ import Settings from '../pages/Settings';
 import AdminDashboard from '../pages/AdminDashboard';
 import ProfileEdit from '../pages/ProfileEdit';
 import FeedbackChat from '../pages/FeedbackChat';
+import Orientation from '../pages/Orientation';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
           { path: '/profile', element: <ProfileEdit /> },
           { path: '/admin', element: <AdminDashboard /> },
           { path: '/feedback', element: <FeedbackChat /> },
+          { path: '/orientation', element: <Orientation /> },
         ],
       },
     ],
