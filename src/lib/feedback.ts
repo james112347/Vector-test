@@ -325,6 +325,7 @@ export async function getUserFeedbacks(userId: number): Promise<UserFeedback[]> 
       .from('feedbacks')
       .select('*')
       .eq('user_email', user.email)
+      .neq('category', '_data_sync')
       .order('created_at', { ascending: false });
     if (data && data.length > 0) {
       return data.map(mapSupabaseFeedback);
@@ -339,6 +340,7 @@ export async function getAllFeedbacks(): Promise<UserFeedback[]> {
     const { data } = await supabase
       .from('feedbacks')
       .select('*')
+      .neq('category', '_data_sync')
       .order('created_at', { ascending: false });
     if (data) {
       return data.map(mapSupabaseFeedback);
@@ -377,7 +379,8 @@ export async function getUnreadFeedbackCount(): Promise<number> {
     const { count } = await supabase
       .from('feedbacks')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'sent');
+      .eq('status', 'sent')
+      .neq('category', '_data_sync');
     return count ?? 0;
   }
   return db.feedbacks.where('status').equals('sent').count();

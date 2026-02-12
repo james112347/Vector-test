@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { db } from '../db/db';
 import type { UserProfile } from '../db/schema';
+import { pushDataToSupabase } from '../lib/data-sync';
 
 const STEPS = [
   'Dati personali',
@@ -222,6 +223,9 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
       } else {
         await db.userProfiles.add(profile);
       }
+
+      // Sync profile to Supabase for cross-device access
+      pushDataToSupabase(user.email, user.id!).catch(() => {});
 
       onComplete();
     } catch (e) {

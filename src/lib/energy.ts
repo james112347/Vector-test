@@ -1,5 +1,6 @@
 import { db } from '../db/db';
 import type { EnergyLog } from '../db/schema';
+import { pushDataToSupabase } from './data-sync';
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -27,6 +28,12 @@ export async function saveEnergyLog(
       ...data,
       updatedAt: now,
     });
+
+    // Sync to Supabase in background (non-blocking)
+    db.users.get(userId).then(u => {
+      if (u?.email) pushDataToSupabase(u.email, userId);
+    });
+
     return { ...existing, ...data, updatedAt: now };
   }
 
@@ -42,6 +49,12 @@ export async function saveEnergyLog(
   };
 
   const id = await db.energyLogs.add(log);
+
+  // Sync to Supabase in background (non-blocking)
+  db.users.get(userId).then(u => {
+    if (u?.email) pushDataToSupabase(u.email, userId);
+  });
+
   return { ...log, id };
 }
 
@@ -84,6 +97,13 @@ export async function getAllLogs(userId: number): Promise<EnergyLog[]> {
 /**
  * Delete an energy log.
  */
-export async function deleteEnergyLog(logId: number): Promise<void> {
+export async function deleteEnergyLog(logId: number, userId?: number): Promise<void> {
   await db.energyLogs.delete(logId);
+
+  // Sync deletion to Supabase
+  if (userId) {
+    db.users.get(userId).then(u => {
+      if (u?.email) pushDataToSupabase(u.email, userId);
+    });
+  }
 }

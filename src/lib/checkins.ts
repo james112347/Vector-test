@@ -1,5 +1,6 @@
 import { db } from '../db/db';
 import type { QuickCheckin, CheckinType } from '../db/schema';
+import { pushDataToSupabase } from './data-sync';
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -26,6 +27,12 @@ export async function addCheckin(
     createdAt: new Date(),
   };
   const id = await db.quickCheckins.add(checkin);
+
+  // Sync to Supabase in background
+  db.users.get(userId).then(u => {
+    if (u?.email) pushDataToSupabase(u.email, userId);
+  });
+
   return { ...checkin, id };
 }
 
@@ -57,8 +64,14 @@ export async function getRecentCheckins(userId: number, days = 7): Promise<Quick
 /**
  * Delete a check-in entry.
  */
-export async function deleteCheckin(id: number): Promise<void> {
+export async function deleteCheckin(id: number, userId?: number): Promise<void> {
   await db.quickCheckins.delete(id);
+
+  if (userId) {
+    db.users.get(userId).then(u => {
+      if (u?.email) pushDataToSupabase(u.email, userId);
+    });
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 import { db } from '../db/db';
 import type { User, Session } from '../db/schema';
 import { supabase } from './supabase';
+import { pullDataFromSupabase, pushDataToSupabase } from './data-sync';
 
 // ---------------------------------------------------------------------------
 // Session persistence in localStorage (survives IndexedDB eviction)
@@ -383,6 +384,12 @@ export async function authenticateUser(email: string, password: string): Promise
           user = { ...localUser, id };
         }
 
+        // Pull user data (energy logs, profile, check-ins) from Supabase.
+        // Await so data is ready before the user sees the dashboard.
+        if (user?.id) {
+          await pullDataFromSupabase(normalizedEmail, user.id).catch(() => {});
+        }
+
         // Also normalize the email in Supabase if it was stored with mixed case
         if (data.email !== normalizedEmail) {
           supabase.from('app_users')
@@ -453,6 +460,11 @@ export async function authenticateUser(email: string, password: string): Promise
     ).then(({ error }) => {
       if (error) console.warn('Could not sync user to Supabase:', error.message);
     });
+
+    // Also push local data (energy logs, profile, check-ins) to Supabase
+    if (user.id) {
+      pushDataToSupabase(normalizedEmail, user.id).catch(() => {});
+    }
   }
 
   // Ensure admin email always has admin + approved flags
