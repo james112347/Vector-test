@@ -1,219 +1,296 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Card, CardContent } from './ui/card';
 import {
-  Moon, Droplets, Coffee, UtensilsCrossed, Target, Dumbbell,
-  AlertCircle, Smile, BedDouble, Pill, MonitorOff,
-  ChevronDown, ChevronUp, Clock,
+  Droplets, Coffee,
+  Smile, Frown, Meh, Sun, Zap, Pill,
+  Check, ChevronRight,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
-import type { LucideIcon } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// Config — ogni check-in alimenta l'IA con dati azionabili
+// Fase del giorno -> domande contestuali smart
 // ---------------------------------------------------------------------------
 
-interface CheckinConfig {
-  type: CheckinType;
-  label: string;
-  sublabel: string;
-  icon: LucideIcon;
-  color: string;
-  mode: 'scale' | 'counter';
-  scaleLabels?: string[];
-  target?: number;
-  /** Sezione: 'quick' per barra rapida, 'detail' per sezione espansa */
-  section: 'quick' | 'detail';
+type TimePhase = 'morning' | 'midday' | 'afternoon' | 'evening';
+
+function getTimePhase(): TimePhase {
+  const h = new Date().getHours();
+  if (h < 11) return 'morning';
+  if (h < 14) return 'midday';
+  if (h < 18) return 'afternoon';
+  return 'evening';
 }
 
-const CHECKINS: CheckinConfig[] = [
-  // --- Quick bar (azioni rapide con un tap) ---
-  {
-    type: 'caffeine', label: 'Caffe', sublabel: 'Tazzina bevuta adesso',
-    icon: Coffee, color: '#92400e', mode: 'counter', section: 'quick',
+const PHASE_CONFIG: Record<TimePhase, {
+  greeting: string;
+  /** Domanda principale con risposte che salvano MULTIPLI check-in */
+  mainQuestion: string;
+  /** Risposte rapide: ogni risposta salva piu check-in contemporaneamente */
+  answers: Array<{
+    label: string;
+    icon: typeof Smile;
+    color: string;
+    /** Check-in che vengono salvati con questa risposta */
+    saves: Array<{ type: CheckinType; value: number }>;
+  }>;
+  /** Domande follow-up opzionali (max 1-2) */
+  followUps: Array<{
+    question: string;
+    condition?: (checkins: QuickCheckin[]) => boolean;
+    answers: Array<{
+      label: string;
+      saves: Array<{ type: CheckinType; value: number }>;
+    }>;
+  }>;
+}> = {
+  morning: {
+    greeting: 'Buongiorno',
+    mainQuestion: 'Come hai dormito e come ti senti?',
+    answers: [
+      {
+        label: 'Male, stanco',
+        icon: Frown,
+        color: '#ef4444',
+        saves: [
+          { type: 'sleep_quality', value: 2 },
+          { type: 'mood', value: 2 },
+        ],
+      },
+      {
+        label: 'Cosi cosi',
+        icon: Meh,
+        color: '#f59e0b',
+        saves: [
+          { type: 'sleep_quality', value: 3 },
+          { type: 'mood', value: 3 },
+        ],
+      },
+      {
+        label: 'Bene, riposato',
+        icon: Smile,
+        color: '#22c55e',
+        saves: [
+          { type: 'sleep_quality', value: 4 },
+          { type: 'mood', value: 4 },
+        ],
+      },
+      {
+        label: 'Alla grande!',
+        icon: Zap,
+        color: '#3b82f6',
+        saves: [
+          { type: 'sleep_quality', value: 5 },
+          { type: 'mood', value: 5 },
+          { type: 'stress', value: 1 },
+        ],
+      },
+    ],
+    followUps: [
+      {
+        question: 'Hai fatto colazione?',
+        answers: [
+          { label: 'Saltata', saves: [{ type: 'meal_time', value: 1 }] },
+          { label: 'Veloce', saves: [{ type: 'meal_time', value: 3 }] },
+          { label: 'Completa', saves: [{ type: 'meal_time', value: 5 }] },
+        ],
+      },
+    ],
   },
-  {
-    type: 'water', label: 'Acqua', sublabel: 'Bicchiere bevuto',
-    icon: Droplets, color: '#3b82f6', mode: 'counter', target: 8, section: 'quick',
+  midday: {
+    greeting: 'Meta giornata',
+    mainQuestion: 'Come sta andando?',
+    answers: [
+      {
+        label: 'Fatico molto',
+        icon: Frown,
+        color: '#ef4444',
+        saves: [
+          { type: 'mood', value: 2 },
+          { type: 'stress', value: 4 },
+          { type: 'focus', value: 2 },
+        ],
+      },
+      {
+        label: 'Un po\' stanco',
+        icon: Meh,
+        color: '#f59e0b',
+        saves: [
+          { type: 'mood', value: 3 },
+          { type: 'stress', value: 3 },
+          { type: 'focus', value: 3 },
+        ],
+      },
+      {
+        label: 'Tutto ok',
+        icon: Smile,
+        color: '#22c55e',
+        saves: [
+          { type: 'mood', value: 4 },
+          { type: 'stress', value: 2 },
+          { type: 'focus', value: 4 },
+        ],
+      },
+      {
+        label: 'Produttivo!',
+        icon: Zap,
+        color: '#3b82f6',
+        saves: [
+          { type: 'mood', value: 5 },
+          { type: 'stress', value: 1 },
+          { type: 'focus', value: 5 },
+        ],
+      },
+    ],
+    followUps: [
+      {
+        question: 'Hai pranzato?',
+        answers: [
+          { label: 'Non ancora', saves: [{ type: 'meal_time', value: 1 }] },
+          { label: 'Qualcosa', saves: [{ type: 'meal_time', value: 3 }] },
+          { label: 'Pasto completo', saves: [{ type: 'meal_time', value: 5 }] },
+        ],
+      },
+    ],
   },
-  {
-    type: 'supplement', label: 'Integr.', sublabel: 'Integratore/vitamina',
-    icon: Pill, color: '#8b5cf6', mode: 'counter', section: 'quick',
+  afternoon: {
+    greeting: 'Buon pomeriggio',
+    mainQuestion: 'Come ti senti ora?',
+    answers: [
+      {
+        label: 'Scarico',
+        icon: Frown,
+        color: '#ef4444',
+        saves: [
+          { type: 'mood', value: 2 },
+          { type: 'focus', value: 2 },
+          { type: 'stress', value: 4 },
+        ],
+      },
+      {
+        label: 'Calo energia',
+        icon: Meh,
+        color: '#f59e0b',
+        saves: [
+          { type: 'mood', value: 3 },
+          { type: 'focus', value: 3 },
+          { type: 'stress', value: 3 },
+        ],
+      },
+      {
+        label: 'Bene',
+        icon: Smile,
+        color: '#22c55e',
+        saves: [
+          { type: 'mood', value: 4 },
+          { type: 'focus', value: 4 },
+          { type: 'stress', value: 2 },
+        ],
+      },
+      {
+        label: 'Carico!',
+        icon: Zap,
+        color: '#3b82f6',
+        saves: [
+          { type: 'mood', value: 5 },
+          { type: 'focus', value: 5 },
+          { type: 'stress', value: 1 },
+        ],
+      },
+    ],
+    followUps: [
+      {
+        question: 'Movimento oggi?',
+        answers: [
+          { label: 'Niente', saves: [{ type: 'activity_done', value: 1 }] },
+          { label: 'Poco', saves: [{ type: 'activity_done', value: 2 }] },
+          { label: 'Si!', saves: [{ type: 'activity_done', value: 4 }] },
+        ],
+      },
+    ],
   },
-  {
-    type: 'screen_break', label: 'Pausa', sublabel: 'Pausa schermo',
-    icon: MonitorOff, color: '#06b6d4', mode: 'counter', section: 'quick',
+  evening: {
+    greeting: 'Buona sera',
+    mainQuestion: 'Come e\' andata oggi?',
+    answers: [
+      {
+        label: 'Giornata no',
+        icon: Frown,
+        color: '#ef4444',
+        saves: [
+          { type: 'mood', value: 2 },
+          { type: 'stress', value: 4 },
+        ],
+      },
+      {
+        label: 'Nella media',
+        icon: Meh,
+        color: '#f59e0b',
+        saves: [
+          { type: 'mood', value: 3 },
+          { type: 'stress', value: 3 },
+        ],
+      },
+      {
+        label: 'Buona',
+        icon: Smile,
+        color: '#22c55e',
+        saves: [
+          { type: 'mood', value: 4 },
+          { type: 'stress', value: 2 },
+        ],
+      },
+      {
+        label: 'Ottima!',
+        icon: Zap,
+        color: '#3b82f6',
+        saves: [
+          { type: 'mood', value: 5 },
+          { type: 'stress', value: 1 },
+        ],
+      },
+    ],
+    followUps: [
+      {
+        question: 'Attivita fisica oggi?',
+        condition: (checkins) => !checkins.some(c => c.type === 'activity_done'),
+        answers: [
+          { label: 'Nessuna', saves: [{ type: 'activity_done', value: 1 }] },
+          { label: 'Leggera', saves: [{ type: 'activity_done', value: 3 }] },
+          { label: 'Intensa', saves: [{ type: 'activity_done', value: 5 }] },
+        ],
+      },
+    ],
   },
-  // --- Detail section (scale 1-5) ---
-  {
-    type: 'sleep_quality', label: 'Qualita sonno', sublabel: 'Come hai dormito stanotte?',
-    icon: Moon, color: '#8b5cf6', mode: 'scale',
-    scaleLabels: ['Pessimo', 'Male', 'Sufficiente', 'Bene', 'Ottimo'], section: 'detail',
-  },
-  {
-    type: 'mood', label: 'Umore', sublabel: 'Come ti senti adesso?',
-    icon: Smile, color: '#f59e0b', mode: 'scale',
-    scaleLabels: ['Pessimo', 'Giu', 'Neutro', 'Bene', 'Ottimo'], section: 'detail',
-  },
-  {
-    type: 'stress', label: 'Stress', sublabel: 'Livello di stress attuale',
-    icon: AlertCircle, color: '#ef4444', mode: 'scale',
-    scaleLabels: ['Nessuno', 'Leggero', 'Moderato', 'Alto', 'Estremo'], section: 'detail',
-  },
-  {
-    type: 'meal_time', label: 'Ultimo pasto', sublabel: 'Qualita del tuo ultimo pasto',
-    icon: UtensilsCrossed, color: '#22c55e', mode: 'scale',
-    scaleLabels: ['Saltato', 'Scarso', 'Sufficiente', 'Buono', 'Nutriente'], section: 'detail',
-  },
-  {
-    type: 'focus', label: 'Focus', sublabel: 'Quanto riesci a concentrarti?',
-    icon: Target, color: '#f59e0b', mode: 'scale',
-    scaleLabels: ['Zero', 'Basso', 'Medio', 'Buono', 'Massimo'], section: 'detail',
-  },
-  {
-    type: 'activity_done', label: 'Attivita fisica', sublabel: 'Movimento fatto oggi',
-    icon: Dumbbell, color: '#ef4444', mode: 'scale',
-    scaleLabels: ['Nessuna', 'Camminata', 'Leggera', 'Moderata', 'Intensa'], section: 'detail',
-  },
-  {
-    type: 'nap', label: 'Pisolino', sublabel: 'Hai fatto un pisolino?',
-    icon: BedDouble, color: '#6366f1', mode: 'scale',
-    scaleLabels: ['No', '10min', '20min', '30min', '45min+'], section: 'detail',
-  },
+};
+
+// ---------------------------------------------------------------------------
+// Contatori inline (caffe, acqua, integratori) — sempre visibili
+// ---------------------------------------------------------------------------
+
+const COUNTERS: Array<{
+  type: CheckinType;
+  icon: typeof Coffee;
+  label: string;
+  color: string;
+  target?: number;
+}> = [
+  { type: 'caffeine', icon: Coffee, label: 'Caffe', color: '#92400e' },
+  { type: 'water', icon: Droplets, label: 'Acqua', color: '#3b82f6', target: 8 },
+  { type: 'supplement', icon: Pill, label: 'Integr.', color: '#8b5cf6' },
 ];
 
 // ---------------------------------------------------------------------------
-// Quick Tap Button (barra rapida — un tap per registrare)
-// ---------------------------------------------------------------------------
-
-function QuickTapButton({
-  config,
-  currentValue,
-  lastTime,
-  onTap,
-}: {
-  config: CheckinConfig;
-  currentValue: number;
-  lastTime: string | null;
-  onTap: () => void;
-}) {
-  const Icon = config.icon;
-  return (
-    <button
-      onClick={onTap}
-      className="flex flex-col items-center gap-1 p-2 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all min-w-[68px] relative"
-    >
-      <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center"
-        style={{ backgroundColor: config.color + '15' }}
-      >
-        <Icon className="h-4 w-4" style={{ color: config.color }} />
-      </div>
-      <span className="text-[10px] font-medium">{config.label}</span>
-      {currentValue > 0 ? (
-        <span className="text-xs font-bold tabular-nums" style={{ color: config.color }}>
-          {currentValue}
-          {config.target ? <span className="text-[9px] text-muted-foreground font-normal">/{config.target}</span> : ''}
-        </span>
-      ) : (
-        <span className="text-[10px] text-muted-foreground">+1</span>
-      )}
-      {lastTime && (
-        <span className="text-[8px] text-muted-foreground flex items-center gap-0.5">
-          <Clock className="h-2 w-2" />{lastTime}
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Scale Input (compatto con feedback visivo)
-// ---------------------------------------------------------------------------
-
-function ScaleInput({
-  config,
-  currentValue,
-  onSelect,
-}: {
-  config: CheckinConfig;
-  currentValue: number;
-  onSelect: (v: number) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const Icon = config.icon;
-  const labels = config.scaleLabels || [];
-
-  if (open) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4" style={{ color: config.color }} />
-          <span className="text-xs font-medium">{config.sublabel}</span>
-        </div>
-        <div className="flex gap-1">
-          {labels.map((label, i) => {
-            const level = i + 1;
-            const isActive = currentValue === level;
-            return (
-              <button
-                key={level}
-                onClick={() => { onSelect(level); setOpen(false); }}
-                className={`flex-1 py-2 rounded-lg text-center transition-all ${
-                  isActive
-                    ? 'text-white font-bold text-xs'
-                    : 'bg-muted/50 hover:bg-muted text-muted-foreground text-[10px]'
-                }`}
-                style={isActive ? { backgroundColor: config.color } : undefined}
-              >
-                <div className="text-xs font-bold">{level}</div>
-                <div className={isActive ? 'text-[9px] text-white/80' : 'text-[9px]'}>{label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => setOpen(true)}
-      className="flex items-center gap-3 p-2.5 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-[0.98] transition-all w-full text-left"
-    >
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: config.color + '15' }}>
-        <Icon className="h-4 w-4" style={{ color: config.color }} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{config.label}</p>
-      </div>
-      {currentValue > 0 ? (
-        <div className="flex items-center gap-1 shrink-0">
-          <div className="flex gap-0.5">
-            {[1, 2, 3, 4, 5].map(n => (
-              <div
-                key={n}
-                className="w-1.5 h-3.5 rounded-sm transition-all"
-                style={{ backgroundColor: n <= currentValue ? config.color : 'var(--muted)' }}
-              />
-            ))}
-          </div>
-          <span className="text-xs font-bold tabular-nums" style={{ color: config.color }}>{currentValue}</span>
-        </div>
-      ) : (
-        <span className="text-[10px] text-muted-foreground shrink-0">Registra</span>
-      )}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main Component
+// Componente principale
 // ---------------------------------------------------------------------------
 
 export default function QuickCheckins({ userId }: { userId: number }) {
   const [checkins, setCheckins] = useState<QuickCheckin[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [step, setStep] = useState<'main' | 'followup' | 'done'>('main');
+  const [followUpIdx, setFollowUpIdx] = useState(0);
+
+  const phase = useMemo(() => getTimePhase(), []);
+  const config = PHASE_CONFIG[phase];
 
   const loadCheckins = useCallback(async () => {
     const items = await getTodayCheckins(userId);
@@ -222,25 +299,58 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   useEffect(() => { loadCheckins(); }, [loadCheckins]);
 
+  // Controlla se l'utente ha gia risposto alla domanda di questa fase
+  const hasAnsweredMain = useMemo(() => {
+    // Se ha gia registrato mood in questa fase oraria, consideriamo completato
+    const phaseStart = phase === 'morning' ? 5 : phase === 'midday' ? 11 : phase === 'afternoon' ? 14 : 18;
+    return checkins.some(c => {
+      if (c.type !== 'mood') return false;
+      const [h] = c.time.split(':').map(Number);
+      return h >= phaseStart;
+    });
+  }, [checkins, phase]);
+
+  useEffect(() => {
+    if (hasAnsweredMain) setStep('done');
+  }, [hasAnsweredMain]);
+
   const getValue = (type: CheckinType): number => {
-    const items = checkins.filter(c => c.type === type);
-    if (items.length === 0) return 0;
-    const config = CHECKINS.find(c => c.type === type);
-    if (config?.mode === 'counter') {
-      return items.reduce((s, c) => s + c.value, 0);
+    return checkins
+      .filter(c => c.type === type)
+      .reduce((s, c) => s + c.value, 0);
+  };
+
+  const saveMultiple = async (saves: Array<{ type: CheckinType; value: number }>) => {
+    for (const { type, value } of saves) {
+      await addCheckin(userId, type, value);
     }
-    return items[items.length - 1].value;
-  };
-
-  const getLastTime = (type: CheckinType): string | null => {
-    const items = checkins.filter(c => c.type === type);
-    if (items.length === 0) return null;
-    return items[items.length - 1].time;
-  };
-
-  const handleScale = async (type: CheckinType, value: number) => {
-    await addCheckin(userId, type, value);
     await loadCheckins();
+  };
+
+  const handleMainAnswer = async (saves: Array<{ type: CheckinType; value: number }>) => {
+    await saveMultiple(saves);
+    // Check se ci sono follow-up applicabili
+    const applicableFollowUps = config.followUps.filter(
+      f => !f.condition || f.condition(checkins),
+    );
+    if (applicableFollowUps.length > 0) {
+      setFollowUpIdx(0);
+      setStep('followup');
+    } else {
+      setStep('done');
+    }
+  };
+
+  const handleFollowUp = async (saves: Array<{ type: CheckinType; value: number }>) => {
+    await saveMultiple(saves);
+    const applicableFollowUps = config.followUps.filter(
+      f => !f.condition || f.condition(checkins),
+    );
+    if (followUpIdx + 1 < applicableFollowUps.length) {
+      setFollowUpIdx(followUpIdx + 1);
+    } else {
+      setStep('done');
+    }
   };
 
   const handleCounter = async (type: CheckinType) => {
@@ -248,71 +358,110 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     await loadCheckins();
   };
 
-  const quickItems = CHECKINS.filter(c => c.section === 'quick');
-  const detailItems = CHECKINS.filter(c => c.section === 'detail');
-  const allCount = CHECKINS.length;
-  const filledCount = CHECKINS.filter(c => getValue(c.type) > 0).length;
+  // Conta dati raccolti oggi
+  const typesRecorded = new Set(checkins.map(c => c.type)).size;
 
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Check-in rapido</CardTitle>
-          <span className="text-[10px] text-muted-foreground">
-            {filledCount}/{allCount}
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Quick bar — azioni con un tap */}
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-          {quickItems.map(config => (
-            <QuickTapButton
-              key={config.type}
-              config={config}
-              currentValue={getValue(config.type)}
-              lastTime={getLastTime(config.type)}
-              onTap={() => handleCounter(config.type)}
-            />
-          ))}
+    <Card className="overflow-hidden">
+      <CardContent className="p-0">
+        {/* Contatori inline — sempre visibili, compatti */}
+        <div className="flex items-center justify-around px-3 py-2.5 border-b border-border bg-muted/20">
+          {COUNTERS.map(counter => {
+            const Icon = counter.icon;
+            const val = getValue(counter.type);
+            return (
+              <button
+                key={counter.type}
+                onClick={() => handleCounter(counter.type)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full hover:bg-muted/50 active:scale-95 transition-all"
+              >
+                <Icon className="h-3.5 w-3.5" style={{ color: counter.color }} />
+                <span className="text-xs font-bold tabular-nums" style={{ color: counter.color }}>
+                  {val}
+                </span>
+                {counter.target && (
+                  <span className="text-[9px] text-muted-foreground">/{counter.target}</span>
+                )}
+                <span className="text-[10px] text-muted-foreground font-medium">+1</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Progress dots for quick bar */}
-        {quickItems.some(c => getValue(c.type) > 0) && (
-          <div className="flex items-center gap-1 justify-center">
-            {quickItems.map(c => (
-              <div
-                key={c.type}
-                className="w-1.5 h-1.5 rounded-full transition-all"
-                style={{ backgroundColor: getValue(c.type) > 0 ? c.color : 'var(--muted)' }}
-              />
-            ))}
+        {/* Domanda contestuale */}
+        {step === 'main' && (
+          <div className="px-4 py-3 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Sun className="h-4 w-4 text-amber-500" />
+              <div>
+                <p className="text-xs text-muted-foreground">{config.greeting}</p>
+                <p className="text-sm font-semibold">{config.mainQuestion}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {config.answers.map((ans, i) => {
+                const Icon = ans.icon;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleMainAnswer(ans.saves)}
+                    className="flex flex-col items-center gap-1 p-2 rounded-xl border border-border hover:border-transparent active:scale-95 transition-all"
+                    style={{ ['--hover-bg' as string]: ans.color + '15' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = ans.color + '12')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                  >
+                    <Icon className="h-5 w-5" style={{ color: ans.color }} />
+                    <span className="text-[10px] font-medium text-center leading-tight">{ans.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Toggle detail section */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
-        >
-          {expanded ? (
-            <>Nascondi dettagli <ChevronUp className="h-3.5 w-3.5" /></>
-          ) : (
-            <>Valutazioni dettagliate <ChevronDown className="h-3.5 w-3.5" /></>
-          )}
-        </button>
+        {/* Follow-up */}
+        {step === 'followup' && (() => {
+          const applicableFollowUps = config.followUps.filter(
+            f => !f.condition || f.condition(checkins),
+          );
+          const fu = applicableFollowUps[followUpIdx];
+          if (!fu) return null;
+          return (
+            <div className="px-4 py-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-sm font-medium">{fu.question}</p>
+              </div>
+              <div className="flex gap-2">
+                {fu.answers.map((ans, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleFollowUp(ans.saves)}
+                    className="flex-1 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all"
+                  >
+                    <span className="text-xs font-medium">{ans.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
-        {/* Detail section — scale inputs */}
-        {expanded && (
-          <div className="space-y-2">
-            {detailItems.map(config => (
-              <ScaleInput
-                key={config.type}
-                config={config}
-                currentValue={getValue(config.type)}
-                onSelect={(v) => handleScale(config.type, v)}
-              />
-            ))}
+        {/* Stato completato */}
+        {step === 'done' && (
+          <div className="px-4 py-2.5 flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
+              <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-xs text-muted-foreground flex-1">
+              Check-in completato - {typesRecorded} parametri raccolti
+            </p>
+            <button
+              onClick={() => setStep('main')}
+              className="text-[10px] text-primary font-medium hover:underline"
+            >
+              Aggiorna
+            </button>
           </div>
         )}
       </CardContent>
