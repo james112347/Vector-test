@@ -8,6 +8,7 @@ import { useDarkMode } from '../lib/useDarkMode';
 import { useAppSettings } from '../lib/useAppSettings';
 import { isNotificationSupported, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
 import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail, changePassword } from '../lib/auth';
+import { getAllUserActivity, type UserActivity } from '../lib/useActivityTracker';
 import { Input } from '../components/ui/input';
 import type { User } from '../db/schema';
 
@@ -17,6 +18,7 @@ export default function Settings() {
   const { settings, update: updateSettings } = useAppSettings();
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
+  const [activityData, setActivityData] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -35,7 +37,12 @@ export default function Settings() {
     setLoading(false);
   };
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+    loadUsers();
+    if (currentUser?.isAdmin) {
+      getAllUserActivity().then(setActivityData);
+    }
+  }, [currentUser?.isAdmin]);
 
   const handleApprove = async (userId: number, email: string) => {
     setActionLoading(userId);
@@ -362,62 +369,76 @@ export default function Settings() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {approvedUsers.map(u => (
-                    <div key={u.id} className="p-3 rounded-lg border border-border">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{u.email}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(u.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </p>
+                  {approvedUsers.map(u => {
+                    const activity = activityData.find(a => a.email === u.email);
+                    return (
+                      <div key={u.id} className="p-3 rounded-lg border border-border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{u.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(u.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
+                          {activity && (
+                            <div className="text-right shrink-0 ml-2">
+                              <p className="text-xs font-medium">{activity.total_sessions} sessioni</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {activity.total_minutes >= 60
+                                  ? `${Math.floor(activity.total_minutes / 60)}h ${activity.total_minutes % 60}m`
+                                  : `${activity.total_minutes}m`
+                                } totali
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {confirmDelete === u.id ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-9 flex-1"
+                                onClick={() => handleDelete(u.id!, u.email)}
+                                disabled={actionLoading === u.id}
+                              >
+                                Conferma eliminazione
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 flex-1"
+                                onClick={() => setConfirmDelete(null)}
+                              >
+                                Annulla
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 flex-1"
+                                onClick={() => handleRevoke(u.id!, u.email)}
+                                disabled={actionLoading === u.id}
+                              >
+                                Sospendi
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-9 flex-1"
+                                onClick={() => setConfirmDelete(u.id ?? null)}
+                                disabled={actionLoading === u.id}
+                              >
+                                Elimina
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        {confirmDelete === u.id ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-9 flex-1"
-                              onClick={() => handleDelete(u.id!, u.email)}
-                              disabled={actionLoading === u.id}
-                            >
-                              Conferma eliminazione
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-9 flex-1"
-                              onClick={() => setConfirmDelete(null)}
-                            >
-                              Annulla
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-9 flex-1"
-                              onClick={() => handleRevoke(u.id!, u.email)}
-                              disabled={actionLoading === u.id}
-                            >
-                              Sospendi
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-9 flex-1"
-                              onClick={() => setConfirmDelete(u.id ?? null)}
-                              disabled={actionLoading === u.id}
-                            >
-                              Elimina
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

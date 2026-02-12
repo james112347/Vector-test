@@ -417,9 +417,13 @@ export async function getAllUsers(): Promise<User[]> {
       .from('app_users')
       .select('*')
       .order('created_at', { ascending: true });
+    if (result.error) {
+      console.warn('Supabase fetch users error:', result.error.message);
+      return localUsers;
+    }
     remoteUsers = result.data;
-  } catch {
-    console.warn('Could not fetch remote users, using local data only');
+  } catch (e) {
+    console.warn('Could not fetch remote users, using local data only:', e);
     return localUsers;
   }
 

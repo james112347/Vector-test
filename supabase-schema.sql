@@ -195,3 +195,27 @@ create policy "app_config_select" on public.app_config
 -- INSERT INTO public.app_config (key, value)
 -- VALUES ('groq_api_key', '<LA_TUA_CHIAVE_GROQ>')
 -- ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+-- =============================================================
+-- Tracking utilizzo app per utente
+-- =============================================================
+
+create table if not exists public.user_activity (
+  email text primary key,
+  total_sessions int not null default 0,
+  total_minutes int not null default 0,
+  last_active_at timestamptz,
+  today_minutes int not null default 0,
+  today_date text
+);
+
+alter table public.user_activity enable row level security;
+
+create policy "user_activity_insert" on public.user_activity
+  for insert with check (true);
+
+create policy "user_activity_select" on public.user_activity
+  for select using (true);
+
+create policy "user_activity_update" on public.user_activity
+  for update using (true);

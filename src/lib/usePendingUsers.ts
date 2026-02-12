@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getPendingUsersCount } from './auth';
 import { useAuthState } from '../contexts/AuthContext';
 import { supabase } from './supabase';
+import { notifyNewUser } from './notifications';
+import { getAppSettings } from './useAppSettings';
 
 /**
  * Hook that tracks pending user count in real-time.
@@ -16,6 +18,7 @@ import { supabase } from './supabase';
 export function usePendingUsers() {
   const { user } = useAuthState();
   const [count, setCount] = useState(0);
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -24,11 +27,20 @@ export function usePendingUsers() {
     }
 
     let cancelled = false;
+    let isFirstLoad = true;
 
     const refresh = async () => {
       try {
         const n = await getPendingUsersCount();
-        if (!cancelled) setCount(n);
+        if (!cancelled) {
+          // Send notification if count increased (new user registered)
+          if (!isFirstLoad && n > prevCountRef.current && getAppSettings().notificationsEnabled) {
+            notifyNewUser('Un nuovo utente');
+          }
+          prevCountRef.current = n;
+          isFirstLoad = false;
+          setCount(n);
+        }
       } catch {
         // ignore errors
       }
@@ -44,11 +56,24 @@ export function usePendingUsers() {
         .channel('pending-users')
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'app_users' },
-          () => {
-            // Any insert/update/delete → refresh count
+          { event: 'INSERT', schema: 'public', table: 'app_users' },
+          (payload) => {
+            // New user registered — send notification with their email
+            if (getAppSettings().notificationsEnabled && payload.new && !payload.new.is_approved) {
+              notifyNewUser(payload.new.email || 'Nuovo utente');
+            }
             refresh();
           }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'app_users' },
+          () => { refresh(); }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'app_users' },
+          () => { refresh(); }
         )
         .subscribe();
 

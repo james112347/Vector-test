@@ -11,13 +11,14 @@
  *   today_date text
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { supabase } from './supabase';
 
 const HEARTBEAT_INTERVAL = 60_000; // 1 minute
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export function useActivityTracker(email: string | undefined): void {
-  const startRef = useRef(Date.now());
 
   useEffect(() => {
     if (!email || !supabase) return;
@@ -58,22 +59,21 @@ export function useActivityTracker(email: string | undefined): void {
     };
     document.addEventListener('visibilitychange', onVisibility);
 
-    // On unload, record final active time
+    // On unload, record final active time via fetch keepalive (supports auth headers)
     const onUnload = () => {
-      const mins = Math.round((Date.now() - startRef.current) / 60_000);
-      if (mins > 0 && navigator.sendBeacon && supabase) {
-        // Use sendBeacon for reliable delivery on page close
-        const url = `${(supabase as unknown as { supabaseUrl: string }).supabaseUrl}/rest/v1/user_activity?email=eq.${encodeURIComponent(email)}`;
-        const key = (supabase as unknown as { supabaseKey: string }).supabaseKey;
-        if (url && key) {
-          navigator.sendBeacon(
-            url,
-            new Blob(
-              [JSON.stringify({ last_active_at: new Date().toISOString() })],
-              { type: 'application/json' }
-            )
-          );
-        }
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        const url = `${SUPABASE_URL}/rest/v1/user_activity?email=eq.${encodeURIComponent(email)}`;
+        fetch(url, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ last_active_at: new Date().toISOString() }),
+          keepalive: true,
+        }).catch(() => {});
       }
     };
     window.addEventListener('beforeunload', onUnload);

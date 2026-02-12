@@ -60,3 +60,11 @@ export function notifyFeedbackReply(): void {
     tag: 'feedback-reply',
   });
 }
+
+/** Send notification to admin when a new user registers. */
+export function notifyNewUser(email: string): void {
+  sendNotification('Nuovo utente registrato', {
+    body: `${email} ha richiesto l'accesso. Vai alle impostazioni per approvare.`,
+    tag: 'new-user',
+  });
+}
