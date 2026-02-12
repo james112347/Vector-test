@@ -105,7 +105,7 @@ export default function Login() {
                 <Label htmlFor="password">Password</Label>
                 <button
                   type="button"
-                  onClick={() => { setForgotMode(true); setResetEmail(email); }}
+                  onClick={() => setForgotMode(true)}
                   className="text-xs text-primary hover:underline"
                 >
                   Password dimenticata?
