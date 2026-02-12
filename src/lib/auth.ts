@@ -123,20 +123,47 @@ export async function checkExistingSession(): Promise<{ session: Session; user: 
   if (session?.userId) {
     const user = await db.users.get(session.userId);
     if (user) {
-      // Sync approval status from Supabase
-      if (supabase && !user.isApproved) {
+      // Sync user data to/from Supabase on session resume
+      if (supabase) {
         try {
           const { data } = await supabase
             .from('app_users')
-            .select('is_approved')
+            .select('is_approved, password_hash')
             .eq('email', user.email)
             .single();
-          if (data?.is_approved) {
-            await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
-            user.isApproved = true;
+          if (data) {
+            // Pull: update local approval status if changed remotely
+            if (data.is_approved && !user.isApproved) {
+              await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
+              user.isApproved = true;
+            }
+            // Push: sync password_hash to Supabase if missing there
+            if (!data.password_hash && user.passwordHash) {
+              supabase.from('app_users')
+                .update({ password_hash: user.passwordHash, updated_at: new Date().toISOString() })
+                .eq('email', user.email)
+                .then(({ error }) => {
+                  if (error) console.warn('Could not push password_hash:', error.message);
+                });
+            }
+          } else {
+            // User not in Supabase at all — push full record
+            supabase.from('app_users').upsert(
+              {
+                email: user.email,
+                password_hash: user.passwordHash,
+                is_approved: user.isApproved ?? true,
+                is_admin: user.isAdmin ?? false,
+                created_at: user.createdAt?.toISOString() ?? new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'email' }
+            ).then(({ error }) => {
+              if (error) console.warn('Could not push user to Supabase:', error.message);
+            });
           }
         } catch {
-          console.warn('Could not sync approval status, using local data');
+          console.warn('Could not sync with Supabase, using local data');
         }
       }
       return { session, user };
@@ -312,7 +339,12 @@ export async function authenticateUser(email: string, password: string): Promise
         // PGRST116 = "not found", any other error is a connectivity/server issue
         throw error;
       }
-      if (data?.password_hash) {
+      if (data) {
+        if (!data.password_hash) {
+          // User exists in Supabase but password was never synced.
+          // They need to log in from the original browser first to trigger sync.
+          throw new Error('MISSING_PASSWORD_SYNC');
+        }
         const valid = await verifyPassword(password, data.password_hash);
         if (!valid) throw new Error('Email o password non validi.');
         // Create local copy of this user (always store normalized email)
@@ -339,7 +371,10 @@ export async function authenticateUser(email: string, password: string): Promise
       }
     } catch (e) {
       // If it's our own auth error, rethrow
-      if (e instanceof Error && e.message === 'Email o password non validi.') throw e;
+      if (e instanceof Error && (
+        e.message === 'Email o password non validi.' ||
+        e.message === 'MISSING_PASSWORD_SYNC'
+      )) throw e;
       // Network/Supabase error — inform user clearly
       console.error('Supabase auth fetch failed:', e);
       if (!user) {
@@ -380,6 +415,25 @@ export async function authenticateUser(email: string, password: string): Promise
 
   if (!valid) {
     throw new Error('Email o password non validi.');
+  }
+
+  // Sync user data (including password_hash) to Supabase after successful local login.
+  // This ensures cross-device / bookmark / PWA login works next time.
+  if (supabase) {
+    const now = new Date();
+    supabase.from('app_users').upsert(
+      {
+        email: normalizedEmail,
+        password_hash: user.passwordHash,
+        is_approved: user.isApproved ?? true,
+        is_admin: user.isAdmin ?? false,
+        created_at: user.createdAt?.toISOString() ?? now.toISOString(),
+        updated_at: now.toISOString(),
+      },
+      { onConflict: 'email' }
+    ).then(({ error }) => {
+      if (error) console.warn('Could not sync user to Supabase:', error.message);
+    });
   }
 
   // Ensure admin email always has admin + approved flags

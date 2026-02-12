@@ -12,6 +12,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isConnectionError, setIsConnectionError] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
+  const [missingSync, setMissingSync] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const { signIn } = useAuthActions();
@@ -22,6 +23,7 @@ export default function Login() {
     setError('');
     setIsConnectionError(false);
     setPendingApproval(false);
+    setMissingSync(false);
     setIsLoading(true);
 
     try {
@@ -31,6 +33,8 @@ export default function Login() {
       const message = err instanceof Error ? err.message : 'Email o password non validi';
       if (message === 'PENDING_APPROVAL') {
         setPendingApproval(true);
+      } else if (message === 'MISSING_PASSWORD_SYNC') {
+        setMissingSync(true);
       } else if (message.includes('connettersi') || message.includes('connessione') || message.includes('network') || message.includes('fetch')) {
         setIsConnectionError(true);
         setError(message);
@@ -140,6 +144,24 @@ export default function Login() {
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
                       Il tuo account non è ancora stato approvato dall'amministratore.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {missingSync && (
+              <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                      Sincronizzazione necessaria
+                    </p>
+                    <p className="text-xs text-blue-700 dark:text-blue-400 mt-1 leading-relaxed">
+                      Per usare Vector da segnalibro o schermata Home, accedi prima una volta dal browser Safari/Chrome. I tuoi dati verranno sincronizzati automaticamente e il segnalibro funzionera.
                     </p>
                   </div>
                 </div>
