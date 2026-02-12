@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuthState } from '../contexts/AuthContext';
 import { getUnreadFeedbackCount } from './feedback';
-import { sendNotification } from './notifications';
+import { sendNotification, updateAppBadge } from './notifications';
 import { getAppSettings } from './useAppSettings';
 import { supabase } from './supabase';
 
@@ -32,9 +32,12 @@ export function useAdminNotifications() {
           sendNotification('Nuovo feedback ricevuto', {
             body: `Hai ${newCount} ${newCount === 1 ? 'nuovo feedback' : 'nuovi feedback'} da leggere.`,
             tag: 'new-feedback',
-          });
+            navigateTo: '/Vector-test/admin/feedback',
+          } as any);
         }
 
+        // Update app badge counter
+        updateAppBadge(currentCount);
         localStorage.setItem(LAST_COUNT_KEY, String(currentCount));
       } catch (e) {
         console.error('Notification poll error:', e);
@@ -63,10 +66,12 @@ export function useAdminNotifications() {
             sendNotification('Nuovo feedback ricevuto', {
               body: `${email} ha inviato: ${cat}`,
               tag: 'new-feedback',
-            });
-            // Update stored count
+              navigateTo: '/Vector-test/admin/feedback',
+            } as any);
+            // Update stored count and badge
             getUnreadFeedbackCount().then(c => {
               localStorage.setItem(LAST_COUNT_KEY, String(c));
+              updateAppBadge(c);
             });
           }
         )
