@@ -790,14 +790,6 @@ function SahhaQRSection({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function SahhaStep({ n, children }: { n: number; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold shrink-0">{n}</span>
-      <p className="text-sm text-muted-foreground">{children}</p>
-    </div>
-  );
-}
 
 function compressImage(file: File, maxSize: number, quality: number): Promise<string> {
   return new Promise((resolve, reject) => {
