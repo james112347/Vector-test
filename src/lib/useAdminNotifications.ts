@@ -3,13 +3,15 @@ import { useAuthState } from '../contexts/AuthContext';
 import { getUnreadFeedbackCount } from './feedback';
 import { sendNotification } from './notifications';
 import { getAppSettings } from './useAppSettings';
+import { supabase } from './supabase';
 
-const POLL_INTERVAL = 30_000; // 30 seconds
+const POLL_INTERVAL = 30_000; // 30 seconds (fallback)
 const LAST_COUNT_KEY = 'vector_last_feedback_count';
 
 /**
- * Hook that polls for new feedback and sends a notification to the admin.
- * Only active when the logged-in user is admin and notifications are enabled.
+ * Hook that watches for new feedback and notifies the admin.
+ * Uses Supabase Realtime for instant notifications when available,
+ * falls back to polling every 30s.
  */
 export function useAdminNotifications() {
   const { user } = useAuthState();
@@ -42,7 +44,40 @@ export function useAdminNotifications() {
     // Initial check
     checkForNewFeedback();
 
-    // Start polling
+    // Supabase Realtime — instant notifications on new feedback
+    if (supabase) {
+      const sb = supabase;
+      const channel = sb
+        .channel('admin-feedback-notifications')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'feedbacks' },
+          (payload) => {
+            if (!getAppSettings().notificationsEnabled) return;
+            const email = payload.new?.user_email || 'Un utente';
+            const catLabels: Record<string, string> = {
+              bug: 'Bug', feature: 'Nuova funzione', improvement: 'Miglioramento',
+              support: 'Supporto', other: 'Feedback',
+            };
+            const cat = catLabels[payload.new?.category] || 'Feedback';
+            sendNotification('Nuovo feedback ricevuto', {
+              body: `${email} ha inviato: ${cat}`,
+              tag: 'new-feedback',
+            });
+            // Update stored count
+            getUnreadFeedbackCount().then(c => {
+              localStorage.setItem(LAST_COUNT_KEY, String(c));
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        sb.removeChannel(channel);
+      };
+    }
+
+    // Fallback: poll every 30s when no Supabase
     intervalRef.current = setInterval(checkForNewFeedback, POLL_INTERVAL);
 
     return () => {

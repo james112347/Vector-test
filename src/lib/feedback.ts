@@ -1,7 +1,7 @@
 import { db } from '../db/db';
 import type { UserFeedback, FeedbackStatus } from '../db/schema';
 import { supabase } from './supabase';
-import { notifyNewFeedback } from './notifications';
+import { notifyNewFeedback, notifyFeedbackReply } from './notifications';
 import { getAppSettings } from './useAppSettings';
 
 export interface ChatMessage {
@@ -367,6 +367,9 @@ export async function replyToFeedback(id: number, reply: string): Promise<void> 
       updated_at: now.toISOString(),
     }).eq('id', id);
   }
+
+  // Notify user that admin replied (works when user has app open with notifications enabled)
+  notifyFeedbackReply();
 }
 
 export async function getUnreadFeedbackCount(): Promise<number> {

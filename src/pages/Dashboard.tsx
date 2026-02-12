@@ -10,6 +10,9 @@ import { useUserProfile } from '../lib/useUserProfile';
 import { isAIAvailable, generateInsights, getCachedInsights, cacheInsights, type AIAnalysis, type AIContext } from '../lib/ai';
 import { getCachedScores, getCachedBiomarkers, getSahhaProfile } from '../lib/sahha-data';
 import { getAppSettings } from '../lib/useAppSettings';
+import { getUnreadFeedbackCount } from '../lib/feedback';
+import { getAllUsers } from '../lib/auth';
+import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
 import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
@@ -65,6 +68,14 @@ export default function Dashboard() {
   const [aiInsights, setAiInsights] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  // Admin widget stats
+  const [adminStats, setAdminStats] = useState<{
+    totalUsers: number;
+    approvedUsers: number;
+    unreadFeedback: number;
+    totalSessions: number;
+    activeTodayCount: number;
+  } | null>(null);
 
   const refreshing = useRef(false);
 
@@ -105,6 +116,31 @@ export default function Dashboard() {
 
   // Initial load
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load admin widget stats
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+    async function loadAdminStats() {
+      try {
+        const [allUsers, unread, activity] = await Promise.all([
+          getAllUsers(),
+          getUnreadFeedbackCount(),
+          getAllUserActivity(),
+        ]);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        setAdminStats({
+          totalUsers: allUsers.length,
+          approvedUsers: allUsers.filter(u => u.isApproved).length,
+          unreadFeedback: unread,
+          totalSessions: activity.reduce((s, a) => s + a.total_sessions, 0),
+          activeTodayCount: activity.filter(a => a.today_date === todayStr && a.today_minutes > 0).length,
+        });
+      } catch {
+        // Non-critical — widgets just won't show
+      }
+    }
+    loadAdminStats();
+  }, [user?.isAdmin]);
 
   // Auto-refresh when app comes back to foreground
   useEffect(() => {
@@ -217,6 +253,80 @@ export default function Dashboard() {
             </svg>
           </div>
         </button>
+      )}
+
+      {/* Admin Widgets */}
+      {user?.isAdmin && adminStats && (
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => navigate('/settings')}
+            className="rounded-xl border border-border bg-card p-3 text-left hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-7 h-7 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                <svg className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </span>
+              <span className="text-xs text-muted-foreground">Utenti</span>
+            </div>
+            <p className="text-xl font-bold">{adminStats.approvedUsers}</p>
+            <p className="text-[10px] text-muted-foreground">{adminStats.totalUsers} totali</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin')}
+            className="rounded-xl border border-border bg-card p-3 text-left hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-7 h-7 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                <svg className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+              </span>
+              <span className="text-xs text-muted-foreground">Feedback</span>
+            </div>
+            <p className="text-xl font-bold">
+              {adminStats.unreadFeedback}
+              {adminStats.unreadFeedback > 0 && (
+                <span className="text-xs font-normal text-red-500 ml-1">nuovi</span>
+              )}
+            </p>
+            <p className="text-[10px] text-muted-foreground">da leggere</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin')}
+            className="rounded-xl border border-border bg-card p-3 text-left hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-7 h-7 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                <svg className="w-3.5 h-3.5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </span>
+              <span className="text-xs text-muted-foreground">Sessioni</span>
+            </div>
+            <p className="text-xl font-bold">{adminStats.totalSessions}</p>
+            <p className="text-[10px] text-muted-foreground">totali app</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin')}
+            className="rounded-xl border border-border bg-card p-3 text-left hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-7 h-7 rounded-full bg-violet-500/10 flex items-center justify-center shrink-0">
+                <svg className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+              <span className="text-xs text-muted-foreground">Attivi oggi</span>
+            </div>
+            <p className="text-xl font-bold">{adminStats.activeTodayCount}</p>
+            <p className="text-[10px] text-muted-foreground">utenti online</p>
+          </button>
+        </div>
       )}
 
       {/* Today's Energy */}

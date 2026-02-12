@@ -20,6 +20,7 @@ export default function Settings() {
   const [users, setUsers] = useState<User[]>([]);
   const [activityData, setActivityData] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -32,9 +33,16 @@ export default function Settings() {
   const navigate = useNavigate();
 
   const loadUsers = async () => {
-    const all = await getAllUsers();
-    setUsers(all);
-    setLoading(false);
+    try {
+      setLoadError('');
+      const all = await getAllUsers();
+      setUsers(all);
+    } catch (e) {
+      console.error('Load users failed:', e);
+      setLoadError('Errore nel caricamento utenti. Controlla la connessione.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -273,10 +281,30 @@ export default function Settings() {
       {currentUser?.isAdmin && (
         <>
           <Separator />
-          <div>
-            <h2 className="text-xl font-bold">Gestione Accessi</h2>
-            <p className="text-muted-foreground mt-1 text-sm">Approva, revoca o elimina gli utenti</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Gestione Accessi</h2>
+              <p className="text-muted-foreground mt-1 text-sm">Approva, revoca o elimina gli utenti</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0"
+              onClick={() => { setLoading(true); loadUsers(); if (currentUser?.isAdmin) getAllUserActivity().then(setActivityData); }}
+              disabled={loading}
+            >
+              {loading ? 'Caricamento...' : 'Ricarica'}
+            </Button>
           </div>
+
+          {loadError && (
+            <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
+              <p className="text-sm text-red-700 dark:text-red-300">{loadError}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                Gli utenti su Supabase potrebbero non essere visibili. Prova a ricaricare.
+              </p>
+            </div>
+          )}
 
           {/* Pending Users */}
           <Card>
