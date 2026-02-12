@@ -16,7 +16,9 @@ import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
 import ScreenTimeCard from '../components/ScreenTimeCard';
 import SmartHabitPrompt from '../components/SmartHabitPrompt';
-import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, FoodLog } from '../db/schema';
+import ScientificEnergyCard from '../components/ScientificEnergyCard';
+import { getActiveGoals } from '../lib/goals';
+import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, FoodLog, Goal } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
 import { getTodayFoodLogs, getTodayCalorieSummary } from '../lib/food-ai';
 import {
@@ -68,6 +70,7 @@ export default function Dashboard() {
   const [sahhaScores, setSahhaScores] = useState<SahhaScoreLog[]>([]);
   const [sahhaBiomarkers, setSahhaBiomarkers] = useState<SahhaBiomarkerLog[]>([]);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
+  const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -98,10 +101,16 @@ export default function Dashboard() {
       setWeekLogs(week);
       setCheckinSummaries(summaries);
 
-      // Load food logs
+      // Load food logs & goals
       try {
         const foods = await getTodayFoodLogs(uid);
         setFoodLogs(foods);
+      } catch {
+        // ignore
+      }
+      try {
+        const goals = await getActiveGoals(uid);
+        setActiveGoals(goals);
       } catch {
         // ignore
       }
@@ -384,6 +393,41 @@ export default function Dashboard() {
           </button>
         );
       })()}
+
+      {/* Scientific Energy Score */}
+      {user?.id && <ScientificEnergyCard userId={user.id} />}
+
+      {/* Goals Widget */}
+      {activeGoals.length > 0 && (
+        <button
+          onClick={() => navigate('/goals')}
+          className="w-full rounded-xl border border-border bg-card p-4 text-left hover:bg-muted/50 transition-colors shadow-sm"
+        >
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Obiettivi</p>
+              <p className="text-xs text-muted-foreground">
+                {activeGoals.length} attiv{activeGoals.length === 1 ? 'o' : 'i'}
+                {activeGoals.some(g => g.streak > 0) && (
+                  <span className="text-orange-500 ml-1">
+                    — streak {Math.max(...activeGoals.map(g => g.streak))} gg
+                  </span>
+                )}
+              </p>
+            </div>
+            <svg className="h-5 w-5 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </button>
+      )}
 
       {/* Today's Energy */}
       {todayLog ? (

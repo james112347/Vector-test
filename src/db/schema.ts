@@ -190,3 +190,96 @@ export interface FoodLog {
 // ---------------------------------------------------------------------------
 
 export type { OrientationLog, UserActivity, OrientationPreferences } from '../lib/energy-orientation/types';
+
+// ---------------------------------------------------------------------------
+// Scientific Energy Score (modello energetico scientifico)
+// ---------------------------------------------------------------------------
+
+export interface ScientificEnergyScore {
+  id?: number;
+  userId: number;
+  date: string;           // YYYY-MM-DD
+  time: string;           // HH:MM
+  /** Punteggio complessivo 0-100 */
+  overallScore: number;
+  /** Componente circadiana (0-25): cronobiologia + ritmi ultradiani */
+  circadianScore: number;
+  /** Componente sonno (0-25): durata, qualita, debito */
+  sleepScore: number;
+  /** Componente stile di vita (0-25): idratazione, nutrizione, caffeina, attivita */
+  lifestyleScore: number;
+  /** Componente carico allostatico (0-25): stress, recupero, trend */
+  allostaticScore: number;
+  /** Cronotipo stimato dall'algoritmo */
+  chronotype: 'lion' | 'bear' | 'wolf' | 'dolphin';
+  /** Curva energetica prevista prossime 6 ore (array 6 valori 0-100) */
+  predictedCurve: string;   // JSON array
+  /** Collo di bottiglia identificato */
+  bottleneck: string;        // 'sleep' | 'hydration' | 'nutrition' | 'stress' | 'overwork' | 'inactivity' | 'none'
+  /** Debito di sonno cumulativo in ore (rolling 7 gg) */
+  sleepDebt: number;
+  /** Dettagli fattori (per debug e spiegazione) */
+  factors: string;           // JSON object
+  createdAt: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Goals (sistema obiettivi MCII/WOOP)
+// ---------------------------------------------------------------------------
+
+export type GoalCategory = 'energy' | 'sleep' | 'fitness' | 'stress' | 'nutrition' | 'productivity' | 'custom';
+export type GoalTimeframe = 'daily' | 'weekly' | 'monthly';
+export type GoalStatus = 'active' | 'completed' | 'paused' | 'abandoned';
+
+export interface Goal {
+  id?: number;
+  userId: number;
+  /** WOOP: Wish — cosa vuoi ottenere */
+  wish: string;
+  /** WOOP: Outcome — il miglior risultato possibile */
+  outcome: string;
+  /** WOOP: Obstacle — ostacolo interno principale */
+  obstacle: string;
+  /** WOOP: Plan — intenzione di implementazione "Se X, allora Y" */
+  plan: string;
+  category: GoalCategory;
+  timeframe: GoalTimeframe;
+  status: GoalStatus;
+  /** Tipo di checkin collegato per tracking automatico (opzionale) */
+  linkedCheckinType?: CheckinType | null;
+  /** Valore target numerico (opzionale, es. 8 bicchieri acqua) */
+  targetValue?: number | null;
+  /** Unita del target (es. 'bicchieri', 'ore', 'minuti') */
+  targetUnit?: string | null;
+  /** Progresso corrente (auto-calcolato) */
+  currentProgress: number;
+  /** Data inizio obiettivo */
+  startDate: string;        // YYYY-MM-DD
+  /** Data scadenza (per obiettivi con timeframe) */
+  endDate?: string | null;  // YYYY-MM-DD
+  /** Streak consecutivo di giorni raggiunti */
+  streak: number;
+  /** Miglior streak raggiunto */
+  bestStreak: number;
+  /** Consiglio IA personalizzato */
+  aiAdvice?: string | null;
+  /** Note dell'utente */
+  notes?: string | null;
+  completedAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GoalLog {
+  id?: number;
+  userId: number;
+  goalId: number;
+  date: string;             // YYYY-MM-DD
+  /** Valore registrato per quel giorno */
+  value: number;
+  /** Obiettivo raggiunto? */
+  achieved: boolean;
+  /** Nota opzionale */
+  note?: string | null;
+  createdAt: Date;
+}

@@ -15,6 +15,9 @@ import type {
   OrientationPreferences,
   ScreenTimeLog,
   FoodLog,
+  ScientificEnergyScore,
+  Goal,
+  GoalLog,
 } from './schema';
 
 export class VectorDB extends Dexie {
@@ -33,6 +36,9 @@ export class VectorDB extends Dexie {
   orientationPreferences!: Table<OrientationPreferences>;
   screenTimeLogs!: Table<ScreenTimeLog>;
   foodLogs!: Table<FoodLog>;
+  scientificEnergyScores!: Table<ScientificEnergyScore>;
+  goals!: Table<Goal>;
+  goalLogs!: Table<GoalLog>;
 
   constructor() {
     super('VectorDB');
@@ -162,6 +168,26 @@ export class VectorDB extends Dexie {
       orientationPreferences: '++id, &userId',
       screenTimeLogs: '++id, userId, date, [userId+date]',
       foodLogs: '++id, userId, date, [userId+date], mealType',
+    });
+    this.version(12).stores({
+      users: '++id, &email, isApproved',
+      sessions: '++id, userId, expiresAt',
+      userPreferences: '++id, userId',
+      energyLogs: '++id, userId, date, [userId+date]',
+      userProfiles: '++id, &userId',
+      quickCheckins: '++id, userId, date, type, [userId+date], [userId+date+type]',
+      sahhaProfiles: '++id, &userId, externalId',
+      sahhaScores: '++id, userId, type, scoreDateTime, [userId+type]',
+      sahhaBiomarkers: '++id, userId, type, category, startDateTime, [userId+type]',
+      feedbacks: '++id, userId, status, createdAt',
+      orientationLogs: '++id, userId, date, [userId+date], userResponse',
+      userActivities: '++id, userId, activityId, [userId+activityId]',
+      orientationPreferences: '++id, &userId',
+      screenTimeLogs: '++id, userId, date, [userId+date]',
+      foodLogs: '++id, userId, date, [userId+date], mealType',
+      scientificEnergyScores: '++id, userId, date, [userId+date]',
+      goals: '++id, userId, status, category, [userId+status], [userId+category]',
+      goalLogs: '++id, userId, goalId, date, [userId+date], [goalId+date]',
     });
   }
 }
