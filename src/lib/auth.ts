@@ -2,6 +2,49 @@ import { db } from '../db/db';
 import type { User, Session } from '../db/schema';
 import { supabase } from './supabase';
 
+// ---------------------------------------------------------------------------
+// Session persistence in localStorage (survives IndexedDB eviction)
+// ---------------------------------------------------------------------------
+
+const LS_SESSION_KEY = 'vector_session';
+
+interface SavedSession {
+  email: string;
+  token: string;
+  expiresAt: string;
+}
+
+function saveSessionToLS(email: string, token: string, expiresAt: Date): void {
+  try {
+    localStorage.setItem(LS_SESSION_KEY, JSON.stringify({
+      email,
+      token,
+      expiresAt: expiresAt.toISOString(),
+    }));
+  } catch {
+    // localStorage full or unavailable — not critical
+  }
+}
+
+function getSessionFromLS(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(LS_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedSession;
+    if (new Date(parsed.expiresAt) <= new Date()) {
+      localStorage.removeItem(LS_SESSION_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearSessionFromLS(): void {
+  localStorage.removeItem(LS_SESSION_KEY);
+}
+
 /**
  * Admin email - hardcoded owner of the app.
  * This email is always admin and auto-approved.
@@ -50,48 +93,107 @@ export async function createSession(userId: number, expiresInDays = 30): Promise
     createdAt: new Date(),
   };
   const id = await db.sessions.add(session);
+
+  // Save in localStorage as backup (survives IndexedDB eviction)
+  const user = await db.users.get(userId);
+  if (user) {
+    saveSessionToLS(user.email, session.token, session.expiresAt);
+  }
+
   return { ...session, id };
 }
 
 /**
  * Check for a valid (non-expired) session.
  * Returns the session and associated user if found.
+ *
+ * If IndexedDB was cleared (e.g., browser eviction), tries to restore
+ * the session from localStorage + Supabase automatically.
+ * This ensures PWA / bookmark users stay logged in.
  */
 export async function checkExistingSession(): Promise<{ session: Session; user: User } | null> {
   const now = new Date();
+
+  // 1. Try IndexedDB first (primary)
   const session = await db.sessions
     .where('expiresAt')
     .above(now)
     .first();
 
-  if (!session || !session.userId) return null;
-
-  const user = await db.users.get(session.userId);
-  if (!user) {
+  if (session?.userId) {
+    const user = await db.users.get(session.userId);
+    if (user) {
+      // Sync approval status from Supabase
+      if (supabase && !user.isApproved) {
+        try {
+          const { data } = await supabase
+            .from('app_users')
+            .select('is_approved')
+            .eq('email', user.email)
+            .single();
+          if (data?.is_approved) {
+            await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
+            user.isApproved = true;
+          }
+        } catch {
+          console.warn('Could not sync approval status, using local data');
+        }
+      }
+      return { session, user };
+    }
     await db.sessions.delete(session.id!);
+  }
+
+  // 2. IndexedDB empty — try restoring from localStorage + Supabase
+  const saved = getSessionFromLS();
+  if (!saved || !supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('email', saved.email)
+      .single();
+
+    if (error || !data) {
+      clearSessionFromLS();
+      return null;
+    }
+
+    if (!data.is_approved) {
+      clearSessionFromLS();
+      return null;
+    }
+
+    // Re-create local user from Supabase data
+    const restoredUser: User = {
+      email: data.email,
+      passwordHash: data.password_hash || '',
+      hasAcceptedTerms: true,
+      isApproved: data.is_approved,
+      isAdmin: data.is_admin ?? false,
+      createdAt: new Date(data.created_at),
+      updatedAt: now,
+    };
+    const userId = await db.users.add(restoredUser);
+    restoredUser.id = userId;
+
+    // Re-create session in IndexedDB
+    const restoredSession: Session = {
+      userId,
+      token: saved.token,
+      expiresAt: new Date(saved.expiresAt),
+      createdAt: now,
+    };
+    const sessionId = await db.sessions.add(restoredSession);
+    restoredSession.id = sessionId;
+
+    console.log('Session restored from localStorage + Supabase for:', saved.email);
+    return { session: restoredSession, user: restoredUser };
+  } catch (e) {
+    console.warn('Could not restore session from Supabase:', e);
     return null;
   }
-
-  // Sync approval status from Supabase (in case admin approved on another device)
-  // Wrapped in try/catch: network failure should NOT invalidate a valid local session
-  if (supabase && !user.isApproved) {
-    try {
-      const { data } = await supabase
-        .from('app_users')
-        .select('is_approved')
-        .eq('email', user.email)
-        .single();
-      if (data?.is_approved) {
-        await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
-        user.isApproved = true;
-      }
-    } catch {
-      // Network error — don't kill the session, use local data
-      console.warn('Could not sync approval status, using local data');
-    }
-  }
-
-  return { session, user };
 }
 
 /**
@@ -99,6 +201,7 @@ export async function checkExistingSession(): Promise<{ session: Session; user: 
  */
 export async function clearSession(): Promise<void> {
   await db.sessions.clear();
+  clearSessionFromLS();
 }
 
 /**
