@@ -289,7 +289,7 @@ export default function FeedbackChat() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-8rem)]">
+    <div className="flex flex-col" style={{ height: 'calc(100dvh - 8rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div>
@@ -390,8 +390,20 @@ export default function FeedbackChat() {
                 <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-3 max-w-[85%]">
                   <p className="text-sm">
                     Ciao! Ti aiuto a scrivere il tuo feedback per Vector. Descrivi il problema, la richiesta o il suggerimento e ti guidero con alcune domande per renderlo chiaro e utile.
-                    Puoi anche allegare screenshot o video!
                   </p>
+                </div>
+
+                {/* Tip: screenshot e registrazioni schermo */}
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex gap-2.5 items-start">
+                  <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                  <div>
+                    <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">Puoi condividere screenshot e registrazioni schermo!</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                      Usa il pulsante <span className="inline-flex items-center mx-0.5 align-middle"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg></span> per allegare immagini, screenshot o video dalla galleria. Puoi anche registrare lo schermo e condividere il video per mostrarci un problema!
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
