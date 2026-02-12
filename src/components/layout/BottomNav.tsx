@@ -1,13 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Heart, Compass, Clock, Settings } from 'lucide-react';
+import { LayoutDashboard, Heart, Compass, Target, Settings } from 'lucide-react';
 import { usePendingUsers } from '../../lib/usePendingUsers';
 
 const tabs = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
-  { path: '/health', label: 'Salute', icon: Heart },
   { path: '/orientation', label: 'Guida', icon: Compass },
-  { path: '/history', label: 'Storico', icon: Clock },
-  { path: '/settings', label: 'Impost.', icon: Settings },
+  { path: '/goals', label: 'Obiettivi', icon: Target },
+  { path: '/health', label: 'Salute', icon: Heart },
+  { path: '/settings', label: 'Altro', icon: Settings },
 ];
 
 export function BottomNav() {

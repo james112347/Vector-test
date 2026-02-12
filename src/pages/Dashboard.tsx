@@ -14,13 +14,13 @@ import { getUnreadFeedbackCount } from '../lib/feedback';
 import { getAllUsers } from '../lib/auth';
 import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
-import ScreenTimeCard from '../components/ScreenTimeCard';
-import SmartHabitPrompt from '../components/SmartHabitPrompt';
 import ScientificEnergyCard from '../components/ScientificEnergyCard';
 import { getActiveGoals } from '../lib/goals';
-import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, FoodLog, Goal } from '../db/schema';
+import { useEnergyOrientation } from '../lib/useEnergyOrientation';
+import { CATEGORY_LABELS } from '../lib/energy-orientation';
+import type { EnergyLog, SahhaScoreLog, SahhaBiomarkerLog, Goal } from '../db/schema';
 import type { DailyCheckinSummary } from '../lib/checkins';
-import { getTodayFoodLogs, getTodayCalorieSummary } from '../lib/food-ai';
+import { Compass } from 'lucide-react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -69,7 +69,6 @@ export default function Dashboard() {
   const [checkinSummaries, setCheckinSummaries] = useState<DailyCheckinSummary[]>([]);
   const [sahhaScores, setSahhaScores] = useState<SahhaScoreLog[]>([]);
   const [sahhaBiomarkers, setSahhaBiomarkers] = useState<SahhaBiomarkerLog[]>([]);
-  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState<AIAnalysis | null>(null);
@@ -86,6 +85,10 @@ export default function Dashboard() {
 
   const refreshing = useRef(false);
 
+  // Orientation system
+  const { recommendations } = useEnergyOrientation(user?.id);
+  const topRec = recommendations[0];
+
   const loadData = useCallback(async (showLoader = true) => {
     const uid = user?.id;
     if (!uid || refreshing.current) return;
@@ -101,13 +104,7 @@ export default function Dashboard() {
       setWeekLogs(week);
       setCheckinSummaries(summaries);
 
-      // Load food logs & goals
-      try {
-        const foods = await getTodayFoodLogs(uid);
-        setFoodLogs(foods);
-      } catch {
-        // ignore
-      }
+      // Load goals
       try {
         const goals = await getActiveGoals(uid);
         setActiveGoals(goals);
@@ -244,13 +241,15 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4 pb-24">
+      {/* 1. Greeting header */}
       <div>
         <h1 className="text-2xl font-bold">{greeting()}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          La tua dashboard energetica
+          Il tuo centro decisionale
         </p>
       </div>
 
+      {/* 2. Admin widgets (if admin) */}
       {/* Pending Approvals Banner */}
       {pendingCount > 0 && (
         <button
@@ -276,7 +275,7 @@ export default function Dashboard() {
         </button>
       )}
 
-      {/* Admin Widgets */}
+      {/* Admin Stats Grid */}
       {user?.isAdmin && adminStats && (
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -350,54 +349,34 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Smart Habit Notifications — risposte rapide basate su abitudini */}
-      {user?.id && <SmartHabitPrompt userId={user.id} />}
-
-      {/* Quick Check-ins — in alto per accesso rapido */}
-      {user?.id && <QuickCheckins userId={user.id} />}
-
-      {/* Screen Time — tempo di utilizzo app */}
-      {user?.id && <ScreenTimeCard userId={user.id} />}
-
-      {/* Food Scanner Card */}
-      {(() => {
-        const foodSummary = getTodayCalorieSummary(foodLogs);
-        return (
-          <button
-            onClick={() => navigate('/food')}
-            className="w-full rounded-xl border border-border bg-card p-4 text-left hover:bg-muted/50 transition-colors shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Food Scanner</p>
-                {foodLogs.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Oggi: {foodSummary.total} kcal da {foodSummary.meals} {foodSummary.meals === 1 ? 'pasto' : 'pasti'}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Scatta una foto e calcola le calorie
-                  </p>
-                )}
-              </div>
-              <svg className="h-5 w-5 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </button>
-        );
-      })()}
-
-      {/* Scientific Energy Score */}
+      {/* 3. Scientific Energy Card — most important, the energy score */}
       {user?.id && <ScientificEnergyCard userId={user.id} />}
 
-      {/* Goals Widget */}
+      {/* 4. Cosa fare adesso — top recommendation from orientation system */}
+      {topRec && (
+        <button
+          onClick={() => navigate('/orientation')}
+          className="w-full rounded-xl border-2 border-primary/20 bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Compass className="h-4 w-4 text-primary" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-wide">Cosa fare adesso</span>
+          </div>
+          <p className="text-sm font-medium">{topRec.activity.name}</p>
+          <p className="text-xs text-muted-foreground">{topRec.reason}</p>
+          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+            <span>{topRec.durationMin} min</span>
+            <span>{CATEGORY_LABELS[topRec.activity.category]}</span>
+            <span>Intensit&agrave; {Math.round(topRec.intensity * 100)}%</span>
+            <span className="ml-auto text-primary font-medium">Vedi guida &rarr;</span>
+          </div>
+        </button>
+      )}
+
+      {/* 5. Quick Check-ins — data collection */}
+      {user?.id && <QuickCheckins userId={user.id} />}
+
+      {/* 6. Goals Widget (if goals exist) */}
       {activeGoals.length > 0 && (
         <button
           onClick={() => navigate('/goals')}
@@ -429,7 +408,7 @@ export default function Dashboard() {
         </button>
       )}
 
-      {/* Today's Energy */}
+      {/* 7. Today's Energy Rings (if logged) */}
       {todayLog ? (
         <Card>
           <CardHeader className="pb-2">
@@ -443,7 +422,7 @@ export default function Dashboard() {
             </div>
             {todayLog.notes && (
               <p className="text-xs text-muted-foreground mt-3 text-center italic">
-                "{todayLog.notes}"
+                &ldquo;{todayLog.notes}&rdquo;
               </p>
             )}
           </CardContent>
@@ -452,7 +431,7 @@ export default function Dashboard() {
         <Card>
           <CardContent className="py-8 text-center space-y-3">
             <p className="text-muted-foreground text-sm">
-              Non hai ancora registrato l'energia di oggi
+              Non hai ancora registrato l&apos;energia di oggi
             </p>
             <Button size="sm" onClick={() => navigate('/log')}>
               Registra ora
@@ -461,7 +440,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* AI Insights */}
+      {/* 8. AI Insights (if available) */}
       {isAIAvailable() && weekLogs.length >= 2 && (
         <Card>
           <CardHeader className="pb-2">
@@ -517,7 +496,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Weekly Chart */}
+      {/* 9. Weekly Chart */}
       {chartData.length >= 2 ? (
         <Card>
           <CardHeader className="pb-2">
@@ -586,7 +565,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Average Energy Level */}
+      {/* 10. Average Energy Level */}
       {weekLogs.length > 0 && (() => {
         const avgPhysical = weekLogs.reduce((s, l) => s + l.physical, 0) / weekLogs.length;
         const avgMental = weekLogs.reduce((s, l) => s + l.mental, 0) / weekLogs.length;

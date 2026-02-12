@@ -384,9 +384,14 @@ export default function Orientation() {
     <div className="space-y-4 pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Compass className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Orientamento</h1>
+        <div>
+          <div className="flex items-center gap-2">
+            <Compass className="h-5 w-5 text-primary" />
+            <h1 className="text-xl font-bold">Guida Energetica</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Cosa fare, quando e con quale intensita
+          </p>
         </div>
         <Button
           size="sm"
@@ -398,9 +403,6 @@ export default function Orientation() {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground -mt-2">
-        Cosa fare, quando e con quale intensita
-      </p>
 
       {error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
@@ -532,7 +534,7 @@ export default function Orientation() {
 
       {/* Footer info */}
       <p className="text-[10px] text-center text-muted-foreground px-4">
-        Il sistema analizza energia, stato fisiologico e carico cognitivo per suggerirti l'attivita giusta al momento giusto. Base per l'algoritmo IA.
+        Vector analizza il tuo stato energetico in tempo reale per guidarti su cosa fare, quando e con quale intensita — massimizzando risultati e sostenibilita.
       </p>
     </div>
   );

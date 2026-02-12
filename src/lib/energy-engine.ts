@@ -1309,6 +1309,21 @@ export function estimateActivityEnergyCost(
 // Labels
 // ---------------------------------------------------------------------------
 
+/** Actionable advice for each bottleneck — used by UI to show quick recommendations */
+export const BOTTLENECK_ACTIONS: Record<Bottleneck, string> = {
+  sleep: 'Vai a letto 30 minuti prima stasera e evita schermi nell\'ultima ora.',
+  hydration: 'Bevi un bicchiere d\'acqua adesso. Obiettivo: almeno 8 bicchieri oggi.',
+  nutrition: 'Il prossimo pasto dovrebbe includere proteine, carboidrati complessi e verdure.',
+  stress: 'Fai 5 minuti di respirazione profonda (4s inspira, 7s trattieni, 8s espira).',
+  overwork: 'Stacca per almeno 15 minuti. Fai una camminata breve.',
+  inactivity: 'Anche 10 minuti di movimento leggero miglioreranno la tua energia.',
+  caffeine_late: 'Non assumere piu caffeina oggi. L\'effetto dura 5+ ore.',
+  screen_fatigue: 'Fai una pausa dallo schermo. Guarda lontano per 20 secondi ogni 20 minuti.',
+  burnout_risk: 'Priorita al recupero oggi. Riposo, natura, zero sovraccarico cognitivo.',
+  sleep_debt: 'Dormi 1 ora in piu per le prossime notti per recuperare il debito.',
+  none: 'Tutto nella norma. Sfrutta questo stato per attivita ad alto valore.',
+};
+
 export const BOTTLENECK_LABELS: Record<Bottleneck, string> = {
   sleep: 'Sonno insufficiente',
   hydration: 'Disidratazione',

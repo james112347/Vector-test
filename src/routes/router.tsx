@@ -14,7 +14,6 @@ import Profile from '../pages/Profile';
 import ProfileEdit from '../pages/ProfileEdit';
 import FeedbackChat from '../pages/FeedbackChat';
 import Orientation from '../pages/Orientation';
-import FoodScanner from '../pages/FoodScanner';
 import Goals from '../pages/Goals';
 
 export const router = createBrowserRouter([
@@ -39,7 +38,6 @@ export const router = createBrowserRouter([
           { path: '/admin', element: <AdminDashboard /> },
           { path: '/feedback', element: <FeedbackChat /> },
           { path: '/orientation', element: <Orientation /> },
-          { path: '/food', element: <FoodScanner /> },
           { path: '/goals', element: <Goals /> },
         ],
       },

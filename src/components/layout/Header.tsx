@@ -46,12 +46,13 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border safe-area-top">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-        <h1
-          className="text-lg font-bold text-primary cursor-pointer"
+        <button
+          className="flex items-center gap-1.5 cursor-pointer"
           onClick={() => navigate('/')}
         >
-          Vector
-        </h1>
+          <span className="text-lg font-bold tracking-tight text-primary">Vector</span>
+          <span className="text-[9px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">BETA</span>
+        </button>
 
         <div className="flex items-center gap-1">
           {/* Profile button */}

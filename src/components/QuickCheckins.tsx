@@ -1,17 +1,50 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from './ui/card';
 import {
-  Droplets, Coffee, Sun, Pill, MonitorOff,
-  Check, ChevronRight, Send,
+  Moon, Sun, Brain, Heart, Zap, Coffee, Droplets, Pill,
+  MonitorOff, Check, ChevronRight, Activity, Frown, Meh,
+  Smile, SmilePlus, Sparkles, CloudSun, Sunset, CloudMoon,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 
 // ---------------------------------------------------------------------------
-// Fase del giorno -> mapping percentuale smart
+// Types
 // ---------------------------------------------------------------------------
 
 type TimePhase = 'morning' | 'midday' | 'afternoon' | 'evening';
+
+interface RatingOption {
+  value: number;
+  label: string;
+  icon: typeof Frown;
+  color: string;
+  bg: string;
+}
+
+interface CheckinQuestion {
+  type: CheckinType;
+  label: string;
+  question: string;
+  icon: typeof Moon;
+  inverse?: boolean;
+  /** Only show if this type hasn't been logged today */
+  skipIfLogged?: boolean;
+  /** Custom rating labels */
+  ratings?: RatingOption[];
+}
+
+interface PhaseConfig {
+  greeting: string;
+  icon: typeof Sun;
+  iconColor: string;
+  questions: CheckinQuestion[];
+}
+
+// ---------------------------------------------------------------------------
+// Time phase detection
+// ---------------------------------------------------------------------------
 
 function getTimePhase(): TimePhase {
   const h = new Date().getHours();
@@ -21,154 +54,183 @@ function getTimePhase(): TimePhase {
   return 'evening';
 }
 
-/** Converte percentuale 0-100 in valore 1-5 arrotondato */
-function pctTo5(pct: number): number {
-  return Math.max(1, Math.min(5, Math.round(1 + (pct / 100) * 4)));
-}
-
-/** Inverso: 100% -> 1 (basso stress), 0% -> 5 (alto stress) */
-function pctTo5Inv(pct: number): number {
-  return pctTo5(100 - pct);
-}
-
 // ---------------------------------------------------------------------------
-// Emoji per contesto (energia, cibo, attivita)
+// Default 1-5 rating scale
 // ---------------------------------------------------------------------------
 
-type EmojiInfo = { emoji: string; label: string; color: string };
+const DEFAULT_RATINGS: RatingOption[] = [
+  { value: 1, label: 'Male',   icon: Frown,     color: 'text-red-500',    bg: 'bg-red-500' },
+  { value: 2, label: 'Poco',   icon: Frown,     color: 'text-orange-500', bg: 'bg-orange-500' },
+  { value: 3, label: 'Cosi',   icon: Meh,       color: 'text-amber-500',  bg: 'bg-amber-500' },
+  { value: 4, label: 'Bene',   icon: Smile,     color: 'text-emerald-500',bg: 'bg-emerald-500' },
+  { value: 5, label: 'Ottimo', icon: SmilePlus,  color: 'text-green-600',  bg: 'bg-green-600' },
+];
 
-function emojiEnergia(pct: number): EmojiInfo {
-  if (pct <= 15) return { emoji: '😩', label: 'Pessimo', color: '#dc2626' };
-  if (pct <= 30) return { emoji: '😟', label: 'Male', color: '#ef4444' };
-  if (pct <= 45) return { emoji: '😐', label: 'Cosi cosi', color: '#f59e0b' };
-  if (pct <= 60) return { emoji: '🙂', label: 'Discreto', color: '#eab308' };
-  if (pct <= 75) return { emoji: '😊', label: 'Bene', color: '#22c55e' };
-  if (pct <= 90) return { emoji: '😄', label: 'Molto bene', color: '#16a34a' };
-  return { emoji: '🔥', label: 'Alla grande!', color: '#3b82f6' };
-}
+/** Inverse scale: 1=high(bad), 5=low(good) — used for stress */
+const INVERSE_RATINGS: RatingOption[] = [
+  { value: 1, label: 'Alto',      icon: Zap,       color: 'text-red-500',    bg: 'bg-red-500' },
+  { value: 2, label: 'Medio-alto',icon: Zap,       color: 'text-orange-500', bg: 'bg-orange-500' },
+  { value: 3, label: 'Medio',     icon: Meh,       color: 'text-amber-500',  bg: 'bg-amber-500' },
+  { value: 4, label: 'Basso',     icon: Smile,     color: 'text-emerald-500',bg: 'bg-emerald-500' },
+  { value: 5, label: 'Minimo',    icon: Sparkles,  color: 'text-green-600',  bg: 'bg-green-600' },
+];
 
-function emojiCibo(pct: number): EmojiInfo {
-  if (pct <= 10) return { emoji: '🚫', label: 'Saltato', color: '#dc2626' };
-  if (pct <= 30) return { emoji: '🍪', label: 'Snack', color: '#ef4444' };
-  if (pct <= 50) return { emoji: '🥐', label: 'Veloce', color: '#f59e0b' };
-  if (pct <= 70) return { emoji: '🍽️', label: 'Discreto', color: '#eab308' };
-  if (pct <= 85) return { emoji: '🥗', label: 'Completo', color: '#22c55e' };
-  return { emoji: '🍱', label: 'Ottimo pasto', color: '#16a34a' };
-}
+const MEAL_RATINGS: RatingOption[] = [
+  { value: 1, label: 'Saltato',  icon: Frown,    color: 'text-red-500',    bg: 'bg-red-500' },
+  { value: 2, label: 'Snack',    icon: Frown,    color: 'text-orange-500', bg: 'bg-orange-500' },
+  { value: 3, label: 'Veloce',   icon: Meh,      color: 'text-amber-500',  bg: 'bg-amber-500' },
+  { value: 4, label: 'Buono',    icon: Smile,    color: 'text-emerald-500',bg: 'bg-emerald-500' },
+  { value: 5, label: 'Completo', icon: SmilePlus, color: 'text-green-600',  bg: 'bg-green-600' },
+];
 
-function emojiAttivita(pct: number): EmojiInfo {
-  if (pct <= 10) return { emoji: '🛋️', label: 'Nessuna', color: '#dc2626' };
-  if (pct <= 30) return { emoji: '🚶', label: 'Passeggiata', color: '#f59e0b' };
-  if (pct <= 50) return { emoji: '🏃', label: 'Moderata', color: '#eab308' };
-  if (pct <= 70) return { emoji: '💪', label: 'Buona', color: '#22c55e' };
-  if (pct <= 85) return { emoji: '🏋️', label: 'Intensa', color: '#16a34a' };
-  return { emoji: '🔥', label: 'Top!', color: '#3b82f6' };
-}
-
-type EmojiMapper = (pct: number) => EmojiInfo;
+const ACTIVITY_RATINGS: RatingOption[] = [
+  { value: 1, label: 'Nessuna',  icon: Frown,    color: 'text-red-500',    bg: 'bg-red-500' },
+  { value: 2, label: 'Leggera',  icon: Meh,      color: 'text-orange-500', bg: 'bg-orange-500' },
+  { value: 3, label: 'Moderata', icon: Meh,      color: 'text-amber-500',  bg: 'bg-amber-500' },
+  { value: 4, label: 'Buona',    icon: Smile,    color: 'text-emerald-500',bg: 'bg-emerald-500' },
+  { value: 5, label: 'Intensa',  icon: SmilePlus, color: 'text-green-600',  bg: 'bg-green-600' },
+];
 
 // ---------------------------------------------------------------------------
-// Configurazione fasi
+// Phase configurations
 // ---------------------------------------------------------------------------
-
-interface SliderMap {
-  type: CheckinType;
-  label: string;
-  inverse?: boolean;
-}
-
-interface FollowUpConfig {
-  question: string;
-  condition?: (checkins: QuickCheckin[]) => boolean;
-  maps: SliderMap[];
-  emojiMapper: EmojiMapper;
-  gradient: string;
-}
-
-interface PhaseConfig {
-  greeting: string;
-  mainQuestion: string;
-  maps: SliderMap[];
-  followUps: FollowUpConfig[];
-}
-
-const GRADIENT_ENERGIA = 'linear-gradient(90deg, #dc2626 0%, #f59e0b 35%, #22c55e 65%, #3b82f6 100%)';
-const GRADIENT_CIBO = 'linear-gradient(90deg, #dc2626 0%, #f59e0b 30%, #22c55e 60%, #16a34a 100%)';
-const GRADIENT_ATTIVITA = 'linear-gradient(90deg, #94a3b8 0%, #f59e0b 30%, #22c55e 60%, #3b82f6 100%)';
 
 const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
   morning: {
     greeting: 'Buongiorno',
-    mainQuestion: 'Come hai dormito e come ti senti?',
-    maps: [
-      { type: 'sleep_quality', label: 'Sonno' },
-      { type: 'mood', label: 'Umore' },
-      { type: 'stress', label: 'Stress', inverse: true },
-    ],
-    followUps: [
+    icon: Sun,
+    iconColor: 'text-amber-500',
+    questions: [
       {
+        type: 'sleep_quality',
+        label: 'Sonno',
+        question: 'Come hai dormito?',
+        icon: Moon,
+      },
+      {
+        type: 'mood',
+        label: 'Umore',
+        question: 'Come ti senti stamattina?',
+        icon: Heart,
+      },
+      {
+        type: 'stress',
+        label: 'Stress',
+        question: 'Livello di stress?',
+        icon: Zap,
+        inverse: true,
+        ratings: INVERSE_RATINGS,
+      },
+      {
+        type: 'meal_time',
+        label: 'Colazione',
         question: 'Colazione?',
-        maps: [{ type: 'meal_time', label: 'Pasto' }],
-        emojiMapper: emojiCibo,
-        gradient: GRADIENT_CIBO,
+        icon: UtensilsCrossed,
+        ratings: MEAL_RATINGS,
       },
     ],
   },
   midday: {
-    greeting: 'Meta giornata',
-    mainQuestion: 'Come sta andando?',
-    maps: [
-      { type: 'mood', label: 'Umore' },
-      { type: 'focus', label: 'Focus' },
-      { type: 'stress', label: 'Stress', inverse: true },
-    ],
-    followUps: [
+    greeting: 'Buon proseguimento',
+    icon: CloudSun,
+    iconColor: 'text-sky-500',
+    questions: [
       {
+        type: 'focus',
+        label: 'Focus',
+        question: 'Come va la concentrazione?',
+        icon: Brain,
+      },
+      {
+        type: 'stress',
+        label: 'Stress',
+        question: 'Livello di stress?',
+        icon: Zap,
+        inverse: true,
+        ratings: INVERSE_RATINGS,
+      },
+      {
+        type: 'mood',
+        label: 'Umore',
+        question: 'Come ti senti?',
+        icon: Heart,
+      },
+      {
+        type: 'meal_time',
+        label: 'Pranzo',
         question: 'Pranzo?',
-        maps: [{ type: 'meal_time', label: 'Pasto' }],
-        emojiMapper: emojiCibo,
-        gradient: GRADIENT_CIBO,
+        icon: UtensilsCrossed,
+        ratings: MEAL_RATINGS,
       },
     ],
   },
   afternoon: {
     greeting: 'Buon pomeriggio',
-    mainQuestion: 'Come ti senti ora?',
-    maps: [
-      { type: 'mood', label: 'Umore' },
-      { type: 'focus', label: 'Focus' },
-      { type: 'stress', label: 'Stress', inverse: true },
-    ],
-    followUps: [
+    icon: Sunset,
+    iconColor: 'text-orange-500',
+    questions: [
       {
+        type: 'focus',
+        label: 'Focus',
+        question: 'Come va la concentrazione?',
+        icon: Brain,
+      },
+      {
+        type: 'mood',
+        label: 'Umore',
+        question: 'Come ti senti?',
+        icon: Heart,
+      },
+      {
+        type: 'activity_done',
+        label: 'Attivita',
         question: 'Movimento oggi?',
-        maps: [{ type: 'activity_done', label: 'Attivita' }],
-        emojiMapper: emojiAttivita,
-        gradient: GRADIENT_ATTIVITA,
+        icon: Activity,
+        ratings: ACTIVITY_RATINGS,
+      },
+      {
+        type: 'stress',
+        label: 'Stress',
+        question: 'Livello di stress?',
+        icon: Zap,
+        inverse: true,
+        ratings: INVERSE_RATINGS,
       },
     ],
   },
   evening: {
     greeting: 'Buona sera',
-    mainQuestion: "Com'e' andata oggi?",
-    maps: [
-      { type: 'mood', label: 'Umore' },
-      { type: 'stress', label: 'Stress', inverse: true },
-    ],
-    followUps: [
+    icon: CloudMoon,
+    iconColor: 'text-indigo-400',
+    questions: [
       {
+        type: 'mood',
+        label: 'Umore',
+        question: "Com'e' andata oggi?",
+        icon: Heart,
+      },
+      {
+        type: 'stress',
+        label: 'Stress',
+        question: 'Livello di stress?',
+        icon: Zap,
+        inverse: true,
+        ratings: INVERSE_RATINGS,
+      },
+      {
+        type: 'activity_done',
+        label: 'Attivita',
         question: 'Attivita fisica oggi?',
-        condition: (checkins) => !checkins.some(c => c.type === 'activity_done'),
-        maps: [{ type: 'activity_done', label: 'Attivita' }],
-        emojiMapper: emojiAttivita,
-        gradient: GRADIENT_ATTIVITA,
+        icon: Activity,
+        skipIfLogged: true,
+        ratings: ACTIVITY_RATINGS,
       },
     ],
   },
 };
 
 // ---------------------------------------------------------------------------
-// Contatori inline
+// Quick counters config
 // ---------------------------------------------------------------------------
 
 const COUNTERS: Array<{
@@ -176,151 +238,89 @@ const COUNTERS: Array<{
   icon: typeof Coffee;
   label: string;
   color: string;
+  activeColor: string;
   target?: number;
 }> = [
-  { type: 'caffeine', icon: Coffee, label: 'Caffe', color: '#92400e' },
-  { type: 'water', icon: Droplets, label: 'Acqua', color: '#3b82f6', target: 8 },
-  { type: 'supplement', icon: Pill, label: 'Integr.', color: '#8b5cf6' },
-  { type: 'screen_break', icon: MonitorOff, label: 'Pausa', color: '#06b6d4' },
+  { type: 'caffeine',     icon: Coffee,     label: 'Caffe',   color: 'text-amber-700 dark:text-amber-500',  activeColor: 'bg-amber-100 dark:bg-amber-900/30' },
+  { type: 'water',        icon: Droplets,   label: 'Acqua',   color: 'text-blue-500',   activeColor: 'bg-blue-100 dark:bg-blue-900/30',   target: 8 },
+  { type: 'supplement',   icon: Pill,        label: 'Integr.', color: 'text-violet-500', activeColor: 'bg-violet-100 dark:bg-violet-900/30' },
+  { type: 'screen_break', icon: MonitorOff,  label: 'Pausa',   color: 'text-cyan-500',   activeColor: 'bg-cyan-100 dark:bg-cyan-900/30' },
 ];
 
 // ---------------------------------------------------------------------------
-// Slider percentuale touch-friendly (riusabile)
+// All trackable types for completion display
 // ---------------------------------------------------------------------------
 
-function PercentSlider({
-  value,
-  onChange,
-  onConfirm,
-  maps,
-  emojiMapper = emojiEnergia,
-  gradient = GRADIENT_ENERGIA,
-  compact = false,
+const ALL_TRACKED_TYPES: Array<{ type: CheckinType; label: string }> = [
+  { type: 'sleep_quality', label: 'Sonno' },
+  { type: 'mood',          label: 'Umore' },
+  { type: 'stress',        label: 'Stress' },
+  { type: 'focus',         label: 'Focus' },
+  { type: 'meal_time',     label: 'Pasto' },
+  { type: 'activity_done', label: 'Attivita' },
+  { type: 'water',         label: 'Acqua' },
+  { type: 'caffeine',      label: 'Caffe' },
+];
+
+// ---------------------------------------------------------------------------
+// RatingButton sub-component
+// ---------------------------------------------------------------------------
+
+function RatingButton({
+  option,
+  selected,
+  onSelect,
 }: {
-  value: number;
-  onChange: (v: number) => void;
-  onConfirm: () => void;
-  maps: SliderMap[];
-  emojiMapper?: EmojiMapper;
-  gradient?: string;
-  compact?: boolean;
+  option: RatingOption;
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-
-  const info = emojiMapper(value);
-
-  const updateFromEvent = (clientX: number) => {
-    if (!trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-    onChange(Math.round(pct));
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    dragging.current = true;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    updateFromEvent(e.clientX);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    updateFromEvent(e.clientX);
-  };
-
-  const handlePointerUp = () => {
-    dragging.current = false;
-  };
-
-  const trackHeight = compact ? 'h-8' : 'h-10';
-  const thumbSize = compact ? 'w-6 h-6' : 'w-7 h-7';
-  const thumbOffset = compact ? '12px' : '14px';
-  const emojiSize = compact ? 'text-xl' : 'text-2xl';
-  const pctSize = compact ? 'text-xl' : 'text-2xl';
+  const Icon = option.icon;
 
   return (
-    <div className={compact ? 'space-y-2' : 'space-y-3'}>
-      {/* Emoji + Percentuale */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={emojiSize} role="img">{info.emoji}</span>
-          <span className="text-sm font-medium" style={{ color: info.color }}>
-            {info.label}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`${pctSize} font-bold tabular-nums`} style={{ color: info.color }}>
-            {value}%
-          </span>
-          <button
-            onClick={onConfirm}
-            className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all"
-            style={{ backgroundColor: info.color }}
-          >
-            <Send className="h-3.5 w-3.5 text-white" />
-          </button>
-        </div>
+    <button
+      onClick={onSelect}
+      className={`
+        flex flex-col items-center gap-1 py-2 px-1 rounded-xl
+        transition-all duration-150 active:scale-95 flex-1 min-w-0
+        ${selected
+          ? `${option.bg} text-white shadow-sm`
+          : 'bg-muted/40 hover:bg-muted/70 text-muted-foreground'
+        }
+      `}
+    >
+      <div className={`
+        w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+        ${selected
+          ? 'bg-white/20 text-white'
+          : `bg-background ${option.color}`
+        }
+      `}>
+        {option.value}
       </div>
-
-      {/* Track slider */}
-      <div
-        ref={trackRef}
-        className={`relative ${trackHeight} rounded-xl cursor-pointer touch-none select-none`}
-        style={{ background: gradient }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-      >
-        {/* Thumb */}
-        <div
-          className={`absolute top-1/2 -translate-y-1/2 ${thumbSize} rounded-full bg-white border-2 shadow-md transition-[left] duration-75`}
-          style={{
-            left: `calc(${value}% - ${thumbOffset})`,
-            borderColor: info.color,
-          }}
-        />
-        {/* Tick marks */}
-        <div className="absolute inset-0 flex items-end justify-between px-3 pb-1 pointer-events-none">
-          <span className="text-[8px] text-white/60 font-medium">0</span>
-          <span className="text-[8px] text-white/60 font-medium">25</span>
-          <span className="text-[8px] text-white/60 font-medium">50</span>
-          <span className="text-[8px] text-white/60 font-medium">75</span>
-          <span className="text-[8px] text-white/60 font-medium">100</span>
-        </div>
-      </div>
-
-      {/* Preview mapping */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {maps.map(m => {
-          const val = m.inverse ? pctTo5Inv(value) : pctTo5(value);
-          return (
-            <span
-              key={m.type}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground"
-            >
-              {m.label} <strong className="text-foreground">{val}/5</strong>
-            </span>
-          );
-        })}
-      </div>
-    </div>
+      <Icon className={`h-3.5 w-3.5 ${selected ? 'text-white/80' : option.color}`} />
+      <span className={`text-[10px] font-medium leading-tight ${selected ? 'text-white/90' : ''}`}>
+        {option.label}
+      </span>
+    </button>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Componente principale
+// Main component
 // ---------------------------------------------------------------------------
 
 export default function QuickCheckins({ userId }: { userId: number }) {
   const [checkins, setCheckins] = useState<QuickCheckin[]>([]);
-  const [step, setStep] = useState<'main' | 'followup' | 'done'>('main');
-  const [followUpIdx, setFollowUpIdx] = useState(0);
-  const [sliderValue, setSliderValue] = useState(50);
-  const [followUpSliderValue, setFollowUpSliderValue] = useState(50);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [selectedValue, setSelectedValue] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [allDone, setAllDone] = useState(false);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
 
+  // Load today's checkins
   const loadCheckins = useCallback(async () => {
     const items = await getTodayCheckins(userId);
     setCheckins(items);
@@ -328,160 +328,231 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   useEffect(() => { loadCheckins(); }, [loadCheckins]);
 
-  const hasAnsweredMain = useMemo(() => {
+  // Determine which types have been logged today (rated types, not counters)
+  const loggedTypes = useMemo(() => {
+    const rated = new Set<CheckinType>();
     const phaseStart = phase === 'morning' ? 5 : phase === 'midday' ? 11 : phase === 'afternoon' ? 14 : 18;
-    return checkins.some(c => {
-      if (c.type !== 'mood') return false;
+    for (const c of checkins) {
+      // For phase-specific checks, only count if logged during current phase
       const [h] = c.time.split(':').map(Number);
-      return h >= phaseStart;
-    });
+      if (h >= phaseStart) {
+        rated.add(c.type);
+      }
+      // Counters and some types count regardless of phase
+      if (['water', 'caffeine', 'supplement', 'screen_break'].includes(c.type)) {
+        rated.add(c.type);
+      }
+    }
+    return rated;
   }, [checkins, phase]);
 
-  useEffect(() => {
-    if (hasAnsweredMain) setStep('done');
-  }, [hasAnsweredMain]);
+  // Filter questions: skip already-logged and conditional skips
+  const activeQuestions = useMemo(() => {
+    return config.questions.filter(q => {
+      if (q.skipIfLogged && loggedTypes.has(q.type)) return false;
+      // Don't re-ask questions already answered this phase
+      if (loggedTypes.has(q.type)) return false;
+      return true;
+    });
+  }, [config.questions, loggedTypes]);
 
-  const getValue = (type: CheckinType): number => {
+  // Check if all phase questions are done
+  useEffect(() => {
+    if (activeQuestions.length === 0 && checkins.length > 0) {
+      setAllDone(true);
+    }
+  }, [activeQuestions, checkins]);
+
+  const currentQuestion = activeQuestions[currentIdx] ?? null;
+
+  // Counter value getter
+  const getCounterValue = (type: CheckinType): number => {
     return checkins
       .filter(c => c.type === type)
       .reduce((s, c) => s + c.value, 0);
   };
 
-  const saveFromSlider = async (maps: SliderMap[], pct: number) => {
-    for (const m of maps) {
-      const value = m.inverse ? pctTo5Inv(pct) : pctTo5(pct);
-      await addCheckin(userId, m.type, value);
-    }
+  // Save a rated answer and advance
+  const handleRate = async (value: number) => {
+    if (!currentQuestion || saving) return;
+    setSelectedValue(value);
+    setSaving(true);
+
+    // For inverse types (stress), the value is stored directly:
+    // 1 = high stress (bad), 5 = low stress (good)
+    // The UI labels already reflect this via INVERSE_RATINGS
+    await addCheckin(userId, currentQuestion.type, value);
     await loadCheckins();
+
+    // Brief visual feedback before advancing
+    setTimeout(() => {
+      setSaving(false);
+      setSelectedValue(null);
+      if (currentIdx + 1 < activeQuestions.length) {
+        setCurrentIdx(currentIdx + 1);
+      } else {
+        setAllDone(true);
+      }
+    }, 300);
   };
 
-  const handleMainConfirm = async () => {
-    await saveFromSlider(config.maps, sliderValue);
-    const applicableFollowUps = config.followUps.filter(
-      f => !f.condition || f.condition(checkins),
-    );
-    if (applicableFollowUps.length > 0) {
-      setFollowUpIdx(0);
-      setFollowUpSliderValue(50);
-      setStep('followup');
-    } else {
-      setStep('done');
-    }
-  };
-
-  const handleFollowUpConfirm = async () => {
-    const applicableFollowUps = config.followUps.filter(
-      f => !f.condition || f.condition(checkins),
-    );
-    const fu = applicableFollowUps[followUpIdx];
-    if (!fu) return;
-
-    await saveFromSlider(fu.maps, followUpSliderValue);
-
-    if (followUpIdx + 1 < applicableFollowUps.length) {
-      setFollowUpIdx(followUpIdx + 1);
-      setFollowUpSliderValue(50);
-    } else {
-      setStep('done');
-    }
-  };
-
+  // Counter increment
   const handleCounter = async (type: CheckinType) => {
     await addCheckin(userId, type, 1);
     await loadCheckins();
   };
 
-  const typesRecorded = new Set(checkins.map(c => c.type)).size;
+  // Reset to re-answer
+  const handleRestart = () => {
+    setAllDone(false);
+    setCurrentIdx(0);
+    setSelectedValue(null);
+  };
+
+  // Completion counts for the tracker
+  const allLoggedTypes = useMemo(() => {
+    return new Set(checkins.map(c => c.type));
+  }, [checkins]);
+
+  const PhaseIcon = config.icon;
+  const ratings = currentQuestion?.ratings ?? DEFAULT_RATINGS;
 
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
-        {/* Contatori inline — sempre visibili */}
-        <div className="flex items-center justify-around px-3 py-2.5 border-b border-border bg-muted/20">
+
+        {/* ---- Phase greeting + question area ---- */}
+        {!allDone && currentQuestion && (
+          <div className="px-4 pt-4 pb-3 space-y-3">
+            {/* Greeting */}
+            <div className="flex items-center gap-2">
+              <PhaseIcon className={`h-4 w-4 ${config.iconColor}`} />
+              <span className="text-sm font-semibold text-foreground">
+                {config.greeting}
+              </span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                {currentIdx + 1}/{activeQuestions.length}
+              </span>
+            </div>
+
+            {/* Question */}
+            <div className="flex items-center gap-2">
+              {(() => {
+                const QIcon = currentQuestion.icon;
+                return <QIcon className="h-4 w-4 text-muted-foreground shrink-0" />;
+              })()}
+              <p className="text-sm font-medium text-foreground">
+                {currentQuestion.question}
+              </p>
+            </div>
+
+            {/* 5-point tap rating */}
+            <div className="flex gap-1.5">
+              {ratings.map((opt) => (
+                <RatingButton
+                  key={opt.value}
+                  option={opt}
+                  selected={selectedValue === opt.value}
+                  onSelect={() => handleRate(opt.value)}
+                />
+              ))}
+            </div>
+
+            {/* Skip / advance hint */}
+            {activeQuestions.length > 1 && currentIdx < activeQuestions.length - 1 && (
+              <button
+                onClick={() => {
+                  setSelectedValue(null);
+                  setCurrentIdx(currentIdx + 1);
+                }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronRight className="h-3 w-3" />
+                Salta
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ---- Completion state ---- */}
+        {allDone && (
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center">
+                <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  Check-in completato
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {allLoggedTypes.size} parametri raccolti oggi
+                </p>
+              </div>
+              <button
+                onClick={handleRestart}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                Aggiorna
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ---- Quick counters ---- */}
+        <div className="flex items-center justify-around px-3 py-2 border-t border-border">
           {COUNTERS.map(counter => {
             const Icon = counter.icon;
-            const val = getValue(counter.type);
+            const val = getCounterValue(counter.type);
+            const hasValue = val > 0;
             return (
               <button
                 key={counter.type}
                 onClick={() => handleCounter(counter.type)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full hover:bg-muted/50 active:scale-95 transition-all"
+                className={`
+                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg
+                  transition-all active:scale-95
+                  ${hasValue ? counter.activeColor : 'hover:bg-muted/50'}
+                `}
               >
-                <Icon className="h-3.5 w-3.5" style={{ color: counter.color }} />
-                <span className="text-xs font-bold tabular-nums" style={{ color: counter.color }}>
+                <Icon className={`h-3.5 w-3.5 ${counter.color}`} />
+                <span className={`text-xs font-bold tabular-nums ${counter.color}`}>
                   {val}
                 </span>
                 {counter.target && (
                   <span className="text-[9px] text-muted-foreground">/{counter.target}</span>
                 )}
-                <span className="text-[10px] text-muted-foreground font-medium">+1</span>
               </button>
             );
           })}
         </div>
 
-        {/* Slider percentuale principale */}
-        {step === 'main' && (
-          <div className="px-4 py-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <Sun className="h-4 w-4 text-amber-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">{config.greeting}</p>
-                <p className="text-sm font-semibold">{config.mainQuestion}</p>
-              </div>
-            </div>
-            <PercentSlider
-              value={sliderValue}
-              onChange={setSliderValue}
-              onConfirm={handleMainConfirm}
-              maps={config.maps}
-            />
-          </div>
-        )}
+        {/* ---- Completion tracker ---- */}
+        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border bg-muted/20 flex-wrap">
+          {ALL_TRACKED_TYPES.map(({ type, label }) => {
+            const done = allLoggedTypes.has(type);
+            return (
+              <span
+                key={type}
+                className={`
+                  inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full
+                  ${done
+                    ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                    : 'bg-muted/50 text-muted-foreground'
+                  }
+                `}
+              >
+                {done ? (
+                  <Check className="h-2.5 w-2.5" />
+                ) : (
+                  <span className="w-2.5 h-2.5 rounded-full border border-current opacity-40" />
+                )}
+                {label}
+              </span>
+            );
+          })}
+        </div>
 
-        {/* Follow-up — anche questi con slider percentuale */}
-        {step === 'followup' && (() => {
-          const applicableFollowUps = config.followUps.filter(
-            f => !f.condition || f.condition(checkins),
-          );
-          const fu = applicableFollowUps[followUpIdx];
-          if (!fu) return null;
-          return (
-            <div className="px-4 py-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-sm font-medium">{fu.question}</p>
-              </div>
-              <PercentSlider
-                value={followUpSliderValue}
-                onChange={setFollowUpSliderValue}
-                onConfirm={handleFollowUpConfirm}
-                maps={fu.maps}
-                emojiMapper={fu.emojiMapper}
-                gradient={fu.gradient}
-                compact
-              />
-            </div>
-          );
-        })()}
-
-        {/* Stato completato */}
-        {step === 'done' && (
-          <div className="px-4 py-2.5 flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
-              <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
-            </div>
-            <p className="text-xs text-muted-foreground flex-1">
-              Check-in completato — {typesRecorded} parametri raccolti
-            </p>
-            <button
-              onClick={() => { setStep('main'); setSliderValue(50); setFollowUpSliderValue(50); }}
-              className="text-[10px] text-primary font-medium hover:underline"
-            >
-              Aggiorna
-            </button>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

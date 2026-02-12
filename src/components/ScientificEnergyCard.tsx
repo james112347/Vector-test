@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import {
   computeScientificEnergy,
   BOTTLENECK_LABELS,
+  BOTTLENECK_ACTIONS,
   CHRONOTYPE_LABELS,
   type EnergyBreakdown,
 } from '../lib/energy-engine';
@@ -284,6 +285,12 @@ export default function ScientificEnergyCard({ userId }: Props) {
             </div>
           </div>
         )}
+
+        {/* Actionable advice based on bottleneck */}
+        <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5">
+          <p className="text-[10px] font-semibold text-primary uppercase tracking-wide mb-1">Azione consigliata</p>
+          <p className="text-xs leading-relaxed">{BOTTLENECK_ACTIONS[breakdown.bottleneck]}</p>
+        </div>
 
         {/* Sleep debt */}
         {breakdown.sleepDebt > 2 && (
