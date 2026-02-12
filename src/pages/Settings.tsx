@@ -9,6 +9,7 @@ import { useAppSettings } from '../lib/useAppSettings';
 import { isNotificationSupported, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
 import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail, changePassword } from '../lib/auth';
 import { getAllUserActivity, type UserActivity } from '../lib/useActivityTracker';
+import { getSahhaQR, saveSahhaQR, deleteSahhaQR } from '../lib/qr-config';
 import { Input } from '../components/ui/input';
 import type { User } from '../db/schema';
 
@@ -280,6 +281,9 @@ export default function Settings() {
       {/* Install Help Modal */}
       {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}
 
+      {/* Sahha QR Code Section */}
+      <SahhaQRSection isAdmin={!!currentUser?.isAdmin} />
+
       {/* Novità e Aggiornamenti */}
       <ChangelogSection />
 
@@ -510,6 +514,224 @@ export default function Settings() {
       )}
     </div>
   );
+}
+
+function SahhaQRSection({ isAdmin }: { isAdmin: boolean }) {
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getSahhaQR().then(url => { setQrImage(url); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Seleziona un file immagine (JPG, PNG, ecc.)');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+    try {
+      // Compress and convert to base64
+      const dataUrl = await compressImage(file, 800, 0.85);
+      await saveSahhaQR(dataUrl);
+      setQrImage(dataUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Errore durante il caricamento.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async () => {
+    setUploading(true);
+    try {
+      await deleteSahhaQR();
+      setQrImage(null);
+    } catch {
+      setError('Errore durante la rimozione.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (loading) return null;
+  if (!qrImage && !isAdmin) return null;
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+            </div>
+            <CardTitle className="text-lg">Registrazione Sahha</CardTitle>
+          </div>
+          <CardDescription>Scansiona il QR per collegare il tuo account Sahha</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {qrImage ? (
+            <>
+              {/* Instructions */}
+              <div className="space-y-2.5">
+                <SahhaStep n={1}>
+                  Scarica l'app <strong>Sahha</strong> dal tuo store (
+                  <a href="https://apps.apple.com/app/sahha/id1615682279" target="_blank" rel="noopener noreferrer" className="text-primary underline">iOS</a>
+                  {' / '}
+                  <a href="https://play.google.com/store/apps/details?id=com.sahha.android" target="_blank" rel="noopener noreferrer" className="text-primary underline">Android</a>
+                  )
+                </SahhaStep>
+                <SahhaStep n={2}>
+                  Apri Sahha e tocca <strong>"Join a Project"</strong> o <strong>"Scansiona QR"</strong>
+                </SahhaStep>
+                <SahhaStep n={3}>
+                  Inquadra il codice QR qui sotto con la fotocamera di Sahha
+                </SahhaStep>
+              </div>
+
+              {/* QR Code */}
+              <button
+                onClick={() => setShowFullscreen(true)}
+                className="w-full flex flex-col items-center py-3"
+              >
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-border">
+                  <img
+                    src={qrImage}
+                    alt="QR Code Sahha"
+                    className="w-48 h-48 object-contain"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Tocca per ingrandire</p>
+              </button>
+
+              {/* Admin controls */}
+              {isAdmin && (
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-9"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    Sostituisci QR
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-9"
+                    onClick={handleDelete}
+                    disabled={uploading}
+                  >
+                    Rimuovi
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : isAdmin ? (
+            <div className="text-center py-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Carica il codice QR del tuo progetto Sahha per permettere agli utenti di registrarsi.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="h-10"
+              >
+                {uploading ? 'Caricamento...' : 'Carica QR Code'}
+              </Button>
+            </div>
+          ) : null}
+
+          {error && (
+            <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleUpload}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Fullscreen QR Modal */}
+      {showFullscreen && qrImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+          onClick={() => setShowFullscreen(false)}
+        >
+          <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <img
+              src={qrImage}
+              alt="QR Code Sahha"
+              className="w-full aspect-square object-contain"
+            />
+            <p className="text-center text-sm text-gray-600 mt-3">
+              Inquadra con l'app Sahha
+            </p>
+            <button
+              onClick={() => setShowFullscreen(false)}
+              className="w-full mt-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+            >
+              Chiudi
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SahhaStep({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold shrink-0">{n}</span>
+      <p className="text-sm text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+function compressImage(file: File, maxSize: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          if (width > height) { height = (height / width) * maxSize; width = maxSize; }
+          else { width = (width / height) * maxSize; height = maxSize; }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas non supportato')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Immagine non valida'));
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => reject(new Error('Errore lettura file'));
+    reader.readAsDataURL(file);
+  });
 }
 
 const CHANGELOG = [
