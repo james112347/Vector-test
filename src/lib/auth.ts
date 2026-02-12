@@ -168,7 +168,27 @@ export async function authenticateUser(email: string, password: string): Promise
     throw new Error('Email o password non validi.');
   }
 
-  const valid = await verifyPassword(password, user.passwordHash);
+  let valid = await verifyPassword(password, user.passwordHash);
+
+  // If local password fails, check if password was reset remotely via Supabase
+  if (!valid && supabase) {
+    const { data } = await supabase
+      .from('app_users')
+      .select('password_hash')
+      .eq('email', email)
+      .single();
+    if (data?.password_hash) {
+      valid = await verifyPassword(password, data.password_hash);
+      if (valid) {
+        // Sync the remotely-reset password to local DB
+        await db.users.update(user.id!, {
+          passwordHash: data.password_hash,
+          updatedAt: new Date(),
+        });
+      }
+    }
+  }
+
   if (!valid) {
     throw new Error('Email o password non validi.');
   }
@@ -360,18 +380,94 @@ export async function getPendingUsersCount(): Promise<number> {
 }
 
 /**
- * Reset a user's password by email.
- * Works locally — the user must be on the device where the account exists.
- * Clears existing sessions so the user must log in again.
+ * Request a password reset email.
+ * Calls the Supabase Edge Function which generates a token and sends an email.
+ * Always succeeds (for security — doesn't reveal if email exists).
  */
-export async function resetUserPassword(email: string, newPassword: string): Promise<void> {
-  const user = await db.users.where('email').equals(email).first();
-  if (!user) {
-    throw new Error('Nessun account trovato con questa email su questo dispositivo.');
+export async function requestPasswordReset(email: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Il servizio di reset password non e disponibile. Contatta l\'amministratore.');
   }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-reset-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${supabaseAnonKey}`,
+    },
+    body: JSON.stringify({ action: 'request', email: email.trim().toLowerCase() }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Errore durante l\'invio dell\'email.');
+  }
+}
+
+/**
+ * Validate a password reset token.
+ * Returns true if token is valid and not expired.
+ */
+export async function validateResetToken(email: string, token: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-reset-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${supabaseAnonKey}`,
+    },
+    body: JSON.stringify({ action: 'validate', email, token }),
+  });
+
+  if (!response.ok) return false;
+  const data = await response.json();
+  return data.valid === true;
+}
+
+/**
+ * Reset password using a valid token from the email link.
+ * Updates password both in Supabase (via Edge Function) and locally.
+ */
+export async function resetPasswordWithToken(
+  email: string,
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  if (!supabase) {
+    throw new Error('Il servizio di reset password non e disponibile.');
+  }
+
   const passwordHash = await hashPassword(newPassword);
-  await db.users.update(user.id!, { passwordHash, updatedAt: new Date() });
-  await db.sessions.where('userId').equals(user.id!).delete();
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-reset-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${supabaseAnonKey}`,
+    },
+    body: JSON.stringify({ action: 'reset', email, token, passwordHash }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Errore durante il reset della password.');
+  }
+
+  // Also update locally if user exists on this device
+  const user = await db.users.where('email').equals(email).first();
+  if (user) {
+    await db.users.update(user.id!, { passwordHash, updatedAt: new Date() });
+    await db.sessions.where('userId').equals(user.id!).delete();
+  }
 }
 
 /**

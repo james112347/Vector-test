@@ -104,3 +104,38 @@ create index if not exists idx_sahha_biomarkers_user_category
 alter table public.sahha_biomarkers enable row level security;
 create policy "sahha_biomarkers_all" on public.sahha_biomarkers
   for all using (true) with check (true);
+
+-- =============================================================
+-- Password Reset Tokens
+-- =============================================================
+
+-- Token per reset password via email
+create table if not exists public.password_resets (
+  id bigint generated always as identity primary key,
+  email text not null,
+  token text unique not null,
+  expires_at timestamptz not null,
+  used boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_password_resets_token
+  on public.password_resets (token) where not used;
+
+create index if not exists idx_password_resets_email
+  on public.password_resets (email);
+
+alter table public.password_resets enable row level security;
+
+-- Policy: l'app puo inserire e leggere token
+create policy "password_resets_insert" on public.password_resets
+  for insert with check (true);
+
+create policy "password_resets_select" on public.password_resets
+  for select using (true);
+
+create policy "password_resets_update" on public.password_resets
+  for update using (true);
+
+-- Colonna password_hash in app_users per sincronizzare le password tra dispositivi
+alter table public.app_users add column if not exists password_hash text;

@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import { useAuthActions } from '../contexts/AuthContext';
-import { resetUserPassword } from '../lib/auth';
+import { requestPasswordReset } from '../lib/auth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -15,8 +15,6 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetError, setResetError] = useState('');
   const { signIn } = useAuthActions();
@@ -47,21 +45,17 @@ export default function Login() {
     e.preventDefault();
     setResetError('');
 
-    if (newPassword.length < 6) {
-      setResetError('La password deve essere di almeno 6 caratteri.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setResetError('Le password non corrispondono.');
+    if (!resetEmail.trim()) {
+      setResetError('Inserisci la tua email.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await resetUserPassword(resetEmail, newPassword);
+      await requestPasswordReset(resetEmail);
       setResetSuccess(true);
     } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Errore durante il reset.');
+      setResetError(err instanceof Error ? err.message : 'Errore durante l\'invio.');
     } finally {
       setIsLoading(false);
     }
@@ -70,13 +64,8 @@ export default function Login() {
   const exitForgotMode = () => {
     setForgotMode(false);
     setResetEmail('');
-    setNewPassword('');
-    setConfirmPassword('');
     setResetError('');
     setResetSuccess(false);
-    if (resetSuccess) {
-      setEmail(resetEmail);
-    }
   };
 
   if (forgotMode) {
@@ -86,7 +75,7 @@ export default function Login() {
           <CardHeader>
             <CardTitle className="text-xl">Recupera password</CardTitle>
             <CardDescription>
-              Inserisci la tua email e imposta una nuova password
+              Ti invieremo un link per reimpostare la password
             </CardDescription>
           </CardHeader>
 
@@ -95,14 +84,18 @@ export default function Login() {
               <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4">
                 <div className="flex items-start gap-3">
                   <svg className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                   <div>
                     <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                      Password aggiornata!
+                      Email inviata!
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-                      Ora puoi accedere con la nuova password.
+                      Se l'indirizzo e registrato, riceverai un'email con il link per reimpostare
+                      la password. Controlla anche la cartella spam.
+                    </p>
+                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
+                      Il link scade tra 1 ora.
                     </p>
                   </div>
                 </div>
@@ -125,41 +118,26 @@ export default function Login() {
                     required
                     disabled={isLoading}
                     className="h-12 text-base"
+                    autoFocus
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">Nuova password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    placeholder="Minimo 6 caratteri"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    className="h-12 text-base"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Conferma nuova password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="Ripeti la password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    className="h-12 text-base"
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Riceverai un'email con un link per creare una nuova password.
+                </p>
                 {resetError && (
                   <p className="text-sm text-red-600 dark:text-red-400">{resetError}</p>
                 )}
               </CardContent>
               <CardFooter className="flex flex-col space-y-3 px-6 pt-6 pb-6">
                 <Button type="submit" className="w-full h-12 text-base" disabled={isLoading}>
-                  {isLoading ? 'Aggiornamento...' : 'Imposta nuova password'}
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Invio in corso...
+                    </span>
+                  ) : (
+                    'Invia link di reset'
+                  )}
                 </Button>
                 <button
                   type="button"

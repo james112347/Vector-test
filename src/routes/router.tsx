@@ -12,12 +12,14 @@ import Settings from '../pages/Settings';
 import AdminDashboard from '../pages/AdminDashboard';
 import ProfileEdit from '../pages/ProfileEdit';
 import FeedbackChat from '../pages/FeedbackChat';
+import ResetPassword from '../pages/ResetPassword';
 
 export const router = createBrowserRouter([
   // Public routes
   { path: '/login', element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/terms', element: <Terms /> },
+  { path: '/reset-password', element: <ResetPassword /> },
   // Protected routes
   {
     element: <ProtectedRoute />,
