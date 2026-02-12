@@ -7,7 +7,8 @@ import { useAuthState } from '../contexts/AuthContext';
 import { useDarkMode } from '../lib/useDarkMode';
 import { useAppSettings } from '../lib/useAppSettings';
 import { isNotificationSupported, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
-import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail } from '../lib/auth';
+import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail, changePassword } from '../lib/auth';
+import { Input } from '../components/ui/input';
 import type { User } from '../db/schema';
 
 export default function Settings() {
@@ -19,6 +20,13 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [pwdError, setPwdError] = useState('');
+  const [pwdSuccess, setPwdSuccess] = useState(false);
+  const [pwdLoading, setPwdLoading] = useState(false);
   const navigate = useNavigate();
 
   const loadUsers = async () => {
@@ -157,6 +165,69 @@ export default function Settings() {
                 </button>
               </div>
             </>
+          )}
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Password</p>
+              <p className="text-sm text-muted-foreground">Modifica la password del tuo account</p>
+            </div>
+            <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={() => { setShowChangePassword(!showChangePassword); setPwdError(''); setPwdSuccess(false); }}>
+              {showChangePassword ? 'Annulla' : 'Cambia'}
+            </Button>
+          </div>
+          {showChangePassword && (
+            <div className="space-y-3 pt-1">
+              <Input
+                type="password"
+                placeholder="Password attuale"
+                value={currentPwd}
+                onChange={e => setCurrentPwd(e.target.value)}
+                disabled={pwdLoading}
+                className="h-10"
+              />
+              <Input
+                type="password"
+                placeholder="Nuova password (min 6 caratteri)"
+                value={newPwd}
+                onChange={e => setNewPwd(e.target.value)}
+                disabled={pwdLoading}
+                className="h-10"
+              />
+              <Input
+                type="password"
+                placeholder="Conferma nuova password"
+                value={confirmPwd}
+                onChange={e => setConfirmPwd(e.target.value)}
+                disabled={pwdLoading}
+                className="h-10"
+              />
+              {pwdError && <p className="text-xs text-red-600 dark:text-red-400">{pwdError}</p>}
+              {pwdSuccess && <p className="text-xs text-green-600 dark:text-green-400">Password aggiornata con successo!</p>}
+              <Button
+                size="sm"
+                className="w-full h-10"
+                disabled={pwdLoading || !currentPwd || !newPwd || !confirmPwd}
+                onClick={async () => {
+                  setPwdError('');
+                  setPwdSuccess(false);
+                  if (newPwd !== confirmPwd) { setPwdError('Le password non corrispondono.'); return; }
+                  if (newPwd.length < 6) { setPwdError('La password deve avere almeno 6 caratteri.'); return; }
+                  setPwdLoading(true);
+                  try {
+                    await changePassword(currentUser!.id!, currentPwd, newPwd);
+                    setPwdSuccess(true);
+                    setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
+                  } catch (e) {
+                    setPwdError(e instanceof Error ? e.message : 'Errore durante il cambio password.');
+                  } finally {
+                    setPwdLoading(false);
+                  }
+                }}
+              >
+                {pwdLoading ? 'Aggiornamento...' : 'Aggiorna password'}
+              </Button>
+            </div>
           )}
           <Separator />
           <div className="flex items-center justify-between">

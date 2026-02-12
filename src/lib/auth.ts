@@ -379,109 +379,59 @@ export async function getPendingUsersCount(): Promise<number> {
   return db.users.filter(u => !u.isApproved).count();
 }
 
-/**
- * Request a password reset email.
- * Calls the Supabase Edge Function which generates a token and sends an email.
- * Always succeeds (for security — doesn't reveal if email exists).
- */
-export async function requestPasswordReset(email: string): Promise<void> {
-  if (!supabase) {
-    throw new Error('Il servizio di reset password non e disponibile. Contatta l\'amministratore.');
-  }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/send-reset-email`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    },
-    body: JSON.stringify({ action: 'request', email: email.trim().toLowerCase() }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Errore durante l\'invio dell\'email.');
-  }
-}
 
 /**
- * Validate a password reset token.
- * Returns true if token is valid and not expired.
+ * Admin: reset a user's password to a temporary value.
+ * Syncs the new password hash to Supabase so the user can log in from any device.
  */
-export async function validateResetToken(email: string, token: string): Promise<boolean> {
-  if (!supabase) return false;
+export async function adminResetPassword(email: string, tempPassword: string): Promise<void> {
+  const passwordHash = await hashPassword(tempPassword);
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/send-reset-email`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    },
-    body: JSON.stringify({ action: 'validate', email, token }),
-  });
-
-  if (!response.ok) return false;
-  const data = await response.json();
-  return data.valid === true;
-}
-
-/**
- * Reset password using a valid token from the email link.
- * Updates password both in Supabase (via Edge Function) and locally.
- */
-export async function resetPasswordWithToken(
-  email: string,
-  token: string,
-  newPassword: string,
-): Promise<void> {
-  if (!supabase) {
-    throw new Error('Il servizio di reset password non e disponibile.');
-  }
-
-  const passwordHash = await hashPassword(newPassword);
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/send-reset-email`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    },
-    body: JSON.stringify({ action: 'reset', email, token, passwordHash }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Errore durante il reset della password.');
-  }
-
-  // Also update locally if user exists on this device
+  // Update locally if user exists on this device
   const user = await db.users.where('email').equals(email).first();
   if (user) {
     await db.users.update(user.id!, { passwordHash, updatedAt: new Date() });
     await db.sessions.where('userId').equals(user.id!).delete();
   }
+
+  // Sync to Supabase (so user can log in from any device with the new password)
+  if (supabase) {
+    const { error } = await supabase
+      .from('app_users')
+      .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+      .eq('email', email);
+    if (error) throw new Error(`Errore sincronizzazione password: ${error.message}`);
+  }
 }
 
 /**
- * Admin: reset a user's password to a temporary value.
- * Only works if the user account exists locally.
+ * Change password for the currently logged-in user.
+ * Verifies the old password before setting the new one.
+ * Syncs to Supabase for cross-device access.
  */
-export async function adminResetPassword(email: string, tempPassword: string): Promise<void> {
-  const user = await db.users.where('email').equals(email).first();
-  if (!user) {
-    throw new Error('Account non presente localmente. Il reset funziona solo sullo stesso dispositivo.');
+export async function changePassword(
+  userId: number,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const user = await db.users.get(userId);
+  if (!user) throw new Error('Utente non trovato.');
+
+  const valid = await verifyPassword(currentPassword, user.passwordHash);
+  if (!valid) throw new Error('La password attuale non e corretta.');
+
+  if (newPassword.length < 6) throw new Error('La nuova password deve avere almeno 6 caratteri.');
+
+  const passwordHash = await hashPassword(newPassword);
+  await db.users.update(userId, { passwordHash, updatedAt: new Date() });
+
+  // Sync to Supabase
+  if (supabase) {
+    await supabase
+      .from('app_users')
+      .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+      .eq('email', user.email);
   }
-  const passwordHash = await hashPassword(tempPassword);
-  await db.users.update(user.id!, { passwordHash, updatedAt: new Date() });
-  await db.sessions.where('userId').equals(user.id!).delete();
 }
 
 /**
