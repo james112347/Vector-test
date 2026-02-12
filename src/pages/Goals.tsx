@@ -5,7 +5,6 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useAuthState } from '../contexts/AuthContext';
 import {
-  getActiveGoals,
   getAllGoals,
   createGoal,
   deleteGoal,
@@ -39,7 +38,6 @@ import {
   Trash2,
   Flame,
   Trophy,
-  TrendingUp,
   ChevronDown,
   ChevronUp,
   Sparkles,

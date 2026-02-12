@@ -466,8 +466,8 @@ async function getGoalApiKey(): Promise<string | null> {
         .select('value')
         .eq('key', 'groq_api_key')
         .single();
-      _cachedApiKey = data?.value || null;
-      return _cachedApiKey;
+      _cachedApiKey = data?.value ?? null;
+      return _cachedApiKey as string | null;
     } catch { /* no key */ }
   }
   _cachedApiKey = null;

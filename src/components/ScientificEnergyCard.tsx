@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Moon,
   Sun,
-  Droplets,
   AlertTriangle,
   TrendingUp,
   Brain,
@@ -121,7 +120,6 @@ function PredictedCurve({ curve, currentScore }: { curve: number[]; currentScore
 
   // Find best and worst hour
   const bestIdx = allValues.indexOf(Math.max(...allValues));
-  const worstIdx = allValues.indexOf(Math.min(...allValues.slice(1))) + (allValues.indexOf(Math.min(...allValues.slice(1))) >= 0 ? 0 : 0);
 
   return (
     <div className="mt-3">

@@ -81,14 +81,12 @@ export interface EnergyBreakdown {
 
 /** Borbely Two-Process Model time constants */
 const TAU_WAKE = 18.2;   // hours — homeostatic pressure build-up during wake
-const TAU_SLEEP = 4.2;   // hours — pressure dissipation during sleep
 
 /** Van Dongen critical wakefulness threshold */
 const CRITICAL_WAKEFULNESS_H = 15.84;
 
 /** Sleep parameters */
 const OPTIMAL_SLEEP_H = 8;
-const SLEEP_DEBT_RECOVERY_RATE = 0.5; // 50% of debt recoverable per good night
 
 /** Caffeine pharmacokinetics (Nehlig 2018) */
 const CAFFEINE_HALF_LIFE_H = 5;       // mean
@@ -419,9 +417,7 @@ interface SleepAnalysis {
   explanation: string;
 }
 
-async function analyzeSleep(data: AllData, chronotype: Chronotype): Promise<SleepAnalysis> {
-  const today = todayStr();
-
+async function analyzeSleep(data: AllData, _chronotype: Chronotype): Promise<SleepAnalysis> {
   // 1. Last night quality from today's checkin
   const sleepCheckins = data.todayCheckins.filter(c => c.type === 'sleep_quality');
   const lastNightQuality = sleepCheckins.length > 0
@@ -1019,7 +1015,7 @@ function identifyBottleneck(
   sleepAnalysis: SleepAnalysis,
   lifestyleAnalysis: LifestyleAnalysis,
   allostaticAnalysis: AllostaticAnalysis,
-  circadianScore: number,
+  _circadianScore: number,
 ): Bottleneck {
   const issues: { type: Bottleneck; severity: number }[] = [];
 
