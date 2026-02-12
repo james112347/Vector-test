@@ -1,31 +1,52 @@
 // ---------------------------------------------------------------------------
-// Scientific Energy Engine — Modello energetico basato su evidenze scientifiche
+// Scientific Energy Engine v2 — Modello energetico basato su evidenze scientifiche
 //
-// Componenti del punteggio (0-100):
-//   1. Circadiano (0-25): cronobiologia, ritmi ultradiani, cronotipo
-//   2. Sonno (0-25): durata, qualita, debito cumulativo
-//   3. Stile di vita (0-25): idratazione, nutrizione, caffeina, attivita
-//   4. Carico allostatico (0-25): stress, ore lavoro, recupero, trend
+// Architettura: Modello moltiplicativo con interazioni tra componenti
+//   1. Circadiano (0-25): Two-Process Model (Borbely), BRAC, post-prandiale
+//   2. Sonno (0-25): Process S, durata, qualita, debito Van Dongen, nap recovery
+//   3. Stile di vita (0-25): idratazione (peso-based), nutrizione (macro GI),
+//      caffeina (farmacocinetica), attivita (POMS), fumo, alcol, screen time
+//   4. Carico allostatico (0-25): McEwen model, HRV proxy, stress cumulativo,
+//      burnout risk, recovery deficit, emotional drain
+//
+// Penalita di interazione: quando multipli componenti sono bassi, il declino
+// e' piu che additivo (effetto moltiplicativo della fatica).
 //
 // Riferimenti scientifici:
-//   - Cortisol Awakening Response: Fries et al. 2009, Psychoneuroendocrinology
-//   - Ultradian rhythms: Kleitman 1963, BRAC cycles
-//   - Chronotypes: Breus 2016 (Lion/Bear/Wolf/Dolphin)
-//   - Sleep debt: Van Dongen et al. 2003, Sleep
-//   - Post-prandial somnolence: Carskadon & Dement, circadian dip
-//   - Caffeine half-life: Nehlig 2018, ~5h mean, CYP1A2 variation
-//   - Allostatic load: McEwen 1998, NEJM
+//   - Two-Process Model: Borbely 1982, Process S τw=18.2h τs=4.2h
+//   - Chronotypes: Breus 2016 (Lion/Bear/Wolf/Dolphin), MEQ scoring
+//   - Sleep debt: Van Dongen et al. 2003, >15.84h wakefulness critical
+//   - Caffeine: Nehlig 2018, t½=5h mean (1.5-9.5h CYP1A2), A2A antagonism
+//   - Post-prandial: 12h harmonic of circadian temp rhythm, GI effect
+//   - Hydration: Ganio 2011, 1-2% BW loss → ES=-0.14 attention
+//   - Exercise/POMS: 10min acute vigor boost, 30-60min recovery
+//   - HRV: SDNN<50ms high stress, >100ms healthy (Shaffer 2017)
+//   - Allostatic load: McEwen 1998, 2003, 4 profiles
+//   - BRAC: Kleitman 1963, 90-120min ultradian cycles
+//   - Cortisol Awakening Response: Fries 2009, +15% first 30min
 // ---------------------------------------------------------------------------
 
 import { db } from '../db/db';
-import type { ScientificEnergyScore, UserProfile, EnergyLog, QuickCheckin, FoodLog } from '../db/schema';
+import type {
+  ScientificEnergyScore,
+  UserProfile,
+  EnergyLog,
+  QuickCheckin,
+  FoodLog,
+  SahhaBiomarkerLog,
+  SahhaScoreLog,
+  ScreenTimeLog,
+} from '../db/schema';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export type Chronotype = 'lion' | 'bear' | 'wolf' | 'dolphin';
-export type Bottleneck = 'sleep' | 'hydration' | 'nutrition' | 'stress' | 'overwork' | 'inactivity' | 'none';
+export type Bottleneck =
+  | 'sleep' | 'hydration' | 'nutrition' | 'stress'
+  | 'overwork' | 'inactivity' | 'caffeine_late' | 'screen_fatigue'
+  | 'burnout_risk' | 'sleep_debt' | 'none';
 
 export interface EnergyBreakdown {
   overall: number;          // 0-100
@@ -34,33 +55,71 @@ export interface EnergyBreakdown {
   lifestyle: number;        // 0-25
   allostatic: number;       // 0-25
   chronotype: Chronotype;
-  predictedCurve: number[]; // 6 values (next 6 hours)
+  predictedCurve: number[]; // 12 values (next 12 hours)
   bottleneck: Bottleneck;
-  sleepDebt: number;        // ore
-  factors: Record<string, number>; // dettagli per spiegazione
+  sleepDebt: number;        // ore cumulative
+  // New precision data
+  processS: number;         // Homeostatic sleep pressure 0-1
+  processC: number;         // Circadian alertness 0-1
+  hoursAwake: number;       // Hours since detected wake
+  wakeTime: number;         // Detected wake hour (e.g. 7.5 = 7:30)
+  interactionPenalty: number; // Cross-component penalty applied
+  // Component explanations (Italian, for UI)
+  explanations: {
+    circadian: string;
+    sleep: string;
+    lifestyle: string;
+    allostatic: string;
+  };
+  // Detailed factors for AI and debug
+  factors: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
-// Costanti scientifiche
+// Scientific Constants
 // ---------------------------------------------------------------------------
 
-/** Ore di sonno ottimali per adulti (NSF: 7-9h, media 8h) */
-const OPTIMAL_SLEEP_HOURS = 8;
+/** Borbely Two-Process Model time constants */
+const TAU_WAKE = 18.2;   // hours — homeostatic pressure build-up during wake
+const TAU_SLEEP = 4.2;   // hours — pressure dissipation during sleep
 
-/** Emivita media caffeina in ore (Nehlig 2018) */
-const CAFFEINE_HALF_LIFE_HOURS = 5;
+/** Van Dongen critical wakefulness threshold */
+const CRITICAL_WAKEFULNESS_H = 15.84;
 
-/** Curve circadiane per cronotipo (0-24h, valori 0-1 normalizzati).
- *  Basate su cortisol + core body temp + alertness studies. */
-const CIRCADIAN_CURVES: Record<Chronotype, number[]> = {
-  // Lion (early bird): picco 6-10, calo 14-16, leggero recupero 17-19
-  lion:    [0.15, 0.10, 0.10, 0.12, 0.20, 0.45, 0.75, 0.90, 0.95, 1.00, 0.92, 0.85, 0.75, 0.55, 0.45, 0.50, 0.55, 0.60, 0.50, 0.40, 0.30, 0.25, 0.20, 0.15],
-  // Bear (standard): segue il sole, picco 9-13, post-lunch dip, recupero 16-18
-  bear:    [0.10, 0.08, 0.08, 0.10, 0.15, 0.30, 0.50, 0.70, 0.85, 0.92, 0.95, 1.00, 0.90, 0.65, 0.55, 0.60, 0.70, 0.75, 0.65, 0.50, 0.35, 0.25, 0.15, 0.10],
-  // Wolf (night owl): lento la mattina, picco 12-14 e 17-21
-  wolf:    [0.20, 0.15, 0.12, 0.10, 0.10, 0.15, 0.25, 0.35, 0.50, 0.60, 0.70, 0.80, 0.90, 0.85, 0.75, 0.80, 0.88, 0.95, 1.00, 0.92, 0.80, 0.65, 0.45, 0.30],
-  // Dolphin (light sleeper): irregolare, picco 10-14, brevi finestre
-  dolphin: [0.20, 0.15, 0.15, 0.12, 0.15, 0.25, 0.40, 0.55, 0.65, 0.75, 0.85, 0.90, 0.92, 0.80, 0.65, 0.70, 0.80, 0.85, 0.75, 0.60, 0.50, 0.40, 0.30, 0.25],
+/** Sleep parameters */
+const OPTIMAL_SLEEP_H = 8;
+const SLEEP_DEBT_RECOVERY_RATE = 0.5; // 50% of debt recoverable per good night
+
+/** Caffeine pharmacokinetics (Nehlig 2018) */
+const CAFFEINE_HALF_LIFE_H = 5;       // mean
+const CAFFEINE_MG_PER_ESPRESSO = 80;  // mg per espresso/tazzina
+const CAFFEINE_LATE_CUTOFF = 14;       // after 14:00, caffeine has sleep impact
+
+/** Hydration (Ganio 2011 meta-analysis) */
+const HYDRATION_ML_PER_KG = 33;       // daily requirement ml per kg body weight
+const GLASS_ML = 250;                 // ml per standard glass
+
+/** Ultradian BRAC cycle (Kleitman) */
+const BRAC_PERIOD_MIN = 100;          // minutes per cycle
+const BRAC_REST_PHASE_MIN = 20;       // rest phase duration
+
+/** Post-prandial dip parameters */
+const PP_DIP_DELAY_H = 2;             // hours after meal for peak dip
+const PP_DIP_SIGMA = 0.7;             // Gaussian width in hours
+const PP_DIP_MAX_PENALTY = 0.12;      // max alertness reduction
+
+/** Cortisol Awakening Response */
+const CAR_PEAK_MIN = 30;              // minutes after wake for CAR peak
+const CAR_BOOST = 0.10;               // 10% alertness boost
+
+/** Chronotype circadian parameters: peak alertness hour, amplitude, baseline */
+const CHRONO_PARAMS: Record<Chronotype, {
+  peak: number; amplitude: number; base: number; typicalWake: number;
+}> = {
+  lion:    { peak: 8,  amplitude: 0.40, base: 0.55, typicalWake: 5.5 },
+  bear:    { peak: 11, amplitude: 0.35, base: 0.60, typicalWake: 7.0 },
+  wolf:    { peak: 18, amplitude: 0.35, base: 0.55, typicalWake: 9.0 },
+  dolphin: { peak: 12, amplitude: 0.25, base: 0.50, typicalWake: 7.5 },
 };
 
 // ---------------------------------------------------------------------------
@@ -85,334 +144,811 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function gaussian(x: number, mu: number, sigma: number): number {
+  return Math.exp(-((x - mu) ** 2) / (2 * sigma ** 2));
+}
+
+function timeToDecimal(timeStr: string): number {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h + (m || 0) / 60;
+}
+
 // ---------------------------------------------------------------------------
-// 1. Stima cronotipo dal profilo utente
+// 1. Chronotype Estimation (enhanced)
 // ---------------------------------------------------------------------------
 
 export function estimateChronotype(profile: UserProfile | null): Chronotype {
-  if (!profile) return 'bear'; // default piu comune (55% pop.)
+  if (!profile) return 'bear';
 
   const age = new Date().getFullYear() - profile.birthYear;
   const pattern = profile.energyPattern;
   const sleepHours = profile.sleepHours;
   const schedule = profile.workSchedule;
+  const activity = profile.activityLevel;
 
-  // Euristica basata su pattern dichiarato + eta + sonno
-  if (pattern === 'morning') {
-    return age > 50 || sleepHours <= 6.5 ? 'lion' : 'lion';
-  }
-  if (pattern === 'evening') {
-    return 'wolf';
-  }
+  // Direct mapping from declared pattern
+  if (pattern === 'morning') return age > 50 || sleepHours <= 6.5 ? 'lion' : 'lion';
+  if (pattern === 'evening') return 'wolf';
   if (pattern === 'variable' || schedule === 'irregular' || schedule === 'shifts') {
     return sleepHours < 6 ? 'dolphin' : 'bear';
   }
 
-  // Default per eta
-  if (age < 25) return 'wolf';  // giovani tendono a wolf
-  if (age > 55) return 'lion';  // anziani tendono a lion
-  return 'bear';
+  // Age-based heuristic (MEQ correlation)
+  if (age < 22) return 'wolf';   // adolescents/young adults tend wolf
+  if (age > 55) return 'lion';   // older adults tend lion
+  if (activity === 'very_active' && age > 30) return 'lion'; // active older → morning
+  return 'bear';                  // 55% population default
 }
 
 // ---------------------------------------------------------------------------
-// 2. Componente circadiana (0-25)
+// 2. Comprehensive Data Gathering
 // ---------------------------------------------------------------------------
 
-function computeCircadianScore(chronotype: Chronotype, hour: number): number {
-  const curve = CIRCADIAN_CURVES[chronotype];
-  const h = Math.floor(hour) % 24;
-  const frac = hour - Math.floor(hour);
-  const current = lerp(curve[h], curve[(h + 1) % 24], frac);
+interface AllData {
+  profile: UserProfile | null;
+  todayCheckins: QuickCheckin[];
+  recentCheckins: QuickCheckin[];         // 7 days
+  todayFoodLogs: FoodLog[];
+  recentFoodLogs: FoodLog[];              // 7 days
+  recentEnergyLogs: EnergyLog[];          // 7 days
+  todayEnergyLog: EnergyLog | null;
+  screenTime: ScreenTimeLog | null;
+  sahhaBiomarkers: SahhaBiomarkerLog[];   // recent
+  sahhaScores: SahhaScoreLog[];           // recent
+}
 
-  // Post-prandial dip penalty (13:00-15:00) — Carskadon & Dement
-  let postPrandialPenalty = 0;
-  if (hour >= 13 && hour <= 15) {
-    const dipCenter = 14;
-    const dist = Math.abs(hour - dipCenter);
-    postPrandialPenalty = Math.max(0, 0.08 * (1 - dist));
+async function gatherAllData(userId: number): Promise<AllData> {
+  const today = todayStr();
+  const weekAgo = daysAgoStr(7);
+
+  const [
+    profile,
+    todayCheckins,
+    recentCheckins,
+    todayFoodLogs,
+    recentFoodLogs,
+    recentEnergyLogs,
+    todayEnergyLog,
+    screenTime,
+    sahhaBiomarkers,
+    sahhaScores,
+  ] = await Promise.all([
+    db.userProfiles.where('userId').equals(userId).first().then(p => p ?? null),
+    db.quickCheckins.where('[userId+date]').equals([userId, today]).toArray(),
+    db.quickCheckins.where('userId').equals(userId).and(c => c.date >= weekAgo).toArray(),
+    db.foodLogs.where('[userId+date]').equals([userId, today]).toArray().catch(() => [] as FoodLog[]),
+    db.foodLogs.where('userId').equals(userId).and(f => f.date >= weekAgo).toArray().catch(() => [] as FoodLog[]),
+    db.energyLogs.where('userId').equals(userId).and(l => l.date >= weekAgo).toArray(),
+    db.energyLogs.where('[userId+date]').equals([userId, today]).first().then(l => l ?? null),
+    db.screenTimeLogs.where('[userId+date]').equals([userId, today]).first().then(s => s ?? null).catch(() => null),
+    db.sahhaBiomarkers.where('userId').equals(userId)
+      .and(b => b.startDateTime >= weekAgo).toArray().catch(() => [] as SahhaBiomarkerLog[]),
+    db.sahhaScores.where('userId').equals(userId).toArray().catch(() => [] as SahhaScoreLog[]),
+  ]);
+
+  recentEnergyLogs.sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    profile, todayCheckins, recentCheckins, todayFoodLogs, recentFoodLogs,
+    recentEnergyLogs, todayEnergyLog, screenTime, sahhaBiomarkers, sahhaScores,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 3. Routine Detection
+// ---------------------------------------------------------------------------
+
+interface DetectedRoutine {
+  wakeTime: number;         // decimal hour
+  mealTimes: number[];      // decimal hours of today's meals
+  mealGIEstimates: number[]; // estimated glycemic load per meal (0-1)
+  workStartEstimate: number;
+  lastActivityTime: number | null;
+}
+
+function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
+  const params = CHRONO_PARAMS[chronotype];
+
+  // Detect wake time from earliest checkin today
+  let wakeTime = params.typicalWake;
+  if (data.todayCheckins.length > 0) {
+    const sorted = [...data.todayCheckins].sort((a, b) => a.time.localeCompare(b.time));
+    const earliest = timeToDecimal(sorted[0].time);
+    // Earliest checkin is likely shortly after waking
+    if (earliest >= 4 && earliest <= 13) {
+      wakeTime = Math.max(earliest - 0.25, 4); // assume woke ~15min before first checkin
+    }
   }
 
-  return clamp(Math.round((current - postPrandialPenalty) * 25), 0, 25);
+  // Detect meal times from food scanner + meal_time checkins
+  const mealTimes: number[] = [];
+  const mealGIs: number[] = [];
+
+  for (const food of data.todayFoodLogs) {
+    const t = timeToDecimal(food.time);
+    mealTimes.push(t);
+    // Estimate glycemic load from macro ratio
+    // High carb:fat ratio → higher GI response
+    const total = food.totalCarbs + food.totalFat + food.totalProtein;
+    const carbRatio = total > 0 ? food.totalCarbs / total : 0.5;
+    const gi = clamp(carbRatio * 1.2, 0, 1); // rough GI estimate
+    mealGIs.push(gi);
+  }
+
+  // Also check meal_time checkins for timing
+  const mealCheckins = data.todayCheckins.filter(c => c.type === 'meal_time');
+  for (const mc of mealCheckins) {
+    const t = timeToDecimal(mc.time);
+    if (!mealTimes.some(mt => Math.abs(mt - t) < 0.5)) {
+      mealTimes.push(t);
+      mealGIs.push(0.5); // default moderate GI
+    }
+  }
+
+  // Work start estimate
+  const workStart = wakeTime + 1.5; // typically 1.5h after wake
+
+  // Last activity time
+  const actCheckins = data.todayCheckins.filter(c => c.type === 'activity_done');
+  const lastAct = actCheckins.length > 0
+    ? timeToDecimal(actCheckins[actCheckins.length - 1].time)
+    : null;
+
+  return {
+    wakeTime,
+    mealTimes,
+    mealGIEstimates: mealGIs,
+    workStartEstimate: workStart,
+    lastActivityTime: lastAct,
+  };
 }
 
 // ---------------------------------------------------------------------------
-// 3. Componente sonno (0-25)
+// 4. Circadian Component (0-25)
+//    Two-Process Model + Ultradian BRAC + Post-prandial + CAR
 // ---------------------------------------------------------------------------
 
-interface SleepData {
-  lastNightQuality: number | null;  // 1-5 checkin
-  lastNightHours: number | null;    // da biomarker o profilo
-  sleepDebt: number;                // ore cumulative rolling 7gg
+function computeCircadianAlertness(chronotype: Chronotype, hour: number): number {
+  const p = CHRONO_PARAMS[chronotype];
+  // Primary circadian wave (24h cosine centered on peak)
+  const primary = p.base + p.amplitude * Math.cos((2 * Math.PI / 24) * (hour - p.peak));
+  // 12h harmonic — models the natural post-lunch dip seen in body temperature rhythm
+  const harmonic12h = 0.06 * Math.cos((2 * Math.PI / 12) * (hour - p.peak));
+  return clamp(primary - harmonic12h, 0.05, 1);
 }
 
-async function gatherSleepData(userId: number, profile: UserProfile | null): Promise<SleepData> {
+function computeProcessS(hoursAwake: number, sleepQuality01: number): number {
+  // Homeostatic sleep pressure: builds exponentially during wake
+  // S(t) = UA - (UA - S0) * exp(-t/τw)
+  // S0 is initial pressure after sleep (lower = better sleep)
+  const S0 = 0.1 + (1 - sleepQuality01) * 0.3; // 0.1 (perfect sleep) to 0.4 (terrible)
+  const pressure = 1 - (1 - S0) * Math.exp(-hoursAwake / TAU_WAKE);
+  return clamp(pressure, 0, 1);
+}
+
+function computeUltradianMod(minutesSinceWake: number): number {
+  // BRAC: 90-120 min cycles with 20 min rest phases
+  const cyclePos = minutesSinceWake % BRAC_PERIOD_MIN;
+  // Active phase: 0-80min → positive, Rest phase: 80-100min → dip
+  if (cyclePos < (BRAC_PERIOD_MIN - BRAC_REST_PHASE_MIN)) {
+    return 0.02 * Math.sin((Math.PI * cyclePos) / (BRAC_PERIOD_MIN - BRAC_REST_PHASE_MIN));
+  }
+  // Rest phase: small dip
+  const restPos = cyclePos - (BRAC_PERIOD_MIN - BRAC_REST_PHASE_MIN);
+  return -0.03 * Math.sin((Math.PI * restPos) / BRAC_REST_PHASE_MIN);
+}
+
+function computePostPrandialDip(hour: number, mealTimes: number[], mealGIs: number[]): number {
+  // Gaussian dip for each meal, amplitude depends on GI estimate
+  let totalDip = 0;
+  for (let i = 0; i < mealTimes.length; i++) {
+    const mealTime = mealTimes[i];
+    const gi = mealGIs[i] ?? 0.5;
+    const dipCenter = mealTime + PP_DIP_DELAY_H;
+    const amplitude = PP_DIP_MAX_PENALTY * (0.5 + gi * 0.5); // higher GI → worse dip
+    totalDip += amplitude * gaussian(hour, dipCenter, PP_DIP_SIGMA);
+  }
+  // Also add innate circadian dip even without meal (14:00-15:00)
+  totalDip += 0.04 * gaussian(hour, 14.5, 1.0);
+  return clamp(totalDip, 0, 0.20);
+}
+
+function computeCortisalAwakenResponse(minutesSinceWake: number): number {
+  // CAR: cortisol surge in first ~30 minutes after wake → alertness boost
+  if (minutesSinceWake < 0 || minutesSinceWake > 60) return 0;
+  return CAR_BOOST * gaussian(minutesSinceWake, CAR_PEAK_MIN, 15);
+}
+
+function computeCircadianScore(
+  chronotype: Chronotype,
+  currentHour: number,
+  hoursAwake: number,
+  sleepQuality01: number,
+  routine: DetectedRoutine,
+): { score: number; processC: number; processS: number; explanation: string } {
+  // Process C: circadian alertness
+  const processC = computeCircadianAlertness(chronotype, currentHour);
+
+  // Process S: homeostatic sleep pressure
+  const processS = computeProcessS(hoursAwake, sleepQuality01);
+
+  // Ultradian modulation
+  const minutesSinceWake = hoursAwake * 60;
+  const ultradianMod = computeUltradianMod(minutesSinceWake);
+
+  // Post-prandial dip
+  const ppDip = computePostPrandialDip(currentHour, routine.mealTimes, routine.mealGIEstimates);
+
+  // Cortisol Awakening Response
+  const car = computeCortisalAwakenResponse(minutesSinceWake);
+
+  // Combined alertness: high processC and low processS = high alertness
+  // Alertness = C - weight*S + modifiers
+  const alertness = clamp(processC - processS * 0.35 + ultradianMod - ppDip + car, 0.05, 1);
+
+  // Scale to 0-25
+  const score = clamp(Math.round(alertness * 25), 0, 25);
+
+  // Explanation
+  const explanations: string[] = [];
+  if (processC > 0.7) explanations.push('fase circadiana favorevole');
+  else if (processC < 0.4) explanations.push('fase circadiana bassa');
+  if (hoursAwake > CRITICAL_WAKEFULNESS_H) explanations.push(`sveglio da ${hoursAwake.toFixed(1)}h (>15.8h critico)`);
+  if (ppDip > 0.05) explanations.push('calo post-prandiale in corso');
+  if (car > 0.02) explanations.push('risposta cortisolo mattutino attiva');
+
+  const chrName = CHRONOTYPE_LABELS[chronotype].name;
+  const explanation = explanations.length > 0
+    ? `Cronotipo ${chrName}: ${explanations.join(', ')}`
+    : `Cronotipo ${chrName}: ritmo circadiano nella norma`;
+
+  return { score, processC, processS, explanation };
+}
+
+// ---------------------------------------------------------------------------
+// 5. Sleep Component (0-25)
+//    Quality + Duration + Cumulative Debt (Van Dongen) + Nap Recovery
+// ---------------------------------------------------------------------------
+
+interface SleepAnalysis {
+  score: number;
+  sleepDebt: number;
+  lastNightQuality: number | null;   // 1-5
+  lastNightHours: number | null;
+  napRecovery: number;               // hours recovered from naps
+  explanation: string;
+}
+
+async function analyzeSleep(data: AllData, chronotype: Chronotype): Promise<SleepAnalysis> {
   const today = todayStr();
-  const yesterday = daysAgoStr(1);
 
-  // Qualita sonno da checkin di oggi (spesso registrata la mattina)
-  const sleepCheckins = await db.quickCheckins
-    .where('[userId+date]')
-    .equals([userId, today])
-    .and(c => c.type === 'sleep_quality')
-    .toArray();
+  // 1. Last night quality from today's checkin
+  const sleepCheckins = data.todayCheckins.filter(c => c.type === 'sleep_quality');
   const lastNightQuality = sleepCheckins.length > 0
     ? sleepCheckins[sleepCheckins.length - 1].value
     : null;
 
-  // Durata sonno da biomarker Sahha
+  // 2. Duration from Sahha biomarker or profile fallback
   let lastNightHours: number | null = null;
-  try {
-    const sleepBio = await db.sahhaBiomarkers
-      .where('userId').equals(userId)
-      .and(b => b.type === 'sleep_duration' && b.startDateTime >= yesterday)
-      .last();
-    if (sleepBio) {
-      lastNightHours = parseFloat(sleepBio.value) / 60; // min -> ore
-    }
-  } catch { /* nessun dato biometrico */ }
-
-  // Fallback alle ore dichiarate nel profilo
-  if (lastNightHours == null && profile) {
-    lastNightHours = profile.sleepHours;
+  const sleepBio = data.sahhaBiomarkers
+    .filter(b => b.type === 'sleep_duration')
+    .sort((a, b) => b.startDateTime.localeCompare(a.startDateTime))[0];
+  if (sleepBio) {
+    lastNightHours = parseFloat(sleepBio.value) / 60;
+  }
+  if (lastNightHours == null && data.profile) {
+    lastNightHours = data.profile.sleepHours;
   }
 
-  // Calcolo debito di sonno rolling 7 giorni
-  // Debito = somma(OPTIMAL - ore_dormite) per gli ultimi 7 giorni
+  // 3. Alcohol impact on sleep quality estimation
+  let alcoholSleepPenalty = 0;
+  if (data.profile) {
+    switch (data.profile.alcoholFrequency) {
+      case 'daily': alcoholSleepPenalty = 0.15; break;   // chronic sleep disruption
+      case 'weekly': alcoholSleepPenalty = 0.05; break;
+      default: alcoholSleepPenalty = 0; break;
+    }
+  }
+
+  // 4. Cumulative sleep debt (Van Dongen model: slow allostatic process)
+  // Debt = sum of (optimal - actual) over 7 days, with partial recovery
   let sleepDebt = 0;
-  if (lastNightHours != null) {
-    // Semplificazione: usiamo la media delle ultime notti note
-    const recentSleepCheckins = await db.quickCheckins
-      .where('userId').equals(userId)
-      .and(c => c.type === 'sleep_quality' && c.date >= daysAgoStr(7))
-      .toArray();
+  const days7 = [];
+  for (let d = 1; d <= 7; d++) {
+    const dateStr = daysAgoStr(d);
+    const daySleepCheckins = data.recentCheckins
+      .filter(c => c.type === 'sleep_quality' && c.date === dateStr);
 
-    if (recentSleepCheckins.length > 0) {
-      // Stima ore da qualita: quality 5->8h, 4->7h, 3->6h, 2->5h, 1->4h
-      const estimatedHours = recentSleepCheckins.map(c => 3 + c.value);
-      const totalDeficit = estimatedHours.reduce(
-        (sum, h) => sum + Math.max(0, OPTIMAL_SLEEP_HOURS - h), 0
-      );
-      sleepDebt = totalDeficit;
+    let dayHours: number;
+    if (daySleepCheckins.length > 0) {
+      const quality = daySleepCheckins[daySleepCheckins.length - 1].value;
+      // Better estimation: quality 5→8.5h, 4→7.5h, 3→6.5h, 2→5.5h, 1→4.5h
+      dayHours = 2.5 + quality * 1.2;
+    } else if (lastNightHours != null) {
+      dayHours = lastNightHours; // assume similar to last known
     } else {
-      // Stima dal profilo
-      const dailyDeficit = Math.max(0, OPTIMAL_SLEEP_HOURS - (lastNightHours || 7));
-      sleepDebt = dailyDeficit * 3; // assume 3 giorni di stesso pattern
+      dayHours = 7; // generic fallback
     }
+
+    // More recent days contribute more (recency weighting)
+    const recencyWeight = 1 - (d - 1) * 0.08; // day 1: 1.0, day 7: 0.52
+    const deficit = Math.max(0, OPTIMAL_SLEEP_H - dayHours);
+    sleepDebt += deficit * recencyWeight;
+    days7.push({ date: dateStr, hours: dayHours, deficit });
   }
 
-  return { lastNightQuality, lastNightHours, sleepDebt };
-}
+  // 5. Nap recovery (from today's nap checkins)
+  const napCheckins = data.todayCheckins.filter(c => c.type === 'nap');
+  let napRecovery = 0;
+  if (napCheckins.length > 0) {
+    // nap value 1-5: 1=very short, 5=long nap
+    // Recovery: ~20-30 min nap (value 2-3) recovers ~0.5-1h of debt
+    const napValue = napCheckins.reduce((s, c) => s + c.value, 0) / napCheckins.length;
+    napRecovery = clamp(napValue * 0.3, 0, 1.5);
+    sleepDebt = Math.max(0, sleepDebt - napRecovery);
+  }
 
-function computeSleepScore(data: SleepData): { score: number; debt: number } {
-  let score = 25; // partenza perfetta
+  // 6. Sahha readiness score as additional signal
+  const readinessScore = data.sahhaScores
+    .filter(s => s.type === 'readiness')
+    .sort((a, b) => b.scoreDateTime.localeCompare(a.scoreDateTime))[0];
+  const sahhaSleepScore = data.sahhaScores
+    .filter(s => s.type === 'sleep')
+    .sort((a, b) => b.scoreDateTime.localeCompare(a.scoreDateTime))[0];
 
-  // Qualita sonno (-0 a -10)
-  if (data.lastNightQuality != null) {
-    const qualityFactor = data.lastNightQuality / 5; // 0.2-1.0
+  // === Compute Sleep Score (0-25) ===
+  let score = 25;
+
+  // Quality deduction: (5 - quality) / 5 * 10 → max -10
+  if (lastNightQuality != null) {
+    const qualityFactor = lastNightQuality / 5; // 0.2-1.0
     score -= Math.round((1 - qualityFactor) * 10);
   }
 
-  // Durata sonno (-0 a -8)
-  if (data.lastNightHours != null) {
-    const deviation = Math.abs(data.lastNightHours - OPTIMAL_SLEEP_HOURS);
+  // Duration deduction: deviation from optimal → max -8
+  if (lastNightHours != null) {
+    const deviation = Math.abs(lastNightHours - OPTIMAL_SLEEP_H);
     score -= Math.round(Math.min(8, deviation * 2.5));
   }
 
-  // Debito cumulativo (-0 a -7) — Van Dongen: debito >20h = prestazione critica
-  const debtPenalty = Math.min(7, Math.round(data.sleepDebt * 0.35));
+  // Sleep debt deduction (Van Dongen: cumulative impairment)
+  // >14h debt equivalent to ~2 nights total deprivation
+  const debtPenalty = Math.min(7, Math.round(sleepDebt * 0.45));
   score -= debtPenalty;
 
-  return { score: clamp(score, 0, 25), debt: data.sleepDebt };
-}
+  // Alcohol penalty on sleep architecture
+  score -= Math.round(alcoholSleepPenalty * 10);
 
-// ---------------------------------------------------------------------------
-// 4. Componente stile di vita (0-25)
-// ---------------------------------------------------------------------------
-
-interface LifestyleData {
-  waterGlasses: number;
-  caffeineCount: number;
-  lastCaffeineHour: number | null;
-  mealQuality: number | null;    // 1-5
-  mealsLogged: number;
-  activityLevel: number | null;  // 1-5 from checkin
-  stressLevel: number | null;    // 1-5
-  moodLevel: number | null;      // 1-5
-}
-
-async function gatherLifestyleData(userId: number): Promise<LifestyleData> {
-  const today = todayStr();
-
-  const checkins = await db.quickCheckins
-    .where('[userId+date]')
-    .equals([userId, today])
-    .toArray();
-
-  const waterCheckins = checkins.filter(c => c.type === 'water');
-  const caffeineCheckins = checkins.filter(c => c.type === 'caffeine');
-  const mealCheckins = checkins.filter(c => c.type === 'meal_time');
-  const activityCheckins = checkins.filter(c => c.type === 'activity_done');
-  const stressCheckins = checkins.filter(c => c.type === 'stress');
-  const moodCheckins = checkins.filter(c => c.type === 'mood');
-
-  // Ultimo orario caffeina
-  let lastCaffeineHour: number | null = null;
-  if (caffeineCheckins.length > 0) {
-    const lastTime = caffeineCheckins[caffeineCheckins.length - 1].time;
-    const [h, m] = lastTime.split(':').map(Number);
-    lastCaffeineHour = h + m / 60;
+  // Sahha bonus/penalty
+  if (readinessScore) {
+    if (readinessScore.score >= 0.7) score += 1;  // well recovered
+    else if (readinessScore.score < 0.4) score -= 2; // poor recovery
+  }
+  if (sahhaSleepScore) {
+    if (sahhaSleepScore.score >= 0.7) score += 1;
+    else if (sahhaSleepScore.score < 0.4) score -= 1;
   }
 
-  // Conta pasti da food scanner
-  let mealsLogged = 0;
-  try {
-    const foods = await db.foodLogs
-      .where('[userId+date]')
-      .equals([userId, today])
-      .toArray();
-    mealsLogged = foods.length;
-  } catch { /* no food data */ }
+  // Nap partial recovery bonus
+  if (napRecovery > 0) score += Math.round(napRecovery);
+
+  score = clamp(score, 0, 25);
+
+  // Explanation
+  const parts: string[] = [];
+  if (lastNightQuality != null) parts.push(`qualita ${lastNightQuality}/5`);
+  if (lastNightHours != null) parts.push(`durata ~${lastNightHours.toFixed(1)}h`);
+  if (sleepDebt > 2) parts.push(`debito cumulativo ${sleepDebt.toFixed(1)}h`);
+  if (napRecovery > 0) parts.push(`recupero pisolino +${napRecovery.toFixed(1)}h`);
+  if (alcoholSleepPenalty > 0) parts.push('impatto alcol sulla qualita');
+  const explanation = parts.length > 0 ? parts.join(', ') : 'Dati sonno insufficienti';
+
+  return { score, sleepDebt, lastNightQuality, lastNightHours, napRecovery, explanation };
+}
+
+// ---------------------------------------------------------------------------
+// 6. Lifestyle Component (0-25)
+//    Hydration + Nutrition + Caffeine + Activity + Smoking + Alcohol + Screen
+// ---------------------------------------------------------------------------
+
+interface LifestyleAnalysis {
+  score: number;
+  waterGlasses: number;
+  targetWater: number;
+  caffeineCount: number;
+  caffeineRemaining: number;     // mg remaining active
+  mealQuality: number | null;
+  mealsLogged: number;
+  totalCalories: number;
+  macroBalance: number;          // 0-1 (1 = well balanced)
+  activityLevel: number | null;
+  stressLevel: number | null;
+  moodLevel: number | null;
+  focusLevel: number | null;
+  screenMinutes: number;
+  explanation: string;
+}
+
+function estimateWaterTarget(profile: UserProfile | null, currentHour: number): number {
+  if (!profile) return Math.round((currentHour / 24) * 8);
+  const dailyMl = profile.weightKg * HYDRATION_ML_PER_KG;
+  const dailyGlasses = Math.round(dailyMl / GLASS_ML);
+  // Proportional to hour of day
+  return Math.max(1, Math.round((currentHour / 24) * dailyGlasses));
+}
+
+function computeCaffeineRemaining(checkins: QuickCheckin[], currentHour: number): number {
+  // Track each caffeine intake and compute remaining effect via half-life
+  const cafCheckins = checkins.filter(c => c.type === 'caffeine');
+  let totalRemainingMg = 0;
+
+  for (const ci of cafCheckins) {
+    const intakeHour = timeToDecimal(ci.time);
+    const hoursSince = currentHour - intakeHour;
+    if (hoursSince < 0) continue; // future somehow
+    const initialMg = ci.value * CAFFEINE_MG_PER_ESPRESSO;
+    const remaining = initialMg * Math.pow(0.5, hoursSince / CAFFEINE_HALF_LIFE_H);
+    totalRemainingMg += remaining;
+  }
+
+  return totalRemainingMg;
+}
+
+function analyzeNutrition(foodLogs: FoodLog[], mealCheckins: QuickCheckin[]): {
+  totalCalories: number;
+  macroBalance: number;
+  avgMealQuality: number | null;
+} {
+  // From food scanner
+  let totalCalories = 0;
+  let totalCarbs = 0;
+  let totalFat = 0;
+  let totalProtein = 0;
+
+  for (const f of foodLogs) {
+    totalCalories += f.totalCalories;
+    totalCarbs += f.totalCarbs;
+    totalFat += f.totalFat;
+    totalProtein += f.totalProtein;
+  }
+
+  // Macro balance: ideal ≈ 50% carbs, 25% fat, 25% protein (calories)
+  // Carb: 4 cal/g, Fat: 9 cal/g, Protein: 4 cal/g
+  const totalMacroG = totalCarbs + totalFat + totalProtein;
+  let macroBalance = 0.5; // default moderate
+
+  if (totalMacroG > 0) {
+    const carbPct = totalCarbs / totalMacroG;
+    const fatPct = totalFat / totalMacroG;
+    const proteinPct = totalProtein / totalMacroG;
+
+    // Score based on deviation from ideal (0.45, 0.25, 0.30)
+    const carbDev = Math.abs(carbPct - 0.45);
+    const fatDev = Math.abs(fatPct - 0.25);
+    const protDev = Math.abs(proteinPct - 0.30);
+    macroBalance = clamp(1 - (carbDev + fatDev + protDev), 0, 1);
+  }
+
+  // From checkins
+  const mealValues = mealCheckins.map(c => c.value);
+  const avgMealQuality = mealValues.length > 0
+    ? mealValues.reduce((s, v) => s + v, 0) / mealValues.length
+    : null;
+
+  return { totalCalories, macroBalance, avgMealQuality };
+}
+
+function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis {
+  const profile = data.profile;
+
+  // === Water ===
+  const waterCheckins = data.todayCheckins.filter(c => c.type === 'water');
+  const waterGlasses = waterCheckins.reduce((s, c) => s + c.value, 0);
+  const targetWater = estimateWaterTarget(profile, currentHour);
+
+  // === Caffeine ===
+  const cafCheckins = data.todayCheckins.filter(c => c.type === 'caffeine');
+  const caffeineCount = cafCheckins.reduce((s, c) => s + c.value, 0);
+  const caffeineRemaining = computeCaffeineRemaining(data.todayCheckins, currentHour);
+
+  // === Nutrition ===
+  const mealCheckins = data.todayCheckins.filter(c => c.type === 'meal_time');
+  const { totalCalories, macroBalance, avgMealQuality } = analyzeNutrition(data.todayFoodLogs, mealCheckins);
+  const mealsLogged = data.todayFoodLogs.length + mealCheckins.length;
+
+  // === Activity ===
+  const actCheckins = data.todayCheckins.filter(c => c.type === 'activity_done');
+  const activityLevel = actCheckins.length > 0
+    ? actCheckins[actCheckins.length - 1].value
+    : null;
+
+  // === Stress & Mood & Focus ===
+  const stressCheckins = data.todayCheckins.filter(c => c.type === 'stress');
+  const moodCheckins = data.todayCheckins.filter(c => c.type === 'mood');
+  const focusCheckins = data.todayCheckins.filter(c => c.type === 'focus');
+  const stressLevel = stressCheckins.length > 0 ? stressCheckins[stressCheckins.length - 1].value : null;
+  const moodLevel = moodCheckins.length > 0 ? moodCheckins[moodCheckins.length - 1].value : null;
+  const focusLevel = focusCheckins.length > 0 ? focusCheckins[focusCheckins.length - 1].value : null;
+
+  // === Screen Time ===
+  const screenMinutes = data.screenTime?.minutes ?? 0;
+
+  // === Compute Score (0-25) ===
+  let score = 25;
+
+  // Hydration: meta-analysis ES=-0.14 at 1-2% BW loss, -0.52 for attention
+  const waterRatio = targetWater > 0 ? waterGlasses / targetWater : 1;
+  if (waterRatio < 0.4) score -= 5;      // severe dehydration risk
+  else if (waterRatio < 0.6) score -= 3;  // moderate
+  else if (waterRatio < 0.8) score -= 1;  // mild
+
+  // Nutrition from food scanner data
+  if (data.todayFoodLogs.length > 0) {
+    // Macro balance quality
+    if (macroBalance < 0.3) score -= 3;    // very unbalanced
+    else if (macroBalance < 0.5) score -= 1;
+    // Very low calories (likely missed meals)
+    if (totalCalories > 0 && totalCalories < 800 && currentHour > 14) score -= 2;
+  }
+  // Nutrition from checkin quality
+  if (avgMealQuality != null) {
+    if (avgMealQuality <= 2) score -= 3;
+    else if (avgMealQuality <= 3) score -= 1;
+  } else if (currentHour > 13 && mealsLogged === 0) {
+    score -= 3; // probable missed meal
+  }
+
+  // Caffeine pharmacokinetics
+  if (caffeineCount > 0) {
+    // Late caffeine: remaining effect at bedtime estimation
+    const lastCafTime = cafCheckins.length > 0
+      ? timeToDecimal(cafCheckins[cafCheckins.length - 1].time)
+      : null;
+
+    if (lastCafTime != null && lastCafTime >= CAFFEINE_LATE_CUTOFF) {
+      // Caffeine after 14:00 affects tonight's sleep
+      score -= 2;
+    }
+    if (caffeineCount > 4) score -= 2;    // > 400mg/day
+    if (caffeineCount > 6) score -= 2;    // > 600mg/day anxiety risk
+    // Early caffeine boost (before noon, moderate amount)
+    if (caffeineCount <= 3 && lastCafTime != null && lastCafTime < 12) {
+      score += 1; // positive effect of moderate morning caffeine
+    }
+  }
+
+  // Physical activity (POMS: acute vigor boost post-exercise)
+  if (activityLevel != null) {
+    if (activityLevel >= 4) score += 1;    // exercise energy boost
+    else if (activityLevel <= 1 && currentHour > 15) score -= 2; // prolonged inactivity
+  }
+
+  // Smoking penalty (chronic vasoconstriction, reduced O2 transport)
+  if (profile) {
+    switch (profile.smokingFrequency) {
+      case 'heavy': score -= 3; break;
+      case 'daily': score -= 2; break;
+      case 'occasional': score -= 1; break;
+    }
+  }
+
+  // Alcohol penalty (beyond sleep effects: dehydration, cognitive)
+  if (profile) {
+    switch (profile.alcoholFrequency) {
+      case 'daily': score -= 2; break;
+      case 'weekly': score -= 1; break;
+    }
+  }
+
+  // Screen time fatigue
+  if (screenMinutes > 0) {
+    if (screenMinutes > 300) score -= 2;      // > 5h continuous
+    else if (screenMinutes > 180) score -= 1;  // > 3h
+  }
+  // Screen break bonus
+  const breakCheckins = data.todayCheckins.filter(c => c.type === 'screen_break');
+  const breakCount = breakCheckins.reduce((s, c) => s + c.value, 0);
+  if (breakCount >= 4 && screenMinutes > 120) score += 1; // good break habits
+
+  score = clamp(score, 0, 25);
+
+  // Explanation
+  const parts: string[] = [];
+  if (waterRatio < 0.6) parts.push(`idratazione ${Math.round(waterRatio * 100)}% del target`);
+  if (caffeineCount > 4) parts.push(`caffeina elevata (${caffeineCount} tazzine)`);
+  if (data.todayFoodLogs.length > 0 && macroBalance < 0.4) parts.push('macro sbilanciati');
+  if (activityLevel != null && activityLevel >= 4) parts.push('buona attivita fisica');
+  if (profile?.smokingFrequency === 'daily' || profile?.smokingFrequency === 'heavy') parts.push('impatto fumo');
+  if (screenMinutes > 180) parts.push(`${Math.round(screenMinutes / 60)}h screen time`);
+  const explanation = parts.length > 0 ? parts.join(', ') : 'Stile di vita nella norma';
 
   return {
-    waterGlasses: waterCheckins.reduce((s, c) => s + c.value, 0),
-    caffeineCount: caffeineCheckins.reduce((s, c) => s + c.value, 0),
-    lastCaffeineHour,
-    mealQuality: mealCheckins.length > 0 ? mealCheckins[mealCheckins.length - 1].value : null,
-    mealsLogged,
-    activityLevel: activityCheckins.length > 0 ? activityCheckins[activityCheckins.length - 1].value : null,
-    stressLevel: stressCheckins.length > 0 ? stressCheckins[stressCheckins.length - 1].value : null,
-    moodLevel: moodCheckins.length > 0 ? moodCheckins[moodCheckins.length - 1].value : null,
+    score, waterGlasses, targetWater, caffeineCount, caffeineRemaining,
+    mealQuality: avgMealQuality, mealsLogged, totalCalories, macroBalance,
+    activityLevel, stressLevel, moodLevel, focusLevel, screenMinutes, explanation,
   };
 }
 
-function computeLifestyleScore(data: LifestyleData, currentHour: number): number {
-  let score = 25;
-
-  // Idratazione: target 8 bicchieri/giorno, proporzionale all'ora
-  const expectedWater = Math.max(1, Math.round((currentHour / 24) * 8));
-  if (data.waterGlasses < expectedWater * 0.5) {
-    score -= 5; // molto disidratato
-  } else if (data.waterGlasses < expectedWater * 0.75) {
-    score -= 2;
-  }
-
-  // Caffeina: boost se <16:00, penalita se tardi
-  if (data.caffeineCount > 0 && data.lastCaffeineHour != null) {
-    if (data.lastCaffeineHour >= 16) {
-      // Caffeina tardi: penalita basata su farmacocinetica
-      // A 5h di emivita, alle 21:00 una caffeina delle 16:00 ha ancora 50% effetto
-      const hoursAgo = currentHour - data.lastCaffeineHour;
-      const remainingEffect = Math.pow(0.5, hoursAgo / CAFFEINE_HALF_LIFE_HOURS);
-      if (remainingEffect > 0.3) score -= 3;
-    }
-    if (data.caffeineCount > 4) score -= 2; // troppa
-  }
-
-  // Nutrizione
-  if (data.mealQuality != null) {
-    if (data.mealQuality >= 4) score += 0; // nessun cambio, gia buono
-    else if (data.mealQuality <= 2) score -= 4;
-    else score -= 1;
-  } else if (currentHour > 13 && data.mealsLogged === 0) {
-    score -= 3; // probabilmente ha saltato un pasto
-  }
-
-  // Attivita fisica: benefici acuti (POMS studies)
-  if (data.activityLevel != null) {
-    if (data.activityLevel >= 4) score += 0; // gia incluso nel baseline
-    else if (data.activityLevel <= 1 && currentHour > 15) score -= 3; // inattivita
-  }
-
-  // Stress (inversamente proporzionale)
-  if (data.stressLevel != null) {
-    if (data.stressLevel >= 4) score -= 4;
-    else if (data.stressLevel >= 3) score -= 2;
-  }
-
-  // Mood (correlazione diretta)
-  if (data.moodLevel != null) {
-    if (data.moodLevel <= 2) score -= 2;
-  }
-
-  return clamp(score, 0, 25);
-}
-
 // ---------------------------------------------------------------------------
-// 5. Componente carico allostatico (0-25)
+// 7. Allostatic Load Component (0-25)
+//    McEwen model: Work + Stress + Emotional + HRV + Recovery + Burnout
 // ---------------------------------------------------------------------------
 
-interface AllostaticData {
-  workHoursToday: number | null;
-  dailyWorkHoursProfile: number;
-  recentEnergyLogs: EnergyLog[];
+interface AllostaticAnalysis {
+  score: number;
+  workHours: number;
   consecutiveLowDays: number;
+  stressTrend: number;           // -1 to 1 (negative = increasing stress)
+  hrvIndicator: number | null;   // 0-1 (higher = better recovery)
+  burnoutRisk: 'low' | 'moderate' | 'high' | 'critical';
+  explanation: string;
 }
 
-async function gatherAllostaticData(userId: number, profile: UserProfile | null): Promise<AllostaticData> {
-  const today = todayStr();
-  const todayLog = await db.energyLogs
-    .where('[userId+date]')
-    .equals([userId, today])
-    .first();
+function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
+  const profile = data.profile;
 
-  const recentLogs = await db.energyLogs
-    .where('userId').equals(userId)
-    .and(l => l.date >= daysAgoStr(7))
-    .toArray();
-  recentLogs.sort((a, b) => a.date.localeCompare(b.date));
+  // === Work hours ===
+  const workHours = data.todayEnergyLog?.workHoursToday ?? profile?.dailyWorkHours ?? 8;
 
-  // Conta giorni consecutivi con energia bassa
-  let consecutiveLow = 0;
-  for (let i = recentLogs.length - 1; i >= 0; i--) {
-    const avg = (recentLogs[i].physical + recentLogs[i].mental + recentLogs[i].emotional) / 3;
-    if (avg <= 4) consecutiveLow++;
+  // === Consecutive low energy days (burnout indicator) ===
+  let consecutiveLowDays = 0;
+  const sortedLogs = [...data.recentEnergyLogs].sort((a, b) => b.date.localeCompare(a.date));
+  for (const log of sortedLogs) {
+    const avg = (log.physical + log.mental + log.emotional) / 3;
+    if (avg <= 4) consecutiveLowDays++;
     else break;
   }
 
+  // === Stress trend (7-day) ===
+  let stressTrend = 0;
+  const stressCheckins = data.recentCheckins.filter(c => c.type === 'stress');
+  if (stressCheckins.length >= 4) {
+    const sorted = [...stressCheckins].sort((a, b) => a.date.localeCompare(b.date));
+    const mid = Math.floor(sorted.length / 2);
+    const firstHalf = sorted.slice(0, mid);
+    const secondHalf = sorted.slice(mid);
+    const firstAvg = firstHalf.reduce((s, c) => s + c.value, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((s, c) => s + c.value, 0) / secondHalf.length;
+    stressTrend = clamp((secondAvg - firstAvg) / 5, -1, 1); // positive = stress increasing
+  }
+
+  // === HRV as stress/recovery proxy ===
+  let hrvIndicator: number | null = null;
+  const hrvBio = data.sahhaBiomarkers
+    .filter(b => b.type === 'heart_rate_variability_sdnn')
+    .sort((a, b) => b.startDateTime.localeCompare(a.startDateTime))[0];
+  if (hrvBio) {
+    const sdnn = parseFloat(hrvBio.value);
+    if (Number.isFinite(sdnn)) {
+      // SDNN < 50ms: high stress, > 100ms: healthy
+      hrvIndicator = clamp((sdnn - 30) / 80, 0, 1); // normalized 0-1
+    }
+  }
+
+  // === Mood trend ===
+  const moodCheckins = data.recentCheckins.filter(c => c.type === 'mood');
+  let moodTrendDown = false;
+  if (moodCheckins.length >= 4) {
+    const sorted = [...moodCheckins].sort((a, b) => a.date.localeCompare(b.date));
+    const recent = sorted.slice(-3);
+    const older = sorted.slice(0, 3);
+    const recentAvg = recent.reduce((s, c) => s + c.value, 0) / recent.length;
+    const olderAvg = older.reduce((s, c) => s + c.value, 0) / older.length;
+    moodTrendDown = (olderAvg - recentAvg) > 0.8;
+  }
+
+  // === Compute Score (0-25) ===
+  let score = 25;
+
+  // Work hours burden (cognitive vs physical from work type)
+  const isPhysicalWork = profile?.workType?.match(/fisic|manual|operai|muratore|cantiere|magazzin/i);
+  if (workHours > 10) score -= isPhysicalWork ? 7 : 6;
+  else if (workHours > 8) score -= isPhysicalWork ? 4 : 3;
+
+  // Stress (today's level + cumulative trend)
+  const todayStress = data.todayCheckins.filter(c => c.type === 'stress');
+  if (todayStress.length > 0) {
+    const stressVal = todayStress[todayStress.length - 1].value;
+    if (stressVal >= 4) score -= 4;
+    else if (stressVal >= 3) score -= 2;
+  }
+  // Cumulative stress trend penalty
+  if (stressTrend > 0.3) score -= 2;
+
+  // Mood/emotional drain
+  const todayMood = data.todayCheckins.filter(c => c.type === 'mood');
+  if (todayMood.length > 0) {
+    const moodVal = todayMood[todayMood.length - 1].value;
+    if (moodVal <= 2) score -= 3;
+    else if (moodVal <= 3) score -= 1;
+  }
+  if (moodTrendDown) score -= 1;
+
+  // Energy trend (3-day rolling decline)
+  if (data.recentEnergyLogs.length >= 6) {
+    const last3 = data.recentEnergyLogs.slice(-3);
+    const prev3 = data.recentEnergyLogs.slice(-6, -3);
+    const last3Avg = last3.reduce((s, l) => s + (l.physical + l.mental + l.emotional) / 3, 0) / 3;
+    const prev3Avg = prev3.reduce((s, l) => s + (l.physical + l.mental + l.emotional) / 3, 0) / 3;
+    const decline = prev3Avg - last3Avg;
+    if (decline > 2) score -= 4;
+    else if (decline > 1) score -= 2;
+  }
+
+  // HRV recovery bonus/penalty
+  if (hrvIndicator != null) {
+    if (hrvIndicator > 0.7) score += 2;       // good autonomic balance
+    else if (hrvIndicator < 0.3) score -= 3;   // sympathetic dominance (stress)
+  }
+
+  // Burnout risk (consecutive low days — exponential impact)
+  let burnoutRisk: 'low' | 'moderate' | 'high' | 'critical' = 'low';
+  if (consecutiveLowDays >= 7) {
+    score -= 7; burnoutRisk = 'critical';
+  } else if (consecutiveLowDays >= 5) {
+    score -= 5; burnoutRisk = 'high';
+  } else if (consecutiveLowDays >= 3) {
+    score -= 3; burnoutRisk = 'moderate';
+  } else if (consecutiveLowDays >= 2) {
+    score -= 1;
+  }
+
+  // Focus drain (low focus = cognitive overload indicator)
+  const todayFocus = data.todayCheckins.filter(c => c.type === 'focus');
+  if (todayFocus.length > 0) {
+    const focusVal = todayFocus[todayFocus.length - 1].value;
+    if (focusVal <= 2) score -= 2; // cognitive exhaustion
+  }
+
+  // Recovery factors
+  const breaks = data.todayCheckins.filter(c => c.type === 'screen_break')
+    .reduce((s, c) => s + c.value, 0);
+  const supplements = data.todayCheckins.filter(c => c.type === 'supplement')
+    .reduce((s, c) => s + c.value, 0);
+  if (breaks >= 3) score += 1;        // taking breaks helps recovery
+  if (supplements > 0) score += 0.5;  // minimal but positive signal
+
+  score = clamp(Math.round(score), 0, 25);
+
+  // Explanation
+  const parts: string[] = [];
+  if (workHours > 8) parts.push(`${workHours}h di lavoro`);
+  if (burnoutRisk !== 'low') parts.push(`rischio burnout: ${burnoutRisk}`);
+  if (hrvIndicator != null && hrvIndicator < 0.4) parts.push('HRV bassa (stress autonomico)');
+  if (hrvIndicator != null && hrvIndicator > 0.7) parts.push('HRV buona (buon recupero)');
+  if (stressTrend > 0.3) parts.push('stress in aumento');
+  if (moodTrendDown) parts.push('umore in calo');
+  const explanation = parts.length > 0 ? parts.join(', ') : 'Carico allostatico nella norma';
+
   return {
-    workHoursToday: todayLog?.workHoursToday ?? null,
-    dailyWorkHoursProfile: profile?.dailyWorkHours ?? 8,
-    recentEnergyLogs: recentLogs,
-    consecutiveLowDays: consecutiveLow,
+    score, workHours, consecutiveLowDays, stressTrend,
+    hrvIndicator, burnoutRisk, explanation,
   };
 }
 
-function computeAllostaticScore(data: AllostaticData): number {
-  let score = 25;
+// ---------------------------------------------------------------------------
+// 8. Interaction Penalties
+//    When multiple components are low, total impact is multiplicative
+// ---------------------------------------------------------------------------
 
-  // Ore di lavoro eccessive
-  const workHours = data.workHoursToday ?? data.dailyWorkHoursProfile;
-  if (workHours > 10) score -= 6;
-  else if (workHours > 8) score -= 3;
+function computeInteractionPenalty(
+  circadian: number, sleep: number, lifestyle: number, allostatic: number,
+): number {
+  const threshold = 12; // below this = component in trouble
+  const components = [circadian, sleep, lifestyle, allostatic];
+  const lowCount = components.filter(c => c < threshold).length;
 
-  // Trend energetico (sliding window)
-  if (data.recentEnergyLogs.length >= 3) {
-    const last3 = data.recentEnergyLogs.slice(-3);
-    const last3Avg = last3.reduce((s, l) => s + (l.physical + l.mental + l.emotional) / 3, 0) / 3;
+  // No penalty for 0-1 low components (linear territory)
+  if (lowCount <= 1) return 0;
 
-    if (data.recentEnergyLogs.length >= 6) {
-      const prev3 = data.recentEnergyLogs.slice(-6, -3);
-      const prev3Avg = prev3.reduce((s, l) => s + (l.physical + l.mental + l.emotional) / 3, 0) / 3;
-      const decline = prev3Avg - last3Avg;
-      if (decline > 2) score -= 5;
-      else if (decline > 1) score -= 2;
-    }
-
-    // Media bassa generale
-    if (last3Avg <= 3) score -= 5;
-    else if (last3Avg <= 5) score -= 2;
-  }
-
-  // Giorni consecutivi bassi (rischio burnout)
-  if (data.consecutiveLowDays >= 5) score -= 6;
-  else if (data.consecutiveLowDays >= 3) score -= 3;
-  else if (data.consecutiveLowDays >= 2) score -= 1;
-
-  return clamp(score, 0, 25);
+  // Penalty increases non-linearly with more low components
+  // 2 low: -3, 3 low: -8, 4 low: -15
+  const penalties = [0, 0, 3, 8, 15];
+  return penalties[lowCount] ?? 0;
 }
 
 // ---------------------------------------------------------------------------
-// 6. Curva predittiva (prossime 6 ore)
+// 9. Predicted Energy Curve (next 12 hours)
 // ---------------------------------------------------------------------------
 
 function predictEnergyCurve(
@@ -420,39 +956,54 @@ function predictEnergyCurve(
   currentHour: number,
   currentScore: number,
   sleepDebt: number,
-  lifestyleData: LifestyleData,
+  caffeineRemaining: number,
+  routine: DetectedRoutine,
+  hoursAwake: number,
+  sleepQuality01: number,
 ): number[] {
-  const curve = CIRCADIAN_CURVES[chronotype];
   const predicted: number[] = [];
 
-  for (let offset = 1; offset <= 6; offset++) {
+  for (let offset = 1; offset <= 12; offset++) {
     const futureHour = (currentHour + offset) % 24;
-    const h = Math.floor(futureHour);
+    const futureHoursAwake = hoursAwake + offset;
 
-    // Base circadiana
-    let baseScore = curve[h] * 100;
+    // Circadian base
+    const circAlertness = computeCircadianAlertness(chronotype, futureHour);
 
-    // Attenuazione per debito sonno
-    const sleepPenalty = Math.min(20, sleepDebt * 1.5);
-    baseScore -= sleepPenalty;
+    // Process S at future time
+    const futureS = computeProcessS(futureHoursAwake, sleepQuality01);
 
-    // Effetto caffeina residuo
-    if (lifestyleData.lastCaffeineHour != null && lifestyleData.caffeineCount > 0) {
-      const hoursSinceCaffeine = futureHour - lifestyleData.lastCaffeineHour;
-      if (hoursSinceCaffeine > 0) {
-        const remaining = Math.pow(0.5, hoursSinceCaffeine / CAFFEINE_HALF_LIFE_HOURS);
-        baseScore += remaining * 5; // piccolo boost residuo
-      }
+    // Post-prandial dip (estimate future meals if not yet happened)
+    const futureMealTimes = [...routine.mealTimes];
+    // If no lunch yet and it's before 13, assume lunch at 13
+    if (!futureMealTimes.some(t => t >= 12 && t <= 14) && futureHour >= 12) {
+      futureMealTimes.push(13);
     }
-
-    // Post-prandial dip
-    if (futureHour >= 13 && futureHour <= 15) {
-      baseScore -= 8;
+    // If no dinner yet and it's before 20, assume dinner at 20
+    if (!futureMealTimes.some(t => t >= 19 && t <= 21) && futureHour >= 19) {
+      futureMealTimes.push(20);
     }
+    const ppDip = computePostPrandialDip(futureHour, futureMealTimes,
+      futureMealTimes.map(() => 0.5));
 
-    // Smooth verso lo score corrente
-    const blendFactor = offset / 6; // piu ci allontaniamo, piu vale la curva circadiana
-    const blended = lerp(currentScore, baseScore, blendFactor);
+    // Caffeine decay
+    const cafDecay = caffeineRemaining * Math.pow(0.5, offset / CAFFEINE_HALF_LIFE_H);
+    const cafBoost = clamp(cafDecay / (3 * CAFFEINE_MG_PER_ESPRESSO), 0, 0.08);
+
+    // Sleep debt drag increases with wakefulness
+    const debtDrag = Math.min(0.15, sleepDebt * 0.015 * (1 + futureHoursAwake * 0.01));
+
+    // Combined future alertness
+    const futureAlertness = clamp(
+      circAlertness - futureS * 0.35 - ppDip + cafBoost - debtDrag,
+      0.05, 1,
+    );
+
+    const futureScore = Math.round(futureAlertness * 100);
+
+    // Blend: closer hours lean toward current score, farther toward model prediction
+    const blendFactor = offset / 12;
+    const blended = lerp(currentScore, futureScore, blendFactor);
 
     predicted.push(clamp(Math.round(blended), 0, 100));
   }
@@ -461,25 +1012,63 @@ function predictEnergyCurve(
 }
 
 // ---------------------------------------------------------------------------
-// 7. Identificazione collo di bottiglia
+// 10. Bottleneck Identification (ranked by severity)
 // ---------------------------------------------------------------------------
 
 function identifyBottleneck(
-  sleepScore: number,
-  sleepData: SleepData,
-  lifestyleData: LifestyleData,
-  allostaticData: AllostaticData,
-  lifestyleScore: number,
-  allostaticScore: number,
+  sleepAnalysis: SleepAnalysis,
+  lifestyleAnalysis: LifestyleAnalysis,
+  allostaticAnalysis: AllostaticAnalysis,
+  circadianScore: number,
 ): Bottleneck {
   const issues: { type: Bottleneck; severity: number }[] = [];
 
-  if (sleepScore <= 12) issues.push({ type: 'sleep', severity: 25 - sleepScore });
-  if (lifestyleData.waterGlasses < 3) issues.push({ type: 'hydration', severity: 5 });
-  if (lifestyleData.mealQuality != null && lifestyleData.mealQuality <= 2) issues.push({ type: 'nutrition', severity: 4 });
-  if (lifestyleData.stressLevel != null && lifestyleData.stressLevel >= 4) issues.push({ type: 'stress', severity: 5 });
-  if (allostaticData.workHoursToday != null && allostaticData.workHoursToday > 10) issues.push({ type: 'overwork', severity: 4 });
-  if (lifestyleData.activityLevel != null && lifestyleData.activityLevel <= 1) issues.push({ type: 'inactivity', severity: 3 });
+  // Sleep
+  if (sleepAnalysis.score <= 10) issues.push({ type: 'sleep', severity: 25 - sleepAnalysis.score });
+  if (sleepAnalysis.sleepDebt > 5) issues.push({ type: 'sleep_debt', severity: Math.round(sleepAnalysis.sleepDebt) });
+
+  // Hydration
+  const waterRatio = lifestyleAnalysis.targetWater > 0
+    ? lifestyleAnalysis.waterGlasses / lifestyleAnalysis.targetWater : 1;
+  if (waterRatio < 0.5) issues.push({ type: 'hydration', severity: 6 });
+  else if (waterRatio < 0.7) issues.push({ type: 'hydration', severity: 3 });
+
+  // Nutrition
+  if (lifestyleAnalysis.mealQuality != null && lifestyleAnalysis.mealQuality <= 2) {
+    issues.push({ type: 'nutrition', severity: 4 });
+  }
+
+  // Caffeine
+  if (lifestyleAnalysis.caffeineCount > 4) {
+    issues.push({ type: 'caffeine_late', severity: 3 });
+  }
+
+  // Stress
+  if (lifestyleAnalysis.stressLevel != null && lifestyleAnalysis.stressLevel >= 4) {
+    issues.push({ type: 'stress', severity: 5 });
+  }
+
+  // Overwork
+  if (allostaticAnalysis.workHours > 10) {
+    issues.push({ type: 'overwork', severity: 5 });
+  }
+
+  // Inactivity
+  if (lifestyleAnalysis.activityLevel != null && lifestyleAnalysis.activityLevel <= 1) {
+    issues.push({ type: 'inactivity', severity: 3 });
+  }
+
+  // Screen fatigue
+  if (lifestyleAnalysis.screenMinutes > 300) {
+    issues.push({ type: 'screen_fatigue', severity: 3 });
+  }
+
+  // Burnout risk
+  if (allostaticAnalysis.burnoutRisk === 'critical') {
+    issues.push({ type: 'burnout_risk', severity: 10 });
+  } else if (allostaticAnalysis.burnoutRisk === 'high') {
+    issues.push({ type: 'burnout_risk', severity: 7 });
+  }
 
   if (issues.length === 0) return 'none';
   issues.sort((a, b) => b.severity - a.severity);
@@ -487,75 +1076,123 @@ function identifyBottleneck(
 }
 
 // ---------------------------------------------------------------------------
-// API Pubblica
+// Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Calcola il punteggio energetico scientifico per l'utente in questo momento.
- * Aggrega: circadian rhythm, sleep architecture, lifestyle factors, allostatic load.
+ * Calcola il punteggio energetico scientifico v2.
+ * Integra TUTTE le fonti dati: profilo, checkin, food scanner, screen time,
+ * Sahha biomarkers, sleep debt, caffeine pharmacokinetics, HRV.
  */
 export async function computeScientificEnergy(userId: number): Promise<EnergyBreakdown> {
-  // Carica profilo
-  const profile = await db.userProfiles.where('userId').equals(userId).first() ?? null;
+  // 1. Gather ALL data
+  const data = await gatherAllData(userId);
 
-  // Stima cronotipo
-  const chronotype = estimateChronotype(profile);
+  // 2. Estimate chronotype
+  const chronotype = estimateChronotype(data.profile);
 
-  // Ora corrente con frazioni
+  // 3. Detect routine
+  const routine = detectRoutine(data, chronotype);
+
+  // 4. Current time calculations
   const now = new Date();
   const currentHour = now.getHours() + now.getMinutes() / 60;
+  const hoursAwake = currentHour >= routine.wakeTime
+    ? currentHour - routine.wakeTime
+    : (currentHour + 24 - routine.wakeTime); // crossed midnight
 
-  // Raccogli dati in parallelo
-  const [sleepData, lifestyleData, allostaticData] = await Promise.all([
-    gatherSleepData(userId, profile),
-    gatherLifestyleData(userId),
-    gatherAllostaticData(userId, profile),
-  ]);
+  // 5. Sleep quality as 0-1 for Process S
+  const todaySleepQ = data.todayCheckins
+    .filter(c => c.type === 'sleep_quality')
+    .pop();
+  const sleepQuality01 = todaySleepQ ? todaySleepQ.value / 5 : 0.6;
 
-  // Calcola ogni componente
-  const circadian = computeCircadianScore(chronotype, currentHour);
-  const { score: sleep, debt: sleepDebt } = computeSleepScore(sleepData);
-  const lifestyle = computeLifestyleScore(lifestyleData, currentHour);
-  const allostatic = computeAllostaticScore(allostaticData);
+  // 6. Compute all components
+  const circResult = computeCircadianScore(chronotype, currentHour, hoursAwake, sleepQuality01, routine);
+  const sleepResult = await analyzeSleep(data, chronotype);
+  const lifestyleResult = analyzeLifestyle(data, currentHour);
+  const allostaticResult = analyzeAllostaticLoad(data);
 
-  const overall = circadian + sleep + lifestyle + allostatic;
+  // 7. Interaction penalty
+  const interactionPenalty = computeInteractionPenalty(
+    circResult.score, sleepResult.score, lifestyleResult.score, allostaticResult.score,
+  );
 
-  // Curva predittiva
+  // 8. Overall score
+  const rawTotal = circResult.score + sleepResult.score + lifestyleResult.score + allostaticResult.score;
+  const overall = clamp(rawTotal - interactionPenalty, 0, 100);
+
+  // 9. Predicted curve (12 hours)
   const predictedCurve = predictEnergyCurve(
-    chronotype, currentHour, overall, sleepDebt, lifestyleData,
+    chronotype, currentHour, overall, sleepResult.sleepDebt,
+    lifestyleResult.caffeineRemaining, routine, hoursAwake, sleepQuality01,
   );
 
-  // Bottleneck
-  const bottleneck = identifyBottleneck(
-    sleep, sleepData, lifestyleData, allostaticData, lifestyle, allostatic,
-  );
+  // 10. Bottleneck
+  const bottleneck = identifyBottleneck(sleepResult, lifestyleResult, allostaticResult, circResult.score);
 
-  // Fattori dettagliati per spiegazione
+  // 11. Detailed factors for AI and storage
   const factors: Record<string, number> = {
-    circadian_base: circadian,
-    sleep_quality: sleepData.lastNightQuality ?? -1,
-    sleep_hours: sleepData.lastNightHours ?? -1,
-    sleep_debt_hours: sleepDebt,
-    water_glasses: lifestyleData.waterGlasses,
-    caffeine_count: lifestyleData.caffeineCount,
-    meal_quality: lifestyleData.mealQuality ?? -1,
-    activity_level: lifestyleData.activityLevel ?? -1,
-    stress_level: lifestyleData.stressLevel ?? -1,
-    mood_level: lifestyleData.moodLevel ?? -1,
-    work_hours: allostaticData.workHoursToday ?? allostaticData.dailyWorkHoursProfile,
-    consecutive_low_days: allostaticData.consecutiveLowDays,
+    // Circadian
+    process_c: Math.round(circResult.processC * 100) / 100,
+    process_s: Math.round(circResult.processS * 100) / 100,
+    hours_awake: Math.round(hoursAwake * 10) / 10,
+    wake_time: Math.round(routine.wakeTime * 10) / 10,
+    // Sleep
+    sleep_quality: sleepResult.lastNightQuality ?? -1,
+    sleep_hours: sleepResult.lastNightHours ?? -1,
+    sleep_debt_hours: Math.round(sleepResult.sleepDebt * 10) / 10,
+    nap_recovery: Math.round(sleepResult.napRecovery * 10) / 10,
+    // Lifestyle
+    water_glasses: lifestyleResult.waterGlasses,
+    water_target: lifestyleResult.targetWater,
+    caffeine_count: lifestyleResult.caffeineCount,
+    caffeine_remaining_mg: Math.round(lifestyleResult.caffeineRemaining),
+    meal_quality: lifestyleResult.mealQuality ?? -1,
+    meals_logged: lifestyleResult.mealsLogged,
+    total_calories: lifestyleResult.totalCalories,
+    macro_balance: Math.round(lifestyleResult.macroBalance * 100) / 100,
+    activity_level: lifestyleResult.activityLevel ?? -1,
+    stress_level: lifestyleResult.stressLevel ?? -1,
+    mood_level: lifestyleResult.moodLevel ?? -1,
+    focus_level: lifestyleResult.focusLevel ?? -1,
+    screen_minutes: lifestyleResult.screenMinutes,
+    // Allostatic
+    work_hours: allostaticResult.workHours,
+    consecutive_low_days: allostaticResult.consecutiveLowDays,
+    stress_trend: Math.round(allostaticResult.stressTrend * 100) / 100,
+    hrv_indicator: allostaticResult.hrvIndicator ?? -1,
+    // Meta
+    interaction_penalty: interactionPenalty,
+    smoking: data.profile?.smokingFrequency === 'heavy' ? 3
+      : data.profile?.smokingFrequency === 'daily' ? 2
+      : data.profile?.smokingFrequency === 'occasional' ? 1 : 0,
+    alcohol: data.profile?.alcoholFrequency === 'daily' ? 3
+      : data.profile?.alcoholFrequency === 'weekly' ? 2
+      : data.profile?.alcoholFrequency === 'occasional' ? 1 : 0,
   };
 
   return {
     overall,
-    circadian,
-    sleep,
-    lifestyle,
-    allostatic,
+    circadian: circResult.score,
+    sleep: sleepResult.score,
+    lifestyle: lifestyleResult.score,
+    allostatic: allostaticResult.score,
     chronotype,
     predictedCurve,
     bottleneck,
-    sleepDebt,
+    sleepDebt: sleepResult.sleepDebt,
+    processS: circResult.processS,
+    processC: circResult.processC,
+    hoursAwake,
+    wakeTime: routine.wakeTime,
+    interactionPenalty,
+    explanations: {
+      circadian: circResult.explanation,
+      sleep: sleepResult.explanation,
+      lifestyle: lifestyleResult.explanation,
+      allostatic: allostaticResult.explanation,
+    },
     factors,
   };
 }
@@ -599,8 +1236,83 @@ export async function getTodayScientificScore(userId: number): Promise<Scientifi
 }
 
 /**
- * Label italiane per bottleneck.
+ * Calcola l'optimal time window per un'attivita in base al cronotipo e routine.
  */
+export function getOptimalWindows(chronotype: Chronotype): {
+  peakCognitive: string;
+  peakPhysical: string;
+  recovery: string;
+  creative: string;
+} {
+  switch (chronotype) {
+    case 'lion':
+      return {
+        peakCognitive: '06:00-10:00',
+        peakPhysical: '07:00-09:00',
+        recovery: '14:00-16:00',
+        creative: '10:00-12:00',
+      };
+    case 'bear':
+      return {
+        peakCognitive: '10:00-14:00',
+        peakPhysical: '09:00-11:00',
+        recovery: '14:00-16:00',
+        creative: '16:00-18:00',
+      };
+    case 'wolf':
+      return {
+        peakCognitive: '17:00-21:00',
+        peakPhysical: '16:00-18:00',
+        recovery: '13:00-15:00',
+        creative: '21:00-23:00',
+      };
+    case 'dolphin':
+      return {
+        peakCognitive: '10:00-14:00',
+        peakPhysical: '10:00-12:00',
+        recovery: '15:00-17:00',
+        creative: '16:00-18:00',
+      };
+  }
+}
+
+/**
+ * Stima il costo energetico di un'attivita.
+ * Returns impact on physical (0-10), mental (0-10), emotional (0-10).
+ */
+export function estimateActivityEnergyCost(
+  category: string,
+  durationMin: number,
+): { physical: number; mental: number; emotional: number; total: number } {
+  const hourFactor = durationMin / 60;
+
+  const baseCosts: Record<string, { p: number; m: number; e: number }> = {
+    fitness:       { p: 4, m: 1, e: 0.5 },
+    productivity:  { p: 0.5, m: 4, e: 1 },
+    energy:        { p: 2, m: 2, e: 1 },
+    sleep:         { p: -2, m: -1, e: -1 }, // recovery
+    stress:        { p: 0.5, m: 1, e: 3 },
+    nutrition:     { p: 0.5, m: 1, e: 0.5 },
+    custom:        { p: 2, m: 2, e: 2 },
+  };
+
+  const base = baseCosts[category] ?? baseCosts.custom;
+  const physical = clamp(base.p * hourFactor, -3, 10);
+  const mental = clamp(base.m * hourFactor, -3, 10);
+  const emotional = clamp(base.e * hourFactor, -3, 10);
+
+  return {
+    physical,
+    mental,
+    emotional,
+    total: physical + mental + emotional,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Labels
+// ---------------------------------------------------------------------------
+
 export const BOTTLENECK_LABELS: Record<Bottleneck, string> = {
   sleep: 'Sonno insufficiente',
   hydration: 'Disidratazione',
@@ -608,15 +1320,16 @@ export const BOTTLENECK_LABELS: Record<Bottleneck, string> = {
   stress: 'Stress elevato',
   overwork: 'Sovraccarico lavorativo',
   inactivity: 'Sedentarieta',
+  caffeine_late: 'Caffeina tardiva',
+  screen_fatigue: 'Affaticamento da schermo',
+  burnout_risk: 'Rischio burnout',
+  sleep_debt: 'Debito di sonno accumulato',
   none: 'Nessun problema critico',
 };
 
-/**
- * Label italiane per cronotipo.
- */
 export const CHRONOTYPE_LABELS: Record<Chronotype, { name: string; description: string }> = {
-  lion: { name: 'Leone', description: 'Mattiniero, picco energetico 6-10' },
-  bear: { name: 'Orso', description: 'Segue il sole, picco 9-13' },
-  wolf: { name: 'Lupo', description: 'Nottambulo, picco 17-21' },
-  dolphin: { name: 'Delfino', description: 'Sonno leggero, finestre brevi di picco' },
+  lion:    { name: 'Leone', description: 'Mattiniero, picco cognitivo 6-10, 15% della popolazione' },
+  bear:    { name: 'Orso', description: 'Segue il sole, picco 10-14, 55% della popolazione' },
+  wolf:    { name: 'Lupo', description: 'Nottambulo, picco 17-21, 15% della popolazione' },
+  dolphin: { name: 'Delfino', description: 'Sonno leggero, picco 10-14 con finestre brevi, 15%' },
 };

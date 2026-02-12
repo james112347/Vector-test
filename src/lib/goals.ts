@@ -1,18 +1,31 @@
 // ---------------------------------------------------------------------------
-// Goals System — Gestione obiettivi basata su MCII/WOOP
+// Goals System v2 — Gestione obiettivi basata su MCII/WOOP + AI Energy Advisor
 //
 // Framework: Mental Contrasting with Implementation Intentions (Oettingen 2012)
 //   Wish → Outcome → Obstacle → Plan (If-Then)
+//   Effect size: g = 0.277-0.465 (meta-analysis 2021)
+//   2x physical activity improvement vs. information-only (4 months)
 //
-// Features:
+// v2 Features:
 //   - CRUD obiettivi
 //   - Tracking automatico da check-in linkati
 //   - Streak tracking
-//   - AI advice generation via Groq
+//   - AI-powered goal setup: analisi dati utente, target realistici,
+//     tempi ottimali, costo energetico, conflitti con altri obiettivi
+//   - Energy budget: quanto costa ogni obiettivo in termini di energia
+//   - Schedule ottimale: quando lavorare su ogni obiettivo basato sul cronotipo
 // ---------------------------------------------------------------------------
 
 import { db } from '../db/db';
 import type { Goal, GoalLog, GoalCategory, GoalTimeframe, GoalStatus, CheckinType } from '../db/schema';
+import { supabase } from './supabase';
+import {
+  computeScientificEnergy,
+  getOptimalWindows,
+  estimateActivityEnergyCost,
+  type EnergyBreakdown,
+  type Chronotype,
+} from './energy-engine';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -217,8 +230,9 @@ export async function autoTrackGoals(userId: number, checkinType: CheckinType): 
   for (const goal of linkedGoals) {
     // Calcola il valore totale di oggi per quel tipo di checkin
     const todayCheckins = await db.quickCheckins
-      .where('[userId+date+type]')
-      .equals([userId, today, checkinType])
+      .where('[userId+date]')
+      .equals([userId, today])
+      .and(c => c.type === checkinType)
       .toArray();
 
     const totalValue = todayCheckins.reduce((s, c) => s + c.value, 0);
@@ -429,3 +443,266 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
     targetUnit: 'pause',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// AI-Powered Goal Advisor
+// ---------------------------------------------------------------------------
+
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+let _cachedApiKey: string | null | undefined = undefined;
+
+async function getGoalApiKey(): Promise<string | null> {
+  if (_cachedApiKey !== undefined) return _cachedApiKey;
+  const envKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+  if (envKey && envKey !== 'your_groq_api_key_here') {
+    _cachedApiKey = envKey;
+    return _cachedApiKey;
+  }
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'groq_api_key')
+        .single();
+      _cachedApiKey = data?.value || null;
+      return _cachedApiKey;
+    } catch { /* no key */ }
+  }
+  _cachedApiKey = null;
+  return null;
+}
+
+export interface GoalSetupAdvice {
+  suggestedTarget: number | null;
+  suggestedUnit: string | null;
+  optimalTimeOfDay: string;
+  estimatedEnergyCost: 'basso' | 'medio' | 'alto';
+  conflicts: string[];
+  implementationTips: string[];
+  improvedPlan: string;
+  expectedTimeline: string;
+  linkedCheckinSuggestion: CheckinType | null;
+}
+
+/**
+ * AI analizza i dati utente e suggerisce come ottimizzare un obiettivo.
+ * Considera: cronobiologia, routine attuale, energia disponibile, altri obiettivi.
+ */
+export async function generateGoalSetupAdvice(
+  userId: number,
+  goalInput: Partial<CreateGoalInput>,
+): Promise<GoalSetupAdvice | null> {
+  const apiKey = await getGoalApiKey();
+  if (!apiKey) return null;
+
+  // Gather context
+  let energy: EnergyBreakdown | null = null;
+  try { energy = await computeScientificEnergy(userId); } catch { /* no data */ }
+
+  const activeGoals = await getActiveGoals(userId);
+  const profile = await db.userProfiles.where('userId').equals(userId).first();
+  const stats = await getGoalStats(userId);
+
+  const windows = energy ? getOptimalWindows(energy.chronotype) : null;
+
+  const activeGoalsSummary = activeGoals.map(g =>
+    `- ${g.wish} (${CATEGORY_LABELS[g.category]}, ${TIMEFRAME_LABELS[g.timeframe]}${g.targetValue ? `, target: ${g.targetValue} ${g.targetUnit || ''}` : ''})`
+  ).join('\n');
+
+  const prompt = `Sei un coach energetico italiano esperto di cronobiologia e obiettivi WOOP/MCII.
+L'utente vuole creare un nuovo obiettivo. Analizza i suoi dati e suggerisci come ottimizzarlo.
+
+NUOVO OBIETTIVO:
+- Desiderio: ${goalInput.wish || '(non specificato)'}
+- Categoria: ${goalInput.category || '(non specificata)'}
+- Frequenza: ${goalInput.timeframe || '(non specificata)'}
+${goalInput.outcome ? `- Risultato: ${goalInput.outcome}` : ''}
+${goalInput.obstacle ? `- Ostacolo: ${goalInput.obstacle}` : ''}
+${goalInput.plan ? `- Piano: ${goalInput.plan}` : ''}
+
+PROFILO UTENTE:
+${profile ? `- Nome: ${profile.name}, Eta: ${new Date().getFullYear() - profile.birthYear}
+- Lavoro: ${profile.occupation}, ${profile.dailyWorkHours}h/giorno, orario: ${profile.workSchedule}
+- Attivita: ${profile.activityLevel}, Sonno: ${profile.sleepHours}h
+- Caffeina: ${profile.caffeineDaily}/giorno` : 'Non disponibile'}
+
+STATO ENERGETICO ATTUALE:
+${energy ? `- Score: ${energy.overall}/100 (circadiano: ${energy.circadian}/25, sonno: ${energy.sleep}/25, lifestyle: ${energy.lifestyle}/25, carico: ${energy.allostatic}/25)
+- Cronotipo: ${energy.chronotype}
+- Debito sonno: ${energy.sleepDebt.toFixed(1)}h
+- Collo di bottiglia: ${energy.bottleneck}
+- Ore sveglio: ${energy.hoursAwake.toFixed(1)}h` : 'Non disponibile'}
+
+${windows ? `FINESTRE OTTIMALI (cronotipo ${energy?.chronotype}):
+- Picco cognitivo: ${windows.peakCognitive}
+- Picco fisico: ${windows.peakPhysical}
+- Recupero: ${windows.recovery}
+- Creativita: ${windows.creative}` : ''}
+
+OBIETTIVI GIA ATTIVI (${activeGoals.length}):
+${activeGoalsSummary || 'Nessuno'}
+
+STATISTICHE: ${stats.totalGoals} obiettivi totali, ${stats.completionRate > 0 ? Math.round(stats.completionRate * 100) + '% tasso di successo' : 'nessuno storico'}
+
+Rispondi in JSON con questa struttura:
+{
+  "suggestedTarget": numero_target_realistico o null se non applicabile,
+  "suggestedUnit": "unita_di_misura" o null,
+  "optimalTimeOfDay": "fascia oraria migliore basata sul cronotipo e sulla categoria (es. 'mattina presto 6-8', 'tarda mattina 10-12', 'pomeriggio 15-17', 'sera 19-21')",
+  "estimatedEnergyCost": "basso" o "medio" o "alto",
+  "conflicts": ["conflitto 1 con obiettivi esistenti o routine", ...] (array vuoto se nessuno),
+  "implementationTips": ["consiglio specifico 1", "consiglio specifico 2", "consiglio specifico 3"],
+  "improvedPlan": "Piano Se-Allora migliorato basato sui dati dell'utente, piu specifico e legato alla sua routine",
+  "expectedTimeline": "Timeline realistica per vedere risultati (es. '2-3 settimane per notare miglioramenti')",
+  "linkedCheckinSuggestion": "tipo_checkin_suggerito" o null
+}
+
+REGOLE:
+- Solo JSON valido, niente testo fuori
+- Il target deve essere REALISTICO basato sui dati attuali dell'utente
+- L'orario deve rispettare il cronotipo (non suggerire mattina presto a un Wolf)
+- Identifica conflitti reali con gli obiettivi esistenti (sovraccarico, orari sovrapposti)
+- I consigli devono essere specifici, non generici
+- Il piano migliorato deve usare dettagli dalla routine dell'utente
+- In italiano`;
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.6,
+        max_tokens: 800,
+        response_format: { type: 'json_object' },
+      }),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
+    return JSON.parse(content) as GoalSetupAdvice;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Energy Budget
+// ---------------------------------------------------------------------------
+
+export interface EnergyBudget {
+  dailyCapacity: number;        // estimated total daily energy (0-100)
+  allocatedToGoals: number;     // energy committed to active goals
+  available: number;            // remaining capacity
+  goalAllocations: {
+    goalId: number;
+    wish: string;
+    category: GoalCategory;
+    energyCost: number;         // estimated daily energy cost
+  }[];
+  overloaded: boolean;          // true if goals exceed 60% of capacity
+}
+
+/**
+ * Calcola il budget energetico: quanta energia e' allocata agli obiettivi attivi.
+ */
+export async function getGoalEnergyBudget(userId: number): Promise<EnergyBudget> {
+  let energy: EnergyBreakdown | null = null;
+  try { energy = await computeScientificEnergy(userId); } catch { /* no data */ }
+
+  const dailyCapacity = energy?.overall ?? 60;
+  const activeGoals = await getActiveGoals(userId);
+
+  const goalAllocations = activeGoals.map(g => {
+    // Estimate energy cost based on category and timeframe
+    const durationEstimate = g.timeframe === 'daily' ? 30 : g.timeframe === 'weekly' ? 60 : 90;
+    const cost = estimateActivityEnergyCost(g.category, durationEstimate);
+    const dailyCost = g.timeframe === 'daily'
+      ? cost.total
+      : g.timeframe === 'weekly'
+        ? cost.total / 7
+        : cost.total / 30;
+
+    return {
+      goalId: g.id!,
+      wish: g.wish,
+      category: g.category,
+      energyCost: Math.round(dailyCost * 10) / 10,
+    };
+  });
+
+  const allocatedToGoals = goalAllocations.reduce((s, g) => s + g.energyCost, 0);
+  const available = Math.max(0, dailyCapacity * 0.6 - allocatedToGoals); // reserve 40% for life
+
+  return {
+    dailyCapacity,
+    allocatedToGoals: Math.round(allocatedToGoals * 10) / 10,
+    available: Math.round(available * 10) / 10,
+    goalAllocations,
+    overloaded: allocatedToGoals > dailyCapacity * 0.6,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Optimal Schedule
+// ---------------------------------------------------------------------------
+
+export interface GoalScheduleSlot {
+  goalId: number;
+  wish: string;
+  category: GoalCategory;
+  suggestedTime: string;        // "10:00-11:00"
+  reason: string;               // perche' questo orario
+  energyDimension: 'physical' | 'mental' | 'emotional';
+}
+
+/**
+ * Genera un programma giornaliero ottimale per gli obiettivi attivi,
+ * basato su cronotipo e tipo di attivita.
+ */
+export async function getOptimalGoalSchedule(userId: number): Promise<{
+  chronotype: Chronotype;
+  schedule: GoalScheduleSlot[];
+  peakWindows: ReturnType<typeof getOptimalWindows>;
+}> {
+  let energy: EnergyBreakdown | null = null;
+  try { energy = await computeScientificEnergy(userId); } catch { /* no data */ }
+
+  const chronotype: Chronotype = energy?.chronotype ?? 'bear';
+  const windows = getOptimalWindows(chronotype);
+  const activeGoals = await getActiveGoals(userId);
+
+  const categoryTimeMap: Record<GoalCategory, { time: string; reason: string; dim: 'physical' | 'mental' | 'emotional' }> = {
+    fitness:       { time: windows.peakPhysical, reason: 'Picco energia fisica', dim: 'physical' },
+    productivity:  { time: windows.peakCognitive, reason: 'Picco cognitivo del tuo cronotipo', dim: 'mental' },
+    energy:        { time: windows.peakCognitive, reason: 'Massima attenzione disponibile', dim: 'mental' },
+    sleep:         { time: windows.recovery, reason: 'Fase di recupero naturale', dim: 'physical' },
+    stress:        { time: windows.recovery, reason: 'Momento ideale per decompressione', dim: 'emotional' },
+    nutrition:     { time: windows.peakCognitive, reason: 'Buona concentrazione per scelte consapevoli', dim: 'mental' },
+    custom:        { time: windows.creative, reason: 'Finestra creativa/flessibile', dim: 'emotional' },
+  };
+
+  const schedule: GoalScheduleSlot[] = activeGoals
+    .filter(g => g.timeframe === 'daily' || g.timeframe === 'weekly')
+    .map(g => {
+      const mapping = categoryTimeMap[g.category];
+      return {
+        goalId: g.id!,
+        wish: g.wish,
+        category: g.category,
+        suggestedTime: mapping.time,
+        reason: mapping.reason,
+        energyDimension: mapping.dim,
+      };
+    });
+
+  return { chronotype, schedule, peakWindows: windows };
+}

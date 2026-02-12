@@ -1,6 +1,7 @@
 import { db } from '../db/db';
 import type { QuickCheckin, CheckinType } from '../db/schema';
 import { pushDataToSupabase } from './data-sync';
+import { autoTrackGoals } from './goals';
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -27,6 +28,9 @@ export async function addCheckin(
     createdAt: new Date(),
   };
   const id = await db.quickCheckins.add(checkin);
+
+  // Auto-track linked goals in background
+  autoTrackGoals(userId, type).catch(() => {/* ignore */});
 
   // Sync to Supabase in background
   db.users.get(userId).then(u => {

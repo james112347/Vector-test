@@ -15,6 +15,11 @@ import {
   Droplets,
   AlertTriangle,
   TrendingUp,
+  Brain,
+  Clock,
+  Activity,
+  Heart,
+  Info,
 } from 'lucide-react';
 
 interface Props {
@@ -27,13 +32,16 @@ function ScoreRing({
   label,
   color,
   size = 'sm',
+  explanation,
 }: {
   value: number;
   maxValue: number;
   label: string;
   color: string;
   size?: 'sm' | 'lg';
+  explanation?: string;
 }) {
+  const [showTip, setShowTip] = useState(false);
   const percentage = (value / maxValue) * 100;
   const radius = size === 'lg' ? 44 : 24;
   const strokeWidth = size === 'lg' ? 8 : 4;
@@ -43,8 +51,11 @@ function ScoreRing({
   const offset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className={`relative ${size === 'lg' ? 'w-24 h-24' : 'w-14 h-14'}`}>
+    <div className="flex flex-col items-center gap-1 relative">
+      <div
+        className={`relative ${size === 'lg' ? 'w-24 h-24' : 'w-14 h-14'} cursor-pointer`}
+        onClick={() => explanation && setShowTip(!showTip)}
+      >
         <svg
           className={`${size === 'lg' ? 'w-24 h-24' : 'w-14 h-14'} -rotate-90`}
           viewBox={`0 0 ${viewSize} ${viewSize}`}
@@ -75,6 +86,12 @@ function ScoreRing({
         </div>
       </div>
       <span className="text-[10px] text-muted-foreground text-center">{label}</span>
+      {showTip && explanation && (
+        <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-20 w-48 rounded-lg bg-popover border border-border p-2 shadow-lg">
+          <p className="text-[10px] text-foreground">{explanation}</p>
+          <button onClick={() => setShowTip(false)} className="text-[9px] text-primary mt-1">Chiudi</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -83,42 +100,86 @@ function PredictedCurve({ curve, currentScore }: { curve: number[]; currentScore
   const hour = new Date().getHours();
   const allValues = [currentScore, ...curve];
   const maxVal = Math.max(...allValues, 1);
-  const points = allValues.map((v, i) => {
-    const x = (i / (allValues.length - 1)) * 200;
-    const y = 40 - (v / maxVal) * 35;
-    return `${x},${y}`;
+  const minVal = Math.min(...allValues);
+  const range = maxVal - minVal || 1;
+
+  // Build smooth path
+  const width = 280;
+  const height = 50;
+  const padding = 5;
+  const points = allValues.map((v, i) => ({
+    x: padding + (i / (allValues.length - 1)) * (width - 2 * padding),
+    y: padding + (1 - (v - minVal) / range) * (height - 2 * padding),
+  }));
+
+  const pathD = points.map((p, i) => {
+    if (i === 0) return `M ${p.x},${p.y}`;
+    const prev = points[i - 1];
+    const cx = (prev.x + p.x) / 2;
+    return `C ${cx},${prev.y} ${cx},${p.y} ${p.x},${p.y}`;
   }).join(' ');
 
+  // Find best and worst hour
+  const bestIdx = allValues.indexOf(Math.max(...allValues));
+  const worstIdx = allValues.indexOf(Math.min(...allValues.slice(1))) + (allValues.indexOf(Math.min(...allValues.slice(1))) >= 0 ? 0 : 0);
+
   return (
-    <div className="mt-2">
-      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-        Previsione prossime 6 ore
+    <div className="mt-3">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1">
+        <TrendingUp className="h-3 w-3" />
+        Previsione prossime 12 ore
       </p>
-      <svg viewBox="0 0 200 45" className="w-full h-10">
-        <polyline
-          points={points}
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-12">
+        {/* Area fill */}
+        <path
+          d={`${pathD} L ${points[points.length - 1].x},${height - padding} L ${padding},${height - padding} Z`}
+          fill="var(--color-primary)"
+          fillOpacity="0.08"
+        />
+        {/* Line */}
+        <path
+          d={pathD}
           fill="none"
           stroke="var(--color-primary)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {allValues.map((v, i) => (
+        {/* Data points */}
+        {points.map((p, i) => (
           <circle
             key={i}
-            cx={(i / (allValues.length - 1)) * 200}
-            cy={40 - (v / maxVal) * 35}
-            r="2.5"
+            cx={p.x} cy={p.y}
+            r={i === 0 ? 3 : 2}
             fill={i === 0 ? 'var(--color-primary)' : 'var(--color-muted-foreground)'}
+            fillOpacity={i === 0 ? 1 : 0.5}
           />
         ))}
+        {/* Value labels for first, peak, and last */}
+        <text x={points[0].x} y={points[0].y - 5} textAnchor="middle" className="fill-primary text-[7px] font-bold">{allValues[0]}</text>
+        {bestIdx > 0 && bestIdx < allValues.length - 1 && (
+          <text x={points[bestIdx].x} y={points[bestIdx].y - 5} textAnchor="middle" className="fill-green-500 text-[7px] font-bold">{allValues[bestIdx]}</text>
+        )}
       </svg>
-      <div className="flex justify-between text-[9px] text-muted-foreground">
-        <span>Ora</span>
-        {curve.map((_, i) => (
-          <span key={i}>{((hour + i + 1) % 24).toString().padStart(2, '0')}:00</span>
+      <div className="flex justify-between text-[8px] text-muted-foreground px-1">
+        <span className="font-medium">Ora</span>
+        {curve.filter((_, i) => i % 2 === 0).map((_, i) => (
+          <span key={i}>{((hour + (i * 2) + 1) % 24).toString().padStart(2, '0')}:00</span>
         ))}
+        <span>{((hour + 12) % 24).toString().padStart(2, '0')}:00</span>
       </div>
+    </div>
+  );
+}
+
+function ProcessIndicator({ label, value, icon: Icon, color }: {
+  label: string; value: string; icon: typeof Brain; color: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon className="h-3 w-3 shrink-0" style={{ color }} />
+      <span className="text-[10px] text-muted-foreground">{label}:</span>
+      <span className="text-[10px] font-medium">{value}</span>
     </div>
   );
 }
@@ -126,6 +187,7 @@ function PredictedCurve({ curve, currentScore }: { curve: number[]; currentScore
 export default function ScientificEnergyCard({ userId }: Props) {
   const [breakdown, setBreakdown] = useState<EnergyBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,17 +239,36 @@ export default function ScientificEnergyCard({ userId }: Props) {
         <div className="flex items-center gap-4">
           <ScoreRing value={breakdown.overall} maxValue={100} label="Totale" color={scoreColor} size="lg" />
           <div className="flex-1 grid grid-cols-2 gap-2">
-            <ScoreRing value={breakdown.circadian} maxValue={25} label="Circadiano" color="#6366f1" />
-            <ScoreRing value={breakdown.sleep} maxValue={25} label="Sonno" color="#8b5cf6" />
-            <ScoreRing value={breakdown.lifestyle} maxValue={25} label="Stile di vita" color="#22c55e" />
-            <ScoreRing value={breakdown.allostatic} maxValue={25} label="Carico" color="#f59e0b" />
+            <ScoreRing
+              value={breakdown.circadian} maxValue={25} label="Circadiano" color="#6366f1"
+              explanation={breakdown.explanations?.circadian}
+            />
+            <ScoreRing
+              value={breakdown.sleep} maxValue={25} label="Sonno" color="#8b5cf6"
+              explanation={breakdown.explanations?.sleep}
+            />
+            <ScoreRing
+              value={breakdown.lifestyle} maxValue={25} label="Stile di vita" color="#22c55e"
+              explanation={breakdown.explanations?.lifestyle}
+            />
+            <ScoreRing
+              value={breakdown.allostatic} maxValue={25} label="Carico" color="#f59e0b"
+              explanation={breakdown.explanations?.allostatic}
+            />
           </div>
         </div>
+
+        {/* Interaction penalty */}
+        {breakdown.interactionPenalty > 0 && (
+          <div className="text-[10px] text-center text-red-500 font-medium">
+            Penalita interazione: -{breakdown.interactionPenalty} (multipli fattori critici)
+          </div>
+        )}
 
         {/* Chronotype badge */}
         <div className="flex items-center gap-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-2">
           <Sun className="h-4 w-4 text-indigo-500 shrink-0" />
-          <div>
+          <div className="flex-1">
             <p className="text-xs font-medium">Cronotipo: {chrono.name}</p>
             <p className="text-[10px] text-muted-foreground">{chrono.description}</p>
           </div>
@@ -218,6 +299,57 @@ export default function ScientificEnergyCard({ userId }: Props) {
                 Recupero necessario per prestazioni ottimali
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Two-Process Model indicators */}
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className="w-full flex items-center justify-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors"
+        >
+          <Info className="h-3 w-3" />
+          {showDetails ? 'Nascondi dettagli scientifici' : 'Mostra dettagli scientifici'}
+        </button>
+
+        {showDetails && (
+          <div className="rounded-lg bg-muted/50 border border-border p-2.5 space-y-1.5">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Two-Process Model (Borbely)
+            </p>
+            <ProcessIndicator
+              label="Process C (circadiano)"
+              value={`${Math.round(breakdown.processC * 100)}%`}
+              icon={Sun} color="#6366f1"
+            />
+            <ProcessIndicator
+              label="Process S (pressione sonno)"
+              value={`${Math.round(breakdown.processS * 100)}%`}
+              icon={Moon} color="#8b5cf6"
+            />
+            <ProcessIndicator
+              label="Ore sveglio"
+              value={`${breakdown.hoursAwake.toFixed(1)}h${breakdown.hoursAwake > 15.84 ? ' (critico)' : ''}`}
+              icon={Clock} color={breakdown.hoursAwake > 15.84 ? '#ef4444' : '#64748b'}
+            />
+            <ProcessIndicator
+              label="Sveglia stimata"
+              value={`${Math.floor(breakdown.wakeTime)}:${String(Math.round((breakdown.wakeTime % 1) * 60)).padStart(2, '0')}`}
+              icon={Activity} color="#22c55e"
+            />
+            {breakdown.factors.caffeine_remaining_mg > 0 && (
+              <ProcessIndicator
+                label="Caffeina residua"
+                value={`${breakdown.factors.caffeine_remaining_mg}mg`}
+                icon={Zap} color="#f59e0b"
+              />
+            )}
+            {breakdown.factors.hrv_indicator >= 0 && (
+              <ProcessIndicator
+                label="HRV (recupero)"
+                value={`${Math.round(breakdown.factors.hrv_indicator * 100)}%`}
+                icon={Heart} color={breakdown.factors.hrv_indicator > 0.5 ? '#22c55e' : '#ef4444'}
+              />
+            )}
           </div>
         )}
 
