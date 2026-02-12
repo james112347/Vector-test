@@ -175,3 +175,23 @@ create policy "feedbacks_update" on public.feedbacks
 
 -- Abilita Realtime per feedback (notifiche admin)
 alter publication supabase_realtime add table public.feedbacks;
+
+-- =============================================================
+-- Configurazione app (chiavi API, parametri)
+-- =============================================================
+
+create table if not exists public.app_config (
+  key text primary key,
+  value text not null
+);
+
+alter table public.app_config enable row level security;
+
+-- Solo lettura pubblica (le chiavi vengono inserite manualmente da admin in Supabase Dashboard)
+create policy "app_config_select" on public.app_config
+  for select using (true);
+
+-- Inserisci la chiave Groq (sostituisci <LA_TUA_CHIAVE_GROQ>):
+-- INSERT INTO public.app_config (key, value)
+-- VALUES ('groq_api_key', '<LA_TUA_CHIAVE_GROQ>')
+-- ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;

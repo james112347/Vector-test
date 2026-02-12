@@ -12,8 +12,41 @@ export interface ChatMessage {
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-function getApiKey(): string | null {
-  return import.meta.env.VITE_GROQ_API_KEY || null;
+// Cache the API key in memory after first fetch
+let cachedApiKey: string | null | undefined = undefined;
+
+/**
+ * Get Groq API key: tries .env first (local dev), then Supabase app_config (production).
+ */
+async function getApiKey(): Promise<string | null> {
+  // Already fetched this session
+  if (cachedApiKey !== undefined) return cachedApiKey;
+
+  // 1. Try build-time env variable (works in local dev)
+  const envKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+  if (envKey) {
+    cachedApiKey = envKey;
+    return cachedApiKey;
+  }
+
+  // 2. Try Supabase app_config table (works in production)
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'groq_api_key')
+        .single();
+      const key = data?.value || null;
+      cachedApiKey = key;
+      return key;
+    } catch {
+      console.warn('Could not fetch Groq API key from Supabase');
+    }
+  }
+
+  cachedApiKey = null;
+  return null;
 }
 
 const SYSTEM_PROMPT = `Sei l'assistente di Vector, un'app per il monitoraggio dell'energia personale.
@@ -72,7 +105,7 @@ FUNZIONALITA DELL'APP VECTOR:
  */
 export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
   // Try real AI first
-  const apiKey = getApiKey();
+  const apiKey = await getApiKey();
   if (apiKey) {
     try {
       return await callGroqAPI(apiKey, messages);
