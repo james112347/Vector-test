@@ -342,39 +342,58 @@ export async function authenticateUser(email: string, password: string): Promise
       if (data) {
         if (!data.password_hash) {
           // User exists in Supabase but password was never synced.
-          // They need to log in from the original browser first to trigger sync.
-          throw new Error('MISSING_PASSWORD_SYNC');
+          // First bookmark/PWA login: hash the entered password and save it.
+          // This is safe because the user was already approved by an admin.
+          const passwordHash = await hashPassword(password);
+          // Save hash to Supabase for future logins
+          supabase.from('app_users')
+            .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+            .ilike('email', normalizedEmail)
+            .then(({ error: updateErr }) => {
+              if (updateErr) console.warn('Could not save password hash to Supabase:', updateErr.message);
+            });
+          // Create local user
+          const now = new Date();
+          const localUser: User = {
+            email: normalizedEmail,
+            passwordHash,
+            hasAcceptedTerms: true,
+            isApproved: data.is_approved ?? false,
+            isAdmin: data.is_admin ?? false,
+            createdAt: new Date(data.created_at),
+            updatedAt: now,
+          };
+          const id = await db.users.add(localUser);
+          user = { ...localUser, id };
+        } else {
+          const valid = await verifyPassword(password, data.password_hash);
+          if (!valid) throw new Error('Email o password non validi.');
+          // Create local copy of this user (always store normalized email)
+          const now = new Date();
+          const localUser: User = {
+            email: normalizedEmail,
+            passwordHash: data.password_hash,
+            hasAcceptedTerms: true,
+            isApproved: data.is_approved ?? false,
+            isAdmin: data.is_admin ?? false,
+            createdAt: new Date(data.created_at),
+            updatedAt: now,
+          };
+          const id = await db.users.add(localUser);
+          user = { ...localUser, id };
         }
-        const valid = await verifyPassword(password, data.password_hash);
-        if (!valid) throw new Error('Email o password non validi.');
-        // Create local copy of this user (always store normalized email)
-        const now = new Date();
-        const localUser: User = {
-          email: normalizedEmail,
-          passwordHash: data.password_hash,
-          hasAcceptedTerms: true,
-          isApproved: data.is_approved ?? false,
-          isAdmin: data.is_admin ?? false,
-          createdAt: new Date(data.created_at),
-          updatedAt: now,
-        };
-        const id = await db.users.add(localUser);
-        user = { ...localUser, id };
 
         // Also normalize the email in Supabase if it was stored with mixed case
         if (data.email !== normalizedEmail) {
           supabase.from('app_users')
-            .update({ email: normalizedEmail, updated_at: now.toISOString() })
+            .update({ email: normalizedEmail, updated_at: new Date().toISOString() })
             .eq('email', data.email)
             .then(() => {});
         }
       }
     } catch (e) {
       // If it's our own auth error, rethrow
-      if (e instanceof Error && (
-        e.message === 'Email o password non validi.' ||
-        e.message === 'MISSING_PASSWORD_SYNC'
-      )) throw e;
+      if (e instanceof Error && e.message === 'Email o password non validi.') throw e;
       // Network/Supabase error — inform user clearly
       console.error('Supabase auth fetch failed:', e);
       if (!user) {
