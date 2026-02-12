@@ -4,10 +4,12 @@ const STORAGE_KEY = 'vector_app_settings';
 
 export interface AppSettings {
   autoRefresh: boolean;
+  notificationsEnabled: boolean;
 }
 
 const defaults: AppSettings = {
   autoRefresh: true,
+  notificationsEnabled: false,
 };
 
 function load(): AppSettings {

@@ -1,5 +1,7 @@
 import { db } from '../db/db';
 import type { UserFeedback, FeedbackStatus } from '../db/schema';
+import { notifyNewFeedback } from './notifications';
+import { getAppSettings } from './useAppSettings';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -85,7 +87,7 @@ export async function saveFeedback(
   category: UserFeedback['category'],
 ): Promise<number> {
   const now = new Date();
-  return db.feedbacks.add({
+  const id = await db.feedbacks.add({
     userId,
     userEmail,
     category,
@@ -95,6 +97,13 @@ export async function saveFeedback(
     createdAt: now,
     updatedAt: now,
   });
+
+  // Notify admin if notifications are enabled
+  if (getAppSettings().notificationsEnabled) {
+    notifyNewFeedback(userEmail, category);
+  }
+
+  return id;
 }
 
 export async function getUserFeedbacks(userId: number): Promise<UserFeedback[]> {

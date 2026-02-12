@@ -6,6 +6,7 @@ import { Separator } from '../components/ui/separator';
 import { useAuthState } from '../contexts/AuthContext';
 import { useDarkMode } from '../lib/useDarkMode';
 import { useAppSettings } from '../lib/useAppSettings';
+import { isNotificationSupported, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
 import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail } from '../lib/auth';
 import type { User } from '../db/schema';
 
@@ -122,6 +123,41 @@ export default function Settings() {
               />
             </button>
           </div>
+          {isNotificationSupported() && (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Notifiche</p>
+                  <p className="text-sm text-muted-foreground">
+                    {getNotificationPermission() === 'denied'
+                      ? 'Bloccate dal browser - abilita dalle impostazioni'
+                      : 'Ricevi avvisi su nuovi feedback'}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!settings.notificationsEnabled) {
+                      const granted = await requestNotificationPermission();
+                      if (granted) updateSettings({ notificationsEnabled: true });
+                    } else {
+                      updateSettings({ notificationsEnabled: false });
+                    }
+                  }}
+                  disabled={getNotificationPermission() === 'denied'}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                    settings.notificationsEnabled ? 'bg-primary' : 'bg-muted'
+                  } ${getNotificationPermission() === 'denied' ? 'opacity-40' : ''}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      settings.notificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </>
+          )}
           <Separator />
           <div className="flex items-center justify-between">
             <div>

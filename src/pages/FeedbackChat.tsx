@@ -207,14 +207,32 @@ export default function FeedbackChat() {
         /* Chat area */
         <>
           <div className="flex-1 overflow-y-auto space-y-3 pb-3">
-            {/* Welcome message */}
+            {/* Welcome + Informativa */}
             {messages.length === 0 && (
               <div className="space-y-3">
-                <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-3 max-w-[85%]">
-                  <p className="text-sm">
-                    Ciao! Sono l'assistente di Vector. Dimmi cosa vorresti segnalare o migliorare e ti aiutero a formulare il feedback nel modo migliore.
+                {/* Informativa */}
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-xs font-semibold text-primary">Perche lasciare un feedback?</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Il tuo feedback e fondamentale per migliorare Vector. Ogni segnalazione ci aiuta a
+                    correggere problemi, aggiungere funzioni utili e rendere l'app piu efficace per il
+                    tuo benessere. L'assistente IA ti aiutera a formulare il messaggio nel modo migliore.
                   </p>
                 </div>
+
+                {/* AI greeting */}
+                <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-3 max-w-[85%]">
+                  <p className="text-sm">
+                    Ciao! Sono l'assistente di Vector. Dimmi cosa vorresti segnalare o migliorare e ti aiutero a formulare il feedback. Puoi anche chiedermi aiuto sull'uso dell'app!
+                  </p>
+                </div>
+
+                {/* Quick suggestions */}
                 <div className="flex flex-wrap gap-2">
                   {[
                     'Ho trovato un problema',
