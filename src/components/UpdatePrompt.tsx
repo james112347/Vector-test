@@ -18,8 +18,14 @@ export function initSW(registerSW: (options: RegisterSWOptions) => (reloadPage?:
       if (resolveReady) resolveReady(registration);
     },
     onNeedRefresh() {
-      // Notify the UpdatePrompt component
-      if (notifyUpdate) notifyUpdate();
+      // Auto-update: reload immediately to apply new version
+      // This prevents users from running stale cached code in bookmark/PWA mode
+      if (updateSWFn) {
+        updateSWFn(true);
+      } else {
+        // Fallback: show prompt if auto-update fails
+        if (notifyUpdate) notifyUpdate();
+      }
     },
     onOfflineReady() {
       console.log('Vector e pronta per funzionare offline');

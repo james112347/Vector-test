@@ -11,7 +11,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'robots.txt'],
       manifest: {
         name: 'Vector - Energy Tracker',
@@ -44,6 +44,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // SPA: redirect all navigation requests to index.html
+        navigateFallback: '/Vector-test/index.html',
+        navigateFallbackDenylist: [/^\/Vector-test\/api/],
+        // Force new SW to take over immediately
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -199,10 +199,11 @@ export async function authenticateUser(email: string, password: string): Promise
   // If user not found locally, try to fetch from Supabase (cross-device login)
   if (!user && supabase) {
     try {
+      // Use ilike for case-insensitive match (handles old data stored with mixed case)
       const { data, error } = await supabase
         .from('app_users')
         .select('*')
-        .eq('email', normalizedEmail)
+        .ilike('email', normalizedEmail)
         .single();
       if (error && error.code !== 'PGRST116') {
         // PGRST116 = "not found", any other error is a connectivity/server issue
@@ -211,10 +212,10 @@ export async function authenticateUser(email: string, password: string): Promise
       if (data?.password_hash) {
         const valid = await verifyPassword(password, data.password_hash);
         if (!valid) throw new Error('Email o password non validi.');
-        // Create local copy of this user
+        // Create local copy of this user (always store normalized email)
         const now = new Date();
         const localUser: User = {
-          email: data.email,
+          email: normalizedEmail,
           passwordHash: data.password_hash,
           hasAcceptedTerms: true,
           isApproved: data.is_approved ?? false,
@@ -224,6 +225,14 @@ export async function authenticateUser(email: string, password: string): Promise
         };
         const id = await db.users.add(localUser);
         user = { ...localUser, id };
+
+        // Also normalize the email in Supabase if it was stored with mixed case
+        if (data.email !== normalizedEmail) {
+          supabase.from('app_users')
+            .update({ email: normalizedEmail, updated_at: now.toISOString() })
+            .eq('email', data.email)
+            .then(() => {});
+        }
       }
     } catch (e) {
       // If it's our own auth error, rethrow
@@ -402,10 +411,17 @@ export async function getAllUsers(): Promise<User[]> {
 
   if (!supabase) return localUsers;
 
-  const { data: remoteUsers } = await supabase
-    .from('app_users')
-    .select('*')
-    .order('created_at', { ascending: true });
+  let remoteUsers;
+  try {
+    const result = await supabase
+      .from('app_users')
+      .select('*')
+      .order('created_at', { ascending: true });
+    remoteUsers = result.data;
+  } catch {
+    console.warn('Could not fetch remote users, using local data only');
+    return localUsers;
+  }
 
   if (!remoteUsers) return localUsers;
 
@@ -452,11 +468,15 @@ export async function getAllUsers(): Promise<User[]> {
  */
 export async function getPendingUsersCount(): Promise<number> {
   if (supabase) {
-    const { count } = await supabase
-      .from('app_users')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_approved', false);
-    return count ?? 0;
+    try {
+      const { count } = await supabase
+        .from('app_users')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_approved', false);
+      return count ?? 0;
+    } catch {
+      // Fallback to local count on network error
+    }
   }
   return db.users.filter(u => !u.isApproved).count();
 }

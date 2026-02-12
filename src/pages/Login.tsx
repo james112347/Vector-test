@@ -10,6 +10,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isConnectionError, setIsConnectionError] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
@@ -19,6 +20,7 @@ export default function Login() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsConnectionError(false);
     setPendingApproval(false);
     setIsLoading(true);
 
@@ -29,6 +31,9 @@ export default function Login() {
       const message = err instanceof Error ? err.message : 'Email o password non validi';
       if (message === 'PENDING_APPROVAL') {
         setPendingApproval(true);
+      } else if (message.includes('connettersi') || message.includes('connessione') || message.includes('network') || message.includes('fetch')) {
+        setIsConnectionError(true);
+        setError(message);
       } else {
         setError(message);
       }
@@ -141,7 +146,34 @@ export default function Login() {
               </div>
             )}
 
-            {error && (
+            {isConnectionError && error && (
+              <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4m0 4h.01" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                      Errore di connessione
+                    </p>
+                    <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                      Verifica la connessione internet e riprova.
+                    </p>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 h-8 text-xs"
+                      disabled={isLoading}
+                    >
+                      Riprova
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error && !isConnectionError && (
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             )}
           </CardContent>
