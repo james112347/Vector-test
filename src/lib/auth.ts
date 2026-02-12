@@ -474,13 +474,13 @@ export async function authenticateUser(email: string, password: string): Promise
     user.isApproved = true;
   }
 
-  // Check Supabase for latest approval status
+  // Check Supabase for latest approval status (always check, not just if locally unapproved)
   if (supabase && !user.isApproved) {
     try {
       const { data } = await supabase
         .from('app_users')
         .select('is_approved')
-        .eq('email', normalizedEmail)
+        .ilike('email', normalizedEmail)
         .single();
       if (data?.is_approved) {
         await db.users.update(user.id!, { isApproved: true, updatedAt: new Date() });
@@ -519,11 +519,22 @@ export async function approveUser(userId: number, email?: string): Promise<void>
   }
 
   if (supabase && targetEmail) {
+    // Use ilike for case-insensitive match to prevent silent 0-row updates
     const { error } = await supabase
       .from('app_users')
       .update({ is_approved: true, updated_at: new Date().toISOString() })
-      .eq('email', targetEmail);
+      .ilike('email', targetEmail);
     if (error) throw new Error(`Errore approvazione: ${error.message}`);
+
+    // Verify the update actually took effect
+    const { data: verify } = await supabase
+      .from('app_users')
+      .select('is_approved')
+      .ilike('email', targetEmail)
+      .single();
+    if (!verify?.is_approved) {
+      throw new Error('Approvazione non riuscita: il dato non è stato salvato su Supabase. Riprova.');
+    }
   }
 }
 
@@ -554,7 +565,7 @@ export async function revokeUser(userId: number, email?: string): Promise<void> 
     const { error } = await supabase
       .from('app_users')
       .update({ is_approved: false, updated_at: new Date().toISOString() })
-      .eq('email', targetEmail);
+      .ilike('email', targetEmail);
     if (error) throw new Error(`Errore revoca: ${error.message}`);
   }
 }
@@ -584,7 +595,7 @@ export async function deleteUser(userId: number, email?: string): Promise<void> 
   }
 
   if (supabase && targetEmail) {
-    const { error } = await supabase.from('app_users').delete().eq('email', targetEmail);
+    const { error } = await supabase.from('app_users').delete().ilike('email', targetEmail);
     if (error) throw new Error(`Errore eliminazione: ${error.message}`);
   }
 }

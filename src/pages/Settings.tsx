@@ -23,6 +23,7 @@ export default function Settings() {
   const [loadError, setLoadError] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [actionError, setActionError] = useState('');
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
@@ -54,10 +55,13 @@ export default function Settings() {
 
   const handleApprove = async (userId: number, email: string) => {
     setActionLoading(userId);
+    setActionError('');
     try {
       await approveUser(userId, email);
       await loadUsers();
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Errore durante l\'approvazione.';
+      setActionError(msg);
       console.error('Approve failed:', e);
     } finally {
       setActionLoading(null);
@@ -66,10 +70,13 @@ export default function Settings() {
 
   const handleRevoke = async (userId: number, email: string) => {
     setActionLoading(userId);
+    setActionError('');
     try {
       await revokeUser(userId, email);
       await loadUsers();
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Errore durante la sospensione.';
+      setActionError(msg);
       console.error('Revoke failed:', e);
     } finally {
       setActionLoading(null);
@@ -78,11 +85,14 @@ export default function Settings() {
 
   const handleDelete = async (userId: number, email: string) => {
     setActionLoading(userId);
+    setActionError('');
     try {
       await deleteUser(userId, email);
       setConfirmDelete(null);
       await loadUsers();
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Errore durante l\'eliminazione.';
+      setActionError(msg);
       console.error('Delete failed:', e);
     } finally {
       setActionLoading(null);
@@ -309,6 +319,12 @@ export default function Settings() {
               {loading ? 'Caricamento...' : 'Ricarica'}
             </Button>
           </div>
+
+          {actionError && (
+            <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
+              <p className="text-sm text-red-700 dark:text-red-300">{actionError}</p>
+            </div>
+          )}
 
           {loadError && (
             <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
