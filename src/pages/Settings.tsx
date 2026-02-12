@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
@@ -561,10 +561,24 @@ const CHANGELOG = [
 
 function ChangelogSection() {
   const [expanded, setExpanded] = useState(false);
+  const location = useLocation();
+  const changelogRef = useRef<HTMLDivElement>(null);
   const visibleEntries = expanded ? CHANGELOG : CHANGELOG.slice(0, 2);
 
+  // Auto-scroll when arriving from update notification or "Scopri le novità"
+  useEffect(() => {
+    const shouldScroll =
+      (location.state as any)?.scrollToChangelog ||
+      location.hash === '#changelog';
+    if (shouldScroll && changelogRef.current) {
+      setTimeout(() => {
+        changelogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, [location]);
+
   return (
-    <Card>
+    <Card ref={changelogRef} id="changelog">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">

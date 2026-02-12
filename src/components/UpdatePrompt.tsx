@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
+import { sendNotification } from '../lib/notifications';
+import { getAppSettings } from '../lib/useAppSettings';
 
 let resolveReady: ((reg: ServiceWorkerRegistration | undefined) => void) | null = null;
 let swRegistration: ServiceWorkerRegistration | undefined;
@@ -18,13 +21,20 @@ export function initSW(registerSW: (options: RegisterSWOptions) => (reloadPage?:
       if (resolveReady) resolveReady(registration);
     },
     onNeedRefresh() {
-      // Auto-update: reload immediately to apply new version
-      // This prevents users from running stale cached code in bookmark/PWA mode
-      if (updateSWFn) {
+      // Send push notification about the update
+      if (getAppSettings().notificationsEnabled) {
+        sendNotification('Vector si è aggiornata!', {
+          body: 'Nuove funzionalità e correzioni disponibili. Tocca per scoprire le novità.',
+          tag: 'app-update',
+          navigateTo: '/Vector-test/settings#changelog',
+        });
+      }
+
+      // Show in-app prompt (or auto-update)
+      if (notifyUpdate) {
+        notifyUpdate();
+      } else if (updateSWFn) {
         updateSWFn(true);
-      } else {
-        // Fallback: show prompt if auto-update fails
-        if (notifyUpdate) notifyUpdate();
       }
     },
     onOfflineReady() {
@@ -68,6 +78,7 @@ function usePeriodicUpdateCheck() {
 export default function UpdatePrompt() {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const navigate = useNavigate();
 
   usePeriodicUpdateCheck();
 
@@ -85,6 +96,11 @@ export default function UpdatePrompt() {
   const dismiss = useCallback(() => {
     setNeedRefresh(false);
   }, []);
+
+  const goToChangelog = useCallback(() => {
+    setNeedRefresh(false);
+    navigate('/settings', { state: { scrollToChangelog: true } });
+  }, [navigate]);
 
   if (!needRefresh) return null;
 
@@ -123,6 +139,12 @@ export default function UpdatePrompt() {
             ) : (
               'Aggiorna ora'
             )}
+          </button>
+          <button
+            onClick={goToChangelog}
+            className="w-full py-2.5 text-sm font-medium rounded-xl text-primary hover:bg-primary/5 transition-colors"
+          >
+            Scopri le novità
           </button>
           <button
             onClick={dismiss}
