@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import InstallPrompt from '../InstallPrompt';
+import NotificationPrompt from '../NotificationPrompt';
 import { useAdminNotifications } from '../../lib/useAdminNotifications';
 import { useSahhaAutoSync } from '../../lib/useSahhaAutoSync';
 import { useActivityTracker } from '../../lib/useActivityTracker';
@@ -122,6 +123,7 @@ export function AppShell() {
         </div>
       )}
       <InstallPrompt />
+      <NotificationPrompt />
     </div>
   );
 }
