@@ -139,3 +139,39 @@ create policy "password_resets_update" on public.password_resets
 
 -- Colonna password_hash in app_users per sincronizzare le password tra dispositivi
 alter table public.app_users add column if not exists password_hash text;
+
+-- =============================================================
+-- Feedback degli utenti (sincronizzati tra dispositivi)
+-- =============================================================
+
+create table if not exists public.feedbacks (
+  id bigint generated always as identity primary key,
+  user_email text not null,
+  category text not null default 'other',  -- bug | feature | improvement | support | other
+  message text not null,
+  chat_history jsonb,
+  status text not null default 'sent',     -- sent | read
+  admin_reply text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_feedbacks_status
+  on public.feedbacks (status) where status = 'sent';
+
+create index if not exists idx_feedbacks_email
+  on public.feedbacks (user_email);
+
+alter table public.feedbacks enable row level security;
+
+create policy "feedbacks_insert" on public.feedbacks
+  for insert with check (true);
+
+create policy "feedbacks_select" on public.feedbacks
+  for select using (true);
+
+create policy "feedbacks_update" on public.feedbacks
+  for update using (true);
+
+-- Abilita Realtime per feedback (notifiche admin)
+alter publication supabase_realtime add table public.feedbacks;

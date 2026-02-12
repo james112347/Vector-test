@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import InstallPrompt from '../InstallPrompt';
+import { useAdminNotifications } from '../../lib/useAdminNotifications';
 
 const TOOLTIP_KEY = 'vector_chat_tooltip_seen';
 const tooltipMessages = [
@@ -16,6 +17,9 @@ export function AppShell() {
   const isFeedbackPage = location.pathname === '/feedback';
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipText, setTooltipText] = useState('');
+
+  // Poll for new feedback and notify admin
+  useAdminNotifications();
 
   useEffect(() => {
     if (isFeedbackPage) return;

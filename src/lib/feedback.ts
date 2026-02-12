@@ -1,5 +1,6 @@
 import { db } from '../db/db';
 import type { UserFeedback, FeedbackStatus } from '../db/schema';
+import { supabase } from './supabase';
 import { notifyNewFeedback } from './notifications';
 import { getAppSettings } from './useAppSettings';
 
@@ -16,18 +17,55 @@ function getApiKey(): string | null {
 }
 
 const SYSTEM_PROMPT = `Sei l'assistente di Vector, un'app per il monitoraggio dell'energia personale.
-Il tuo compito e aiutare gli utenti a formulare feedback chiari e utili sull'app.
+Il tuo compito e aiutare gli utenti a formulare feedback dettagliati e utili da inviare allo sviluppatore.
 
-REGOLE:
-- Rispondi SEMPRE in italiano
-- Sii cordiale, breve e professionale
-- Aiuta l'utente a chiarire il suo feedback: chiedi dettagli se necessario
-- Classifica il feedback in: bug (problema tecnico), feature (nuova funzionalita), improvement (miglioramento), support (aiuto), other (altro)
-- Quando il feedback e chiaro e completo, rispondi includendo ESATTAMENTE questo tag alla fine: [FEEDBACK_PRONTO]
-- Prima del tag, scrivi un breve riepilogo del feedback formulato
-- Se l'utente chiede aiuto sull'uso dell'app, assistilo e poi chiedi se vuole inviare un feedback
+COME COMPORTARTI:
+- Rispondi SEMPRE in italiano, in modo professionale e sobrio
+- NON essere generico. Fai domande precise e mirate per raccogliere informazioni concrete
+- Il tuo obiettivo e trasformare messaggi vaghi in segnalazioni chiare e strutturate
+
+QUANDO L'UTENTE SEGNALA UN PROBLEMA (bug):
+Chiedi sempre:
+1. In quale pagina/sezione dell'app e successo?
+2. Cosa stavi facendo esattamente quando si e verificato?
+3. Cosa ti aspettavi che succedesse?
+4. Cosa e successo invece?
+5. Su quale dispositivo (telefono/computer, modello se possibile)?
+6. Si ripete sempre o e successo solo una volta?
+
+QUANDO L'UTENTE PROPONE UNA FUNZIONE (feature):
+Chiedi:
+1. Cosa vorresti poter fare nell'app?
+2. In quale situazione ti sarebbe utile?
+3. Come immagini che funzioni? (anche in modo semplice)
+
+QUANDO L'UTENTE SUGGERISCE UN MIGLIORAMENTO:
+Chiedi:
+1. Quale parte dell'app vorresti migliorare?
+2. Cosa non ti convince dell'attuale funzionamento?
+3. Come vorresti che funzionasse invece?
+
+QUANDO L'UTENTE CHIEDE AIUTO (supporto):
+- Rispondi alla domanda con istruzioni chiare e pratiche
+- Dopo aver aiutato, chiedi se il problema e risolto o se vuole inviare una segnalazione
+
+REGOLE GENERALI:
+- Fai una domanda alla volta, non sommergere l'utente
+- Dopo 2-3 scambi, quando hai raccolto abbastanza dettagli, formula un riepilogo strutturato del feedback
+- Nel riepilogo includi: tipo di segnalazione, descrizione del problema/proposta, dettagli raccolti
+- Alla fine del riepilogo, aggiungi ESATTAMENTE questo tag: [FEEDBACK_PRONTO]
+- NON aggiungere il tag finche non hai raccolto informazioni sufficienti
 - Non inventare funzionalita che non esistono nell'app
-- L'app include: registrazione energia giornaliera (fisica/mentale/emotiva), check-in rapidi, grafici settimanali, insight IA, integrazione Sahha per dati wearable, dashboard admin`;
+
+FUNZIONALITA DELL'APP VECTOR:
+- Registrazione giornaliera dei livelli di energia (fisica, mentale, emotiva) su scala 1-10
+- Check-in rapidi con emoji
+- Grafici settimanali dell'andamento energetico
+- Insight e suggerimenti generati dall'IA
+- Profilo utente con dati personali e stile di vita
+- Integrazione Sahha per dati da wearable (passi, sonno, frequenza cardiaca)
+- Impostazioni: tema chiaro/scuro, notifiche, aggiornamento automatico
+- Dashboard amministratore per gestione utenti`;
 
 export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
   const apiKey = getApiKey();
@@ -47,14 +85,16 @@ export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: apiMessages,
-      temperature: 0.6,
-      max_tokens: 500,
+      temperature: 0.4,
+      max_tokens: 600,
     }),
   });
 
   if (!response.ok) {
+    const errBody = await response.text().catch(() => '');
+    console.error('Groq API error:', response.status, errBody);
     throw new Error(`Errore IA (${response.status})`);
   }
 
@@ -87,6 +127,8 @@ export async function saveFeedback(
   category: UserFeedback['category'],
 ): Promise<number> {
   const now = new Date();
+
+  // Save locally
   const id = await db.feedbacks.add({
     userId,
     userEmail,
@@ -98,7 +140,22 @@ export async function saveFeedback(
     updatedAt: now,
   });
 
-  // Notify admin if notifications are enabled
+  // Sync to Supabase (so admin receives it on any device)
+  if (supabase) {
+    await supabase.from('feedbacks').insert({
+      user_email: userEmail,
+      category,
+      message,
+      chat_history: chatHistory,
+      status: 'sent',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    }).then(({ error }) => {
+      if (error) console.error('Supabase feedback sync error:', error);
+    });
+  }
+
+  // Local notification (only useful if admin is on same device)
   if (getAppSettings().notificationsEnabled) {
     notifyNewFeedback(userEmail, category);
   }
@@ -107,21 +164,80 @@ export async function saveFeedback(
 }
 
 export async function getUserFeedbacks(userId: number): Promise<UserFeedback[]> {
+  // Try Supabase first for cross-device access
+  const user = await db.users.get(userId);
+  if (supabase && user?.email) {
+    const { data } = await supabase
+      .from('feedbacks')
+      .select('*')
+      .eq('user_email', user.email)
+      .order('created_at', { ascending: false });
+    if (data && data.length > 0) {
+      return data.map(mapSupabaseFeedback);
+    }
+  }
   return db.feedbacks.where('userId').equals(userId).reverse().sortBy('createdAt');
 }
 
 export async function getAllFeedbacks(): Promise<UserFeedback[]> {
+  // Read from Supabase for admin (cross-device)
+  if (supabase) {
+    const { data } = await supabase
+      .from('feedbacks')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (data) {
+      return data.map(mapSupabaseFeedback);
+    }
+  }
   return db.feedbacks.orderBy('createdAt').reverse().toArray();
 }
 
 export async function markFeedbackRead(id: number): Promise<void> {
   await db.feedbacks.update(id, { status: 'read' as FeedbackStatus, updatedAt: new Date() });
+  if (supabase) {
+    await supabase.from('feedbacks').update({
+      status: 'read',
+      updated_at: new Date().toISOString(),
+    }).eq('id', id);
+  }
 }
 
 export async function replyToFeedback(id: number, reply: string): Promise<void> {
-  await db.feedbacks.update(id, { adminReply: reply, status: 'read' as FeedbackStatus, updatedAt: new Date() });
+  const now = new Date();
+  await db.feedbacks.update(id, { adminReply: reply, status: 'read' as FeedbackStatus, updatedAt: now });
+  if (supabase) {
+    await supabase.from('feedbacks').update({
+      admin_reply: reply,
+      status: 'read',
+      updated_at: now.toISOString(),
+    }).eq('id', id);
+  }
 }
 
 export async function getUnreadFeedbackCount(): Promise<number> {
+  if (supabase) {
+    const { count } = await supabase
+      .from('feedbacks')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'sent');
+    return count ?? 0;
+  }
   return db.feedbacks.where('status').equals('sent').count();
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapSupabaseFeedback(row: any): UserFeedback {
+  return {
+    id: row.id,
+    userId: 0,
+    userEmail: row.user_email,
+    category: row.category,
+    message: row.message,
+    chatHistory: typeof row.chat_history === 'string' ? row.chat_history : JSON.stringify(row.chat_history ?? []),
+    status: row.status,
+    adminReply: row.admin_reply ?? undefined,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
