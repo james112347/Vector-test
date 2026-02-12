@@ -68,6 +68,13 @@ const ALCOHOL_OPTIONS = [
   { value: 'daily', label: 'Quotidiano' },
 ] as const;
 
+const EXERCISE_TIME_OPTIONS = [
+  { value: 'morning' as const, label: 'Mattina' },
+  { value: 'afternoon' as const, label: 'Pomeriggio' },
+  { value: 'evening' as const, label: 'Sera' },
+  { value: 'none' as const, label: 'Non mi alleno' },
+];
+
 const GOAL_OPTIONS = [
   { value: 'more_energy', label: 'Piu energia', desc: 'Meno stanchezza durante il giorno' },
   { value: 'better_sleep', label: 'Dormire meglio', desc: 'Qualita e durata del sonno' },
@@ -180,6 +187,15 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
   const [alcoholFrequency, setAlcoholFrequency] = useState<UserProfile['alcoholFrequency']>(initialProfile?.alcoholFrequency ?? 'never');
   const [caffeineDaily, setCaffeineDaily] = useState(initialProfile?.caffeineDaily?.toString() ?? '2');
 
+  // Step 3 (cont.): Routine giornaliera
+  const [typicalWakeTime, setTypicalWakeTime] = useState(initialProfile?.typicalWakeTime ?? '07:00');
+  const [typicalBedTime, setTypicalBedTime] = useState(initialProfile?.typicalBedTime ?? '23:00');
+  const [workStartTime, setWorkStartTime] = useState(initialProfile?.workStartTime ?? '09:00');
+  const [workEndTime, setWorkEndTime] = useState(initialProfile?.workEndTime ?? '18:00');
+  const [lunchTime, setLunchTime] = useState(initialProfile?.lunchTime ?? '13:00');
+  const [dinnerTime, setDinnerTime] = useState(initialProfile?.dinnerTime ?? '20:00');
+  const [exerciseTime, setExerciseTime] = useState<NonNullable<UserProfile['exerciseTime']>>(initialProfile?.exerciseTime ?? 'none');
+
   // Step 4: Obiettivi
   const [goal, setGoal] = useState<UserProfile['goal']>(initialProfile?.goal ?? 'general_wellness');
   const [notes, setNotes] = useState(initialProfile?.notes ?? '');
@@ -211,6 +227,13 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
         smokingFrequency,
         alcoholFrequency,
         caffeineDaily: parseInt(caffeineDaily) || 0,
+        typicalWakeTime,
+        typicalBedTime,
+        workStartTime: (occupation === 'student' || occupation === 'worker' || occupation === 'student_worker') ? workStartTime : undefined,
+        workEndTime: (occupation === 'student' || occupation === 'worker' || occupation === 'student_worker') ? workEndTime : undefined,
+        lunchTime,
+        dinnerTime,
+        exerciseTime,
         goal,
         notes: notes.trim() || undefined,
         completedAt: new Date(),
@@ -396,6 +419,64 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
                       className="h-11 text-base w-24" />
                     <span className="text-sm text-muted-foreground">ore/notte</span>
                   </div>
+                </div>
+
+                {/* Routine giornaliera */}
+                <div className="pt-2 border-t border-border">
+                  <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Routine giornaliera</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-3">Ci aiuta a calcolare i tuoi ritmi energetici e circadiani</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="wakeTime">Orario sveglia</Label>
+                    <Input id="wakeTime" type="time" value={typicalWakeTime}
+                      onChange={(e) => setTypicalWakeTime(e.target.value)}
+                      className="h-11 text-base" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bedTime">Orario di dormire</Label>
+                    <Input id="bedTime" type="time" value={typicalBedTime}
+                      onChange={(e) => setTypicalBedTime(e.target.value)}
+                      className="h-11 text-base" />
+                  </div>
+                </div>
+
+                {(occupation === 'student' || occupation === 'worker' || occupation === 'student_worker') && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="workStart">Inizio lavoro/studio</Label>
+                      <Input id="workStart" type="time" value={workStartTime}
+                        onChange={(e) => setWorkStartTime(e.target.value)}
+                        className="h-11 text-base" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="workEnd">Fine lavoro/studio</Label>
+                      <Input id="workEnd" type="time" value={workEndTime}
+                        onChange={(e) => setWorkEndTime(e.target.value)}
+                        className="h-11 text-base" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="lunchTime">Pranzo tipico</Label>
+                    <Input id="lunchTime" type="time" value={lunchTime}
+                      onChange={(e) => setLunchTime(e.target.value)}
+                      className="h-11 text-base" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dinnerTime">Cena tipica</Label>
+                    <Input id="dinnerTime" type="time" value={dinnerTime}
+                      onChange={(e) => setDinnerTime(e.target.value)}
+                      className="h-11 text-base" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Quando ti alleni?</Label>
+                  <ChipGroup options={EXERCISE_TIME_OPTIONS} value={exerciseTime} onChange={setExerciseTime} cols={4} />
                 </div>
 
                 <div className="space-y-2">

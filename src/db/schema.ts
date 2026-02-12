@@ -63,6 +63,14 @@ export interface UserProfile {
   smokingFrequency: 'never' | 'occasional' | 'daily' | 'heavy';
   alcoholFrequency: 'never' | 'occasional' | 'weekly' | 'daily';
   caffeineDaily: number; // tazzine/giorno
+  // Routine giornaliera (per calcoli energia)
+  typicalWakeTime?: string;    // HH:MM - orario sveglia tipico
+  typicalBedTime?: string;     // HH:MM - orario tipico di andare a dormire
+  workStartTime?: string;      // HH:MM - inizio lavoro/studio
+  workEndTime?: string;        // HH:MM - fine lavoro/studio
+  lunchTime?: string;          // HH:MM - pranzo tipico
+  dinnerTime?: string;         // HH:MM - cena tipica
+  exerciseTime?: 'morning' | 'afternoon' | 'evening' | 'none'; // quando si allena
   // Campi legacy (rimossi dall'onboarding, mantenuti per compatibilita')
   baselinePhysical?: number;
   baselineMental?: number;
