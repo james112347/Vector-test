@@ -41,6 +41,35 @@ export async function addCheckin(
 }
 
 /**
+ * Add a check-in with a specific time (HH:MM).
+ * Used for logging meals or events at a specific time slot.
+ */
+export async function addCheckinWithTime(
+  userId: number,
+  type: CheckinType,
+  value: number,
+  time: string,
+): Promise<QuickCheckin> {
+  const checkin: QuickCheckin = {
+    userId,
+    date: todayString(),
+    time,
+    type,
+    value,
+    createdAt: new Date(),
+  };
+  const id = await db.quickCheckins.add(checkin);
+
+  autoTrackGoals(userId, type).catch(() => {/* ignore */});
+
+  db.users.get(userId).then(u => {
+    if (u?.email) pushDataToSupabase(u.email, userId);
+  });
+
+  return { ...checkin, id };
+}
+
+/**
  * Get today's check-ins for a user.
  */
 export async function getTodayCheckins(userId: number): Promise<QuickCheckin[]> {

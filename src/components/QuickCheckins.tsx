@@ -8,7 +8,7 @@ import {
   BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2,
   Users, Car, Clock, Square, Pause,
 } from 'lucide-react';
-import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins, deleteCheckin, updateCheckin } from '../lib/checkins';
+import { addCheckin, addCheckinWithTime, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins, deleteCheckin, updateCheckin } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 
 // ---------------------------------------------------------------------------
@@ -221,13 +221,6 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
         inverse: true,
         ratings: INVERSE_RATINGS,
       },
-      {
-        type: 'meal_time',
-        label: 'Colazione',
-        question: 'Colazione?',
-        icon: UtensilsCrossed,
-        ratings: MEAL_RATINGS,
-      },
     ],
   },
   midday: {
@@ -255,13 +248,6 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
         question: 'Come ti senti?',
         icon: Heart,
       },
-      {
-        type: 'meal_time',
-        label: 'Pranzo',
-        question: 'Pranzo?',
-        icon: UtensilsCrossed,
-        ratings: MEAL_RATINGS,
-      },
     ],
   },
   afternoon: {
@@ -280,13 +266,6 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
         label: 'Umore',
         question: 'Come ti senti?',
         icon: Heart,
-      },
-      {
-        type: 'meal_time',
-        label: 'Spuntino',
-        question: 'Spuntino pomeridiano?',
-        icon: UtensilsCrossed,
-        ratings: MEAL_RATINGS,
       },
       {
         type: 'activity_done',
@@ -315,13 +294,6 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
         label: 'Umore',
         question: "Com'e' andata oggi?",
         icon: Heart,
-      },
-      {
-        type: 'meal_time',
-        label: 'Cena',
-        question: 'Cena?',
-        icon: UtensilsCrossed,
-        ratings: MEAL_RATINGS,
       },
       {
         type: 'stress',
@@ -481,6 +453,32 @@ function getMealLabel(time: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Meal slots — always 4, always visible, always in order
+// ---------------------------------------------------------------------------
+
+interface MealSlot {
+  key: string;
+  label: string;
+  emoji: string;
+  minHour: number;
+  maxHour: number;
+  defaultTime: string;
+}
+
+const MEAL_SLOTS: MealSlot[] = [
+  { key: 'colazione', label: 'Colazione', emoji: '☀️', minHour: 5,  maxHour: 11, defaultTime: '08:00' },
+  { key: 'pranzo',    label: 'Pranzo',    emoji: '🍽️', minHour: 11, maxHour: 14, defaultTime: '12:30' },
+  { key: 'spuntino',  label: 'Spuntino',  emoji: '🍎', minHour: 14, maxHour: 18, defaultTime: '16:00' },
+  { key: 'cena',      label: 'Cena',      emoji: '🌙', minHour: 18, maxHour: 24, defaultTime: '20:00' },
+];
+
+/** Find the meal slot a checkin time belongs to */
+function getMealSlot(time: string): MealSlot | undefined {
+  const h = parseInt(time.split(':')[0]);
+  return MEAL_SLOTS.find(s => h >= s.minHour && h < s.maxHour);
+}
+
+// ---------------------------------------------------------------------------
 // RatingButton sub-component -- clean numbered circles, no emoji icons
 // ---------------------------------------------------------------------------
 
@@ -628,6 +626,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [enabledExtras, setEnabledExtras] = useState<CheckinType[]>(loadEnabledExtras);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [editingType, setEditingType] = useState<CheckinType | null>(null);
+  const [editingMealSlot, setEditingMealSlot] = useState<string | null>(null);
   const [savingActivity, setSavingActivity] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -863,6 +862,49 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     }, 300);
   };
 
+  // ---------------------------------------------------------------------------
+  // Meals — dedicated section: map each meal slot to its logged checkin
+  // ---------------------------------------------------------------------------
+
+  const mealsBySlot = useMemo(() => {
+    const mealCheckins = checkins.filter(c => c.type === 'meal_time');
+    const map = new Map<string, QuickCheckin>();
+    for (const c of mealCheckins) {
+      const slot = getMealSlot(c.time);
+      if (slot) map.set(slot.key, c);
+    }
+    return map;
+  }, [checkins]);
+
+  /** Rate or re-rate a meal in a specific slot */
+  const handleMealRate = async (slot: MealSlot, value: number) => {
+    setSaving(true);
+    setSelectedValue(value);
+
+    // Delete any existing meal in this slot's time range
+    const existing = mealsBySlot.get(slot.key);
+    if (existing?.id != null) {
+      await deleteCheckin(existing.id, userId);
+    }
+
+    // Determine time: use current time if within slot range, else use default
+    const currentHour = new Date().getHours();
+    const time = (currentHour >= slot.minHour && currentHour < slot.maxHour)
+      ? new Date().toTimeString().slice(0, 5)
+      : slot.defaultTime;
+
+    await addCheckinWithTime(userId, 'meal_time', value, time);
+    await loadCheckins();
+
+    setTimeout(() => {
+      setSaving(false);
+      setSelectedValue(null);
+      setEditingMealSlot(null);
+    }, 300);
+  };
+
+  const mealsLoggedCount = MEAL_SLOTS.filter(s => mealsBySlot.has(s.key)).length;
+
   // Completion counts for the tracker
   const allLoggedTypes = useMemo(() => {
     return new Set(checkins.map(c => c.type));
@@ -904,20 +946,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       activity_done: { icon: Activity, label: 'Movimento', ratings: ACTIVITY_RATINGS },
     };
 
-    // Meal entries — each shown separately with meal name
-    const mealCheckins = checkins.filter(c => c.type === 'meal_time');
-    for (const entry of mealCheckins) {
-      const opt = MEAL_RATINGS.find(r => r.value === entry.value);
-      items.push({
-        key: `meal_${entry.id ?? entry.time}`,
-        type: 'meal_time',
-        icon: UtensilsCrossed,
-        label: getMealLabel(entry.time),
-        displayValue: opt ? `${opt.label} (${entry.value}/5)` : `${entry.value}/5`,
-        color: opt?.color ?? 'text-muted-foreground',
-        time: entry.time,
-      });
-    }
+    // Meals are shown in their own dedicated section — skip here
 
     // Other rated types — latest per type
     for (const [type, meta] of Object.entries(typeMeta)) {
@@ -1169,6 +1198,99 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               </div>
             );
           })()}
+
+          {/* ---- I tuoi pasti — dedicated meals section, all 4 always visible ---- */}
+          <div className="rounded-xl border border-border shadow-sm bg-card overflow-hidden">
+            <div className="bg-amber-500/5 px-3 py-1.5 border-b border-border flex items-center gap-2">
+              <UtensilsCrossed className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+              <span className="text-[11px] font-semibold text-foreground">I tuoi pasti</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{mealsLoggedCount}/4</span>
+            </div>
+            <div className="divide-y divide-border/30">
+              {MEAL_SLOTS.map(slot => {
+                const entry = mealsBySlot.get(slot.key);
+                const isEditing = editingMealSlot === slot.key;
+                const rating = entry ? MEAL_RATINGS.find(r => r.value === entry.value) : null;
+
+                return (
+                  <div key={slot.key}>
+                    {/* Meal row */}
+                    <button
+                      onClick={() => setEditingMealSlot(isEditing ? null : slot.key)}
+                      className={`
+                        w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors
+                        ${isEditing ? 'bg-amber-500/10' : 'hover:bg-muted/30'}
+                      `}
+                    >
+                      {/* Status icon */}
+                      {entry ? (
+                        <div className="w-5 h-5 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+                          <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border border-muted-foreground/30 shrink-0" />
+                      )}
+                      {/* Meal icon/emoji + label */}
+                      <UtensilsCrossed className={`h-3.5 w-3.5 shrink-0 ${rating?.color ?? 'text-muted-foreground'}`} />
+                      <span className={`text-xs ${entry ? 'text-muted-foreground' : 'text-muted-foreground/60'}`}>
+                        {slot.label}
+                      </span>
+                      {/* Rating or prompt */}
+                      {entry && rating ? (
+                        <span className={`text-xs font-semibold ${rating.color}`}>
+                          {rating.label}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/40 italic">
+                          Tocca per registrare
+                        </span>
+                      )}
+                      {/* Time */}
+                      {entry && (
+                        <span className="text-[10px] text-muted-foreground/50 tabular-nums ml-auto shrink-0">
+                          {entry.time}
+                        </span>
+                      )}
+                      {/* Edit icon */}
+                      <Pencil className={`h-2.5 w-2.5 shrink-0 ${entry ? 'text-muted-foreground/40' : 'text-muted-foreground/20'} ${!entry ? 'ml-auto' : 'ml-1'}`} />
+                    </button>
+
+                    {/* Inline rating buttons when editing */}
+                    {isEditing && (
+                      <div className="px-3 pb-3 pt-1 space-y-2 bg-amber-500/5">
+                        <div className="flex items-center gap-2">
+                          <UtensilsCrossed className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                          <span className="text-xs font-medium text-foreground">{slot.label}</span>
+                          {entry && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium ml-auto">
+                              Modifica
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-1.5">
+                          {MEAL_RATINGS.map(opt => (
+                            <RatingButton
+                              key={opt.value}
+                              option={opt}
+                              selected={selectedValue === opt.value || (selectedValue === null && entry?.value === opt.value)}
+                              onSelect={() => handleMealRate(slot, opt.value)}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => { setEditingMealSlot(null); setSelectedValue(null); }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                          Chiudi
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Day summary window — always visible when there are logged items */}
           {!editingType && todaySummary.length > 0 && (
