@@ -8,6 +8,7 @@ import { useAdminNotifications } from '../../lib/useAdminNotifications';
 import { useSahhaAutoSync } from '../../lib/useSahhaAutoSync';
 import { useActivityTracker } from '../../lib/useActivityTracker';
 import { useAuthState } from '../../contexts/AuthContext';
+import { getAppSettings } from '../../lib/useAppSettings';
 
 const tooltipMessages = [
   'Hai un feedback da fornire?',
@@ -57,7 +58,7 @@ export function AppShell() {
     setShowTooltip(true);
   }, [pickMessage]);
 
-  // Show first popup after delay
+  // Show first popup after delay (respects chatPopupEnabled setting)
   useEffect(() => {
     if (isFeedbackPage) {
       setShowTooltip(false);
@@ -65,9 +66,15 @@ export function AppShell() {
       return;
     }
 
+    if (!getAppSettings().chatPopupEnabled) {
+      setShowTooltip(false);
+      clearTimeout(reshowTimerRef.current);
+      return;
+    }
+
     // Only show first popup if not already visible
     const firstTimer = setTimeout(() => {
-      if (!isFeedbackPage) showPopup();
+      if (!isFeedbackPage && getAppSettings().chatPopupEnabled) showPopup();
     }, TOOLTIP_FIRST_DELAY);
 
     return () => {
@@ -78,9 +85,11 @@ export function AppShell() {
 
   const dismissTooltip = useCallback(() => {
     setShowTooltip(false);
-    // Schedule next message after delay
+    // Schedule next message after delay only if popup is enabled
     clearTimeout(reshowTimerRef.current);
-    reshowTimerRef.current = setTimeout(showPopup, TOOLTIP_RESHOW_DELAY);
+    if (getAppSettings().chatPopupEnabled) {
+      reshowTimerRef.current = setTimeout(showPopup, TOOLTIP_RESHOW_DELAY);
+    }
   }, [showPopup]);
 
   return (

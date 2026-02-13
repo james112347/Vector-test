@@ -5,11 +5,13 @@ const STORAGE_KEY = 'vector_app_settings';
 export interface AppSettings {
   autoRefresh: boolean;
   notificationsEnabled: boolean;
+  chatPopupEnabled: boolean;
 }
 
 const defaults: AppSettings = {
   autoRefresh: true,
   notificationsEnabled: false,
+  chatPopupEnabled: true,
 };
 
 function load(): AppSettings {

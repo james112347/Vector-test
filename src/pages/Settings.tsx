@@ -195,6 +195,25 @@ export default function Settings() {
           <Separator />
           <div className="flex items-center justify-between">
             <div>
+              <p className="text-sm font-medium">Popup pulsante chat</p>
+              <p className="text-sm text-muted-foreground">Mostra suggerimenti periodici sul pulsante assistenza</p>
+            </div>
+            <button
+              onClick={() => updateSettings({ chatPopupEnabled: !settings.chatPopupEnabled })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                settings.chatPopupEnabled ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.chatPopupEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm font-medium">Password</p>
               <p className="text-sm text-muted-foreground">Modifica la password del tuo account</p>
             </div>
@@ -654,25 +673,169 @@ function HowItWorksSection() {
               <p className="text-sm font-semibold">Machine Learning (Intelligence)</p>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Dopo 3+ giorni di dati, il motore ML analizza i tuoi pattern:
+              Dopo 3+ giorni di dati, il motore ML on-device analizza i tuoi pattern
+              senza inviare nulla a server esterni. Ecco lo schema logico completo:
             </p>
-            <div className="grid grid-cols-1 gap-1.5">
-              {[
-                { label: 'Analisi trend', desc: 'La tua energia sta migliorando, e stabile o in calo?' },
-                { label: 'Rilevamento pattern', desc: 'Es: "quando dormi meno di 6h, il fisico cala del 30% il giorno dopo"' },
-                { label: 'Correlazioni', desc: 'Quali fattori impattano di piu la tua energia (sonno, stress, attivita...)' },
-                { label: 'Previsione crash', desc: 'Allarme se i pattern indicano un probabile crollo energetico imminente' },
-                { label: 'Report settimanale', desc: 'Voto A-F con analisi dettagliata e consigli personalizzati' },
-              ].map(item => (
-                <div key={item.label} className="flex items-start gap-2 py-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
-                  <div>
-                    <span className="text-[11px] font-medium">{item.label}</span>
-                    <span className="text-[11px] text-muted-foreground"> — {item.desc}</span>
+
+            {/* Pipeline Schema */}
+            <div className="rounded-md bg-muted/30 border border-border/50 p-2.5 space-y-2">
+              <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Schema Pipeline ML</p>
+              <div className="space-y-1">
+                {[
+                  { step: 'Raccolta', detail: 'Aggregazione snapshot giornalieri (energia, sonno, stress, umore, idratazione, caffeina, attivita, focus, pause schermo, obiettivi) per N giorni (7/14/30)' },
+                  { step: 'Filtraggio', detail: 'Solo i giorni con dati significativi vengono usati, garantendo qualita statistica' },
+                  { step: 'Analisi statistica', detail: 'Regressione lineare, correlazione di Pearson, media mobile, z-score e deviazione standard' },
+                  { step: 'Rilevamento pattern', detail: 'Identificazione cicli settimanali, finestre di produttivita, pattern di crash e accumulazione stress' },
+                  { step: 'Previsioni', detail: 'Proiezione energia, allarmi crash, azioni ottimali e proiezione obiettivi' },
+                  { step: 'Report', detail: 'Sintesi settimanale con voto A-F, giorno migliore/peggiore, insight e azioni' },
+                ].map((item, i) => (
+                  <div key={item.step} className="flex items-start gap-2">
+                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{i + 1}</span>
+                      </span>
+                      {i < 5 && <div className="hidden" />}
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-semibold">{item.step}</span>
+                      <span className="text-[10px] text-muted-foreground"> — {item.detail}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
+
+            {/* 5 Moduli dettagliati */}
+            <p className="text-[11px] font-semibold pt-1">I 5 moduli di analisi:</p>
+
+            {/* Modulo 1: Pattern Detection */}
+            <div className="rounded-md bg-muted/30 border border-border/50 p-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-500" />
+                <span className="text-[11px] font-semibold">1. Rilevamento Pattern</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 italic mb-0.5">
+                Metodo: raggruppamento per giorno settimana, z-score per deviazioni significative
+              </p>
+              <div className="space-y-0.5">
+                {[
+                  'Ciclo energetico settimanale: identifica giorni migliori e peggiori (z-score > 0.8)',
+                  'Finestra produttivita: analizza focus per fascia oraria e trova il picco di concentrazione',
+                  'Pattern di crash: rileva giorni con crolli ricorrenti (tasso crash >= 50%)',
+                  'Impatto sonno: correlazione Pearson sonno→energia con quantificazione punti persi',
+                  'Cicli di stress: streak di 3+ giorni stress alto e giorni piu stressanti',
+                ].map(text => (
+                  <div key={text} className="flex items-start gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                    <span className="text-[10px] text-muted-foreground">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modulo 2: Trend Analysis */}
+            <div className="rounded-md bg-muted/30 border border-border/50 p-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-500" />
+                <span className="text-[11px] font-semibold">2. Analisi Trend</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 italic mb-0.5">
+                Metodo: regressione lineare su finestre 7/14/30 giorni, confronto periodo precedente
+              </p>
+              <div className="space-y-0.5">
+                {[
+                  'Trend energia: slope normalizzata della regressione lineare (>3% = miglioramento, <-3% = calo)',
+                  'Trend sonno, stress, umore, idratazione: ciascuno calcolato indipendentemente',
+                  'Confronto periodo: variazione percentuale rispetto al periodo precedente di pari durata',
+                  'Highlight automatici: segnala variazioni significative (es. +15% idratazione, -10% sonno)',
+                ].map(text => (
+                  <div key={text} className="flex items-start gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                    <span className="text-[10px] text-muted-foreground">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modulo 3: Correlazioni */}
+            <div className="rounded-md bg-muted/30 border border-border/50 p-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-500" />
+                <span className="text-[11px] font-semibold">3. Scoperta Correlazioni</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 italic mb-0.5">
+                Metodo: coefficiente di Pearson su 10 coppie di fattori, soglia r &ge; 0.2, analisi a terzili
+              </p>
+              <div className="space-y-0.5">
+                {[
+                  'Idratazione ↔ Focus, Idratazione ↔ Energia, Sonno ↔ Energia del giorno',
+                  'Caffeina ↔ Sonno notte dopo (correlazione sfasata giorno+1)',
+                  'Attivita fisica ↔ Umore, Attivita ↔ Stress, Pasti ↔ Energia',
+                  'Stress ↔ Sonno notte dopo, Pause schermo ↔ Focus, Umore ↔ Energia',
+                  'Quantificazione: confronto terzile alto vs basso per misurare l\'impatto reale (%)',
+                ].map(text => (
+                  <div key={text} className="flex items-start gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                    <span className="text-[10px] text-muted-foreground">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modulo 4: Previsioni */}
+            <div className="rounded-md bg-muted/30 border border-border/50 p-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-500" />
+                <span className="text-[11px] font-semibold">4. Intelligenza Predittiva</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 italic mb-0.5">
+                Metodo: media mobile a finestra 3 + proiezione lineare, regole multifattoriali
+              </p>
+              <div className="space-y-0.5">
+                {[
+                  'Previsione energia domani: media mobile smoothed + slope degli ultimi 3 giorni',
+                  'Allarme crash: 3 giorni di calo consecutivo con energia < 50, o stress alto + sonno scarso',
+                  'Disidratazione: < 3 bicchieri + focus <= 2 attiva un avviso immediato',
+                  'Caffeina eccessiva: consumo odierno > media personale + 1, rischio sonno',
+                  'Proiezione obiettivi: tasso di successo, streak e suggerimenti per migliorare',
+                ].map(text => (
+                  <div key={text} className="flex items-start gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                    <span className="text-[10px] text-muted-foreground">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modulo 5: Report Settimanale */}
+            <div className="rounded-md bg-muted/30 border border-border/50 p-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-500" />
+                <span className="text-[11px] font-semibold">5. Report Settimanale Intelligente</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 italic mb-0.5">
+                Metodo: composito ponderato (energia 40%, sonno 20%, stress 15%, umore 15%, engagement 10%)
+              </p>
+              <div className="space-y-0.5">
+                {[
+                  'Voto complessivo A-F: calcolato su 5 dimensioni pesate con bonus tracking costante',
+                  'Giorno migliore/peggiore: identificato con analisi causale (sonno, idratazione, stress...)',
+                  'Top insight: prioritizza correlazione azionabile > trend significativo > problema sonno',
+                  'Azioni concrete: max 3, derivate da trend in calo, correlazioni forti e pattern rilevati',
+                ].map(text => (
+                  <div key={text} className="flex items-start gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                    <span className="text-[10px] text-muted-foreground">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground leading-relaxed mt-1 italic">
+              Tutti i calcoli ML avvengono in locale sul tuo dispositivo (IndexedDB).
+              Nessun dato viene inviato a server esterni. Servono almeno 3 giorni
+              per le previsioni e 7 per i pattern. Piu dati registri, piu le analisi diventano precise.
+            </p>
           </div>
 
           {/* 5. Sistema di Orientamento */}
