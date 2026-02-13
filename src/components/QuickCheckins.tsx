@@ -1073,12 +1073,13 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                 La tua giornata
               </p>
-              <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-none">
+              <div className="flex flex-col gap-1.5">
                 {todayActivities.map((entry, i) => {
                   const act = getActivityOption(entry.value);
                   if (!act) return null;
                   const Icon = act.icon;
                   const isLast = i === todayActivities.length - 1 && entry.value > 0;
+                  const isEditing = editingActivityId === entry.id;
                   // Show duration: from this entry to the next (or now)
                   const nextEntry = todayActivities[i + 1];
                   let dur = '';
@@ -1097,107 +1098,98 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                     dur = diff < 60 ? `${diff}m` : `${Math.floor(diff / 60)}h${diff % 60 > 0 ? `${diff % 60}m` : ''}`;
                   }
                   return (
-                    <div
-                      key={entry.id ?? i}
-                      className={`
-                        group relative inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] shrink-0
-                        ${isLast ? `${act.bgSelected} text-white` : `${act.bg} ${act.color}`} font-medium
-                      `}
-                    >
-                      <Icon className="h-3 w-3" />
-                      <span>{entry.time}</span>
-                      {dur && <span className={isLast ? 'text-white/70' : 'opacity-60'}>({dur})</span>}
-                      {/* Edit button on hover/tap */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setEditingActivityId(entry.id ?? null); }}
+                    <div key={entry.id ?? i} className="space-y-1.5">
+                      {/* Activity row — tappable */}
+                      <div
                         className={`
-                          ml-0.5 w-4 h-4 rounded-full flex items-center justify-center
-                          opacity-0 group-hover:opacity-100 transition-opacity
-                          ${isLast ? 'bg-white/20 hover:bg-white/40' : 'bg-foreground/10 hover:bg-foreground/20'}
+                          flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px]
+                          ${isLast ? `${act.bgSelected} text-white` : `${act.bg} ${act.color}`}
+                          ${isEditing ? 'ring-2 ring-amber-500/50' : ''}
+                          font-medium transition-all
                         `}
-                        aria-label="Modifica"
                       >
-                        <Pencil className="h-2 w-2" />
-                      </button>
-                      {/* Delete button on hover/tap */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteActivity(entry); }}
-                        className={`
-                          w-4 h-4 rounded-full flex items-center justify-center
-                          opacity-0 group-hover:opacity-100 transition-opacity
-                          ${isLast ? 'bg-white/20 hover:bg-white/40' : 'bg-foreground/10 hover:bg-foreground/20'}
-                        `}
-                        aria-label="Elimina"
-                      >
-                        <X className="h-2.5 w-2.5" />
-                      </button>
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="font-semibold">{act.label}</span>
+                        <span className={isLast ? 'text-white/70' : 'opacity-60'}>{entry.time}</span>
+                        {dur && <span className={isLast ? 'text-white/60' : 'opacity-50'}>({dur})</span>}
+                        {/* Edit button — always visible */}
+                        <button
+                          onClick={() => setEditingActivityId(isEditing ? null : (entry.id ?? null))}
+                          className={`
+                            ml-auto w-6 h-6 rounded-full flex items-center justify-center shrink-0
+                            transition-colors active:scale-90
+                            ${isEditing
+                              ? (isLast ? 'bg-white/40' : 'bg-amber-500/20')
+                              : (isLast ? 'bg-white/20 hover:bg-white/30' : 'bg-foreground/5 hover:bg-foreground/10')
+                            }
+                          `}
+                          aria-label="Modifica"
+                        >
+                          <Pencil className="h-2.5 w-2.5" />
+                        </button>
+                        {/* Delete button — always visible */}
+                        <button
+                          onClick={() => handleDeleteActivity(entry)}
+                          className={`
+                            w-6 h-6 rounded-full flex items-center justify-center shrink-0
+                            transition-colors active:scale-90
+                            ${isLast ? 'bg-white/20 hover:bg-red-400/40' : 'bg-foreground/5 hover:bg-red-500/15'}
+                          `}
+                          aria-label="Elimina"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+
+                      {/* Inline edit selector — shown under this entry */}
+                      {isEditing && (
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 ml-2">
+                          <div className="flex items-center gap-1.5">
+                            <Pencil className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
+                            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                              Cambia attivita
+                            </span>
+                          </div>
+                          <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+                            {ACTIVITY_OPTIONS.map(opt => {
+                              const OptIcon = opt.icon;
+                              const isCurrent = entry.value === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  onClick={() => {
+                                    if (!isCurrent && entry.id != null) {
+                                      handleEditActivityValue(entry.id, opt.value);
+                                    }
+                                  }}
+                                  disabled={savingActivity || isCurrent}
+                                  className={`
+                                    flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl shrink-0
+                                    transition-all duration-150 active:scale-95 border
+                                    ${isCurrent
+                                      ? `${opt.bgSelected} text-white shadow-sm border-transparent`
+                                      : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50'
+                                    }
+                                  `}
+                                >
+                                  <OptIcon className={`h-4 w-4 ${isCurrent ? 'text-white' : opt.color}`} />
+                                  <span className={`
+                                    text-[9px] font-semibold leading-tight whitespace-nowrap
+                                    ${isCurrent ? 'text-white/90' : 'text-muted-foreground'}
+                                  `}>
+                                    {opt.label}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* Inline edit selector — shown when editing an activity entry */}
-              {editingActivityId != null && (() => {
-                const editEntry = todayActivities.find(e => e.id === editingActivityId);
-                if (!editEntry) return null;
-                const currentAct = getActivityOption(editEntry.value);
-                return (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-                        Modifica attivita delle {editEntry.time}
-                      </span>
-                      {currentAct && (
-                        <span className={`ml-auto text-[10px] font-medium ${currentAct.color}`}>
-                          {currentAct.label}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-                      {ACTIVITY_OPTIONS.map(act => {
-                        const ActIcon = act.icon;
-                        const isCurrent = editEntry.value === act.value;
-                        return (
-                          <button
-                            key={act.value}
-                            onClick={() => {
-                              if (!isCurrent && editEntry.id != null) {
-                                handleEditActivityValue(editEntry.id, act.value);
-                              }
-                            }}
-                            disabled={savingActivity || isCurrent}
-                            className={`
-                              flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl shrink-0
-                              transition-all duration-150 active:scale-95
-                              border
-                              ${isCurrent
-                                ? `${act.bgSelected} text-white shadow-sm border-transparent`
-                                : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50'
-                              }
-                            `}
-                          >
-                            <ActIcon className={`h-4 w-4 ${isCurrent ? 'text-white' : act.color}`} />
-                            <span className={`
-                              text-[9px] font-semibold leading-tight whitespace-nowrap
-                              ${isCurrent ? 'text-white/90' : 'text-muted-foreground'}
-                            `}>
-                              {act.label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => setEditingActivityId(null)}
-                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                      Chiudi
-                    </button>
-                  </div>
-                );
-              })()}
             </div>
           )}
         </div>
