@@ -6,6 +6,8 @@ import {
   BOTTLENECK_ACTIONS,
   CHRONOTYPE_LABELS,
   type EnergyBreakdown,
+  type FutureEvent,
+  type RoutineOutlook,
 } from '../lib/energy-engine';
 import {
   generateOrientation,
@@ -19,6 +21,7 @@ import {
   Sun,
   AlertTriangle,
   TrendingUp,
+  TrendingDown,
   Clock,
   Brain,
   Activity,
@@ -43,6 +46,12 @@ import {
   Gamepad2,
   Users,
   Car,
+  CalendarClock,
+  Eye,
+  BedDouble,
+  Timer,
+  Target,
+  Calendar,
 } from 'lucide-react';
 import { addCheckin } from '../lib/checkins';
 import type { CheckinType } from '../db/schema';
@@ -51,7 +60,7 @@ import type { CheckinType } from '../db/schema';
 // Types
 // ---------------------------------------------------------------------------
 
-type ToolPanel = 'fattori' | 'analisi' | 'consigli' | null;
+type ToolPanel = 'fattori' | 'analisi' | 'consigli' | 'prospettiva' | null;
 
 interface Props {
   userId: number;
@@ -691,6 +700,205 @@ function AdvicePanel({ orientation }: { orientation: OrientationResult | null })
 }
 
 // ---------------------------------------------------------------------------
+// FutureOutlookPanel: Shows routine-based future events and lifestyle projection
+// ---------------------------------------------------------------------------
+
+const EVENT_ICONS: Record<string, typeof Brain> = {
+  meal: Utensils,
+  work_end: Briefcase,
+  exercise: Dumbbell,
+  bedtime: BedDouble,
+  caffeine_cutoff: Coffee,
+  energy_peak: TrendingUp,
+  energy_dip: TrendingDown,
+  hydration_check: Droplets,
+  break_needed: Timer,
+};
+
+const EVENT_COLORS: Record<string, string> = {
+  meal: '#f59e0b',
+  work_end: '#3b82f6',
+  exercise: '#f97316',
+  bedtime: '#8b5cf6',
+  caffeine_cutoff: '#a16207',
+  energy_peak: '#22c55e',
+  energy_dip: '#ef4444',
+  hydration_check: '#06b6d4',
+  break_needed: '#64748b',
+};
+
+function FutureOutlookPanel({ outlook }: { outlook: RoutineOutlook }) {
+  const { events, lifestyleProjection, weeklyPattern, dailySummary, optimalActionNow } = outlook;
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Eye className="h-3.5 w-3.5 text-cyan-500" />
+        <span className="text-[11px] font-semibold text-foreground">Prospettiva giornata</span>
+      </div>
+
+      {/* Optimal action now — highlighted */}
+      <div className="rounded-lg bg-primary/8 border-2 border-primary/20 p-3">
+        <div className="flex items-start gap-2">
+          <Target className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[10px] font-bold text-primary uppercase tracking-wide mb-0.5">Cosa fare ora</p>
+            <p className="text-xs text-foreground leading-relaxed font-medium">{optimalActionNow}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Daily summary */}
+      <div className="rounded-md bg-muted/40 p-2.5">
+        <p className="text-[11px] text-foreground leading-snug">{dailySummary}</p>
+      </div>
+
+      {/* Timeline of future events */}
+      {events.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <CalendarClock className="h-3 w-3" />
+            Prossime ore
+          </p>
+          <div className="relative pl-4 border-l-2 border-border/50 space-y-1.5">
+            {events.slice(0, 6).map((event, i) => {
+              const EIcon = EVENT_ICONS[event.type] || Clock;
+              const color = EVENT_COLORS[event.type] || '#64748b';
+              return (
+                <div key={i} className="relative">
+                  {/* Timeline dot */}
+                  <div
+                    className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-background"
+                    style={{ backgroundColor: color }}
+                  />
+                  <div className="rounded-md bg-muted/30 p-2">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-mono font-bold" style={{ color }}>
+                        {event.timeLabel}
+                      </span>
+                      <EIcon className="h-3 w-3" style={{ color }} />
+                      <span className="text-[11px] font-medium text-foreground flex-1">{event.label}</span>
+                      {event.impact !== 0 && (
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{
+                            color: event.impact > 0 ? '#22c55e' : '#ef4444',
+                            backgroundColor: event.impact > 0 ? '#22c55e15' : '#ef444415',
+                          }}
+                        >
+                          {event.impact > 0 ? '+' : ''}{Math.round(event.impact * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-snug">{event.advice}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Lifestyle projection stats */}
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Proiezione a fine giornata</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {/* Hydration */}
+          <div className="rounded-md bg-muted/30 p-2 flex items-center gap-2">
+            <Droplets className="h-3.5 w-3.5 shrink-0" style={{
+              color: lifestyleProjection.projectedHydrationPct >= 80 ? '#22c55e'
+                : lifestyleProjection.projectedHydrationPct >= 60 ? '#f59e0b' : '#ef4444',
+            }} />
+            <div>
+              <p className="text-[10px] text-muted-foreground">Idratazione</p>
+              <p className="text-xs font-bold">{lifestyleProjection.projectedHydrationPct}%</p>
+            </div>
+          </div>
+
+          {/* Caffeine at bedtime */}
+          <div className="rounded-md bg-muted/30 p-2 flex items-center gap-2">
+            <Coffee className="h-3.5 w-3.5 shrink-0" style={{
+              color: lifestyleProjection.caffeineAtBedtime <= 30 ? '#22c55e'
+                : lifestyleProjection.caffeineAtBedtime <= 80 ? '#f59e0b' : '#ef4444',
+            }} />
+            <div>
+              <p className="text-[10px] text-muted-foreground">Caffeina a letto</p>
+              <p className="text-xs font-bold">{lifestyleProjection.caffeineAtBedtime}mg</p>
+            </div>
+          </div>
+
+          {/* Exercise */}
+          <div className="rounded-md bg-muted/30 p-2 flex items-center gap-2">
+            <Dumbbell className="h-3.5 w-3.5 shrink-0" style={{
+              color: lifestyleProjection.exerciseDone ? '#22c55e'
+                : lifestyleProjection.exercisePlanned ? '#f59e0b' : '#64748b',
+            }} />
+            <div>
+              <p className="text-[10px] text-muted-foreground">Esercizio</p>
+              <p className="text-xs font-bold">
+                {lifestyleProjection.exerciseDone ? 'Fatto' : lifestyleProjection.exercisePlanned ? 'Pianificato' : 'Non previsto'}
+              </p>
+            </div>
+          </div>
+
+          {/* Work remaining */}
+          <div className="rounded-md bg-muted/30 p-2 flex items-center gap-2">
+            <Briefcase className="h-3.5 w-3.5 shrink-0" style={{
+              color: lifestyleProjection.workHoursRemaining <= 0 ? '#22c55e'
+                : lifestyleProjection.workHoursRemaining <= 3 ? '#f59e0b' : '#ef4444',
+            }} />
+            <div>
+              <p className="text-[10px] text-muted-foreground">Lavoro</p>
+              <p className="text-xs font-bold">
+                {lifestyleProjection.workHoursRemaining > 0 ? `${lifestyleProjection.workHoursRemaining}h rimaste` : 'Terminato'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Weekly pattern */}
+      {weeklyPattern.weekdayAvg >= 0 && (
+        <div className="rounded-md bg-muted/30 p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Calendar className="h-3 w-3 text-indigo-500" />
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Pattern settimanale</span>
+          </div>
+          <p className="text-[11px] text-foreground leading-snug">{weeklyPattern.trendDescription}</p>
+          {/* Mini weekly bar chart */}
+          <div className="flex items-end gap-1 mt-2 h-8">
+            {['D', 'L', 'M', 'M', 'G', 'V', 'S'].map((day, i) => {
+              const val = weeklyPattern.avgScoreByDayOfWeek[i];
+              const isToday = new Date().getDay() === i;
+              const height = val >= 0 ? Math.max(4, (val / 100) * 32) : 4;
+              const barColor = val < 0 ? '#64748b30'
+                : val >= 70 ? '#22c55e' : val >= 45 ? '#f59e0b' : '#ef4444';
+              return (
+                <div key={i} className="flex flex-col items-center flex-1 gap-0.5">
+                  <div
+                    className="w-full rounded-sm transition-all"
+                    style={{
+                      height,
+                      backgroundColor: barColor,
+                      opacity: isToday ? 1 : 0.6,
+                      border: isToday ? '1px solid var(--color-primary)' : 'none',
+                    }}
+                  />
+                  <span className={`text-[8px] ${isToday ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
+                    {day}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ActivityStrip: Quick current-activity selector
 // ---------------------------------------------------------------------------
 
@@ -852,7 +1060,8 @@ export default function ScientificEnergyCard({ userId }: Props) {
 
   const togglePanel = useCallback((panel: ToolPanel) => {
     setActivePanel(prev => prev === panel ? null : panel);
-    if (!orientation && !orientLoading) {
+    // Prospettiva uses breakdown data directly, no orientation needed
+    if (panel !== 'prospettiva' && !orientation && !orientLoading) {
       loadOrientation();
     }
   }, [orientation, orientLoading, loadOrientation]);
@@ -981,6 +1190,7 @@ export default function ScientificEnergyCard({ userId }: Props) {
           <div className="flex gap-1">
             {([
               { key: 'fattori' as const, label: 'Fattori', Icon: BarChart3, color: '#6366f1' },
+              { key: 'prospettiva' as const, label: 'Futuro', Icon: Eye, color: '#06b6d4' },
               { key: 'analisi' as const, label: 'Analisi IA', Icon: Sparkles, color: '#f59e0b' },
               { key: 'consigli' as const, label: 'Consigli', Icon: Lightbulb, color: '#22c55e' },
             ]).map(({ key, label, Icon, color }) => {
@@ -1005,13 +1215,15 @@ export default function ScientificEnergyCard({ userId }: Props) {
           {/* ---- Panel content ---- */}
           {activePanel && (
             <div className="mt-2 rounded-md bg-background border border-border p-3">
-              {orientLoading && !orientation ? (
+              {orientLoading && !orientation && activePanel !== 'prospettiva' ? (
                 <div className="flex items-center justify-center gap-2 py-4">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">Caricamento...</span>
                 </div>
               ) : activePanel === 'fattori' ? (
                 <FactorsPanel orientation={orientation} breakdown={breakdown} />
+              ) : activePanel === 'prospettiva' ? (
+                <FutureOutlookPanel outlook={breakdown.futureOutlook} />
               ) : activePanel === 'analisi' ? (
                 <AIAnalysisPanel orientation={orientation} onRetry={retryOrientation} />
               ) : activePanel === 'consigli' ? (

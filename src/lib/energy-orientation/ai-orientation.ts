@@ -123,15 +123,29 @@ ${orientationHistory.slice(-10).map(h => {
     return `${h.date} ${h.time}: ${rec.activityName} → ${h.userResponse}${h.feedbackScore ? ` (voto ${h.feedbackScore}/5)` : ''}`;
   }).join('\n')}` : '';
 
+  // Routine schedule context
+  const routineStr = profile ? `
+ROUTINE GIORNALIERA:
+- Sveglia: ${profile.typicalWakeTime || 'non impostata'}
+- Inizio lavoro: ${profile.workStartTime || 'non impostato'}
+- Fine lavoro: ${profile.workEndTime || 'non impostata'}
+- Pranzo: ${profile.lunchTime || 'non impostato'}
+- Cena: ${profile.dinnerTime || 'non impostata'}
+- Esercizio: ${profile.exerciseTime === 'none' ? 'nessuno' : profile.exerciseTime || 'non impostato'}
+- Ora di dormire: ${profile.typicalBedTime || 'non impostata'}
+- Ore sonno ottimali: ${profile.sleepHours}h
+- Tipo sforzo lavoro: ${profile.workEffortType || 'non specificato'}` : '';
+
   return `Sei un sistema IA di orientamento energetico personale. Analizza TUTTI i dati per generare consigli iper-precisi.
-${profileStr}${stateStr}${recsStr}${logsStr}${checkinStr}${sleepStr}${historyStr}
+Guarda al FUTURO: considera la routine dell'utente, le ore rimanenti di lavoro, i pasti previsti, l'esercizio pianificato e l'ora di andare a dormire per dare consigli proattivi.
+${profileStr}${routineStr}${stateStr}${recsStr}${logsStr}${checkinStr}${sleepStr}${historyStr}
 
 Rispondi in JSON con questa struttura:
 {
   "stateAnalysis": "Analisi dettagliata dello stato attuale in 2-3 frasi. Spiega PERCHE l'energia e' a questo livello collegando i dati (sonno, check-in, trend, biomarker). Usa il nome dell'utente.",
   "primaryAdvice": "Il consiglio piu importante per ADESSO (${timeOfDay}). Specifico, azionabile, basato sui dati. Non generico.",
   "recommendationRationale": "Spiega perche le raccomandazioni algoritmiche sono adatte o suggerisci un ordine diverso. Breve, 1-2 frasi.",
-  "shortTermForecast": "Previsione per le prossime 3-4 ore: cosa aspettarsi dall'energia e come prepararsi. Basata sul trend e i dati.",
+  "shortTermForecast": "Previsione per le prossime 3-4 ore basata sulla ROUTINE dell'utente: considera ore lavoro rimanenti, pasti previsti, esercizio pianificato e avvicinamento all'ora di dormire. Sii specifico.",
   "autoResponses": [
     {
       "trigger": "quando attivare (es. 'tra 2 ore', 'dopo pranzo', 'alle 15:00', 'prima di dormire')",
@@ -151,7 +165,10 @@ REGOLE:
 - Se la storia mostra che l'utente ignora certi tipi di raccomandazione, ADATTA il tono e il tipo
 - L'urgencyLevel deve riflettere il rischio reale di burnout/crollo energetico
 - Il timing della prossima notifica deve rispettare l'utente: non troppo frequente, ma non troppo tardi se urgente
-- Usa i dati del sonno (fasi REM, profondo, leggero) per contestualizzare l'analisi`;
+- Usa i dati del sonno (fasi REM, profondo, leggero) per contestualizzare l'analisi
+- IMPORTANTE: Guarda AVANTI nella giornata. Se l'utente ha esercizio previsto, un pranzo in arrivo, fine lavoro vicina, o si avvicina l'ora di dormire, menzionalo nelle previsioni
+- Se la caffeina residua stimata a letto e' alta, avvisa di smettere di bere caffe
+- Se l'idratazione e' sotto ritmo, suggerisci un recupero mirato`;
 }
 
 // ---------------------------------------------------------------------------

@@ -47,6 +47,47 @@ export type Bottleneck =
   | 'overwork' | 'inactivity' | 'caffeine_late' | 'screen_fatigue'
   | 'burnout_risk' | 'sleep_debt' | 'none';
 
+/** Evento futuro nella giornata con impatto energetico previsto */
+export interface FutureEvent {
+  time: number;             // decimal hour (e.g. 13.5 = 13:30)
+  timeLabel: string;        // "13:30"
+  type: 'meal' | 'work_end' | 'exercise' | 'bedtime' | 'caffeine_cutoff' | 'energy_peak' | 'energy_dip' | 'hydration_check' | 'break_needed';
+  label: string;            // Italian description
+  impact: number;           // -1 to +1 predicted impact
+  advice: string;           // actionable tip
+}
+
+/** Proiezione futura dello stile di vita a fine giornata */
+export interface LifestyleProjection {
+  projectedHydrationPct: number;    // % del target idratazione a fine giornata
+  caffeineAtBedtime: number;        // mg caffeina residua stimata all'ora di dormire
+  projectedScreenMinutes: number;   // minuti schermo previsti a fine giornata
+  exerciseDone: boolean;            // se ha gia fatto esercizio oggi
+  exercisePlanned: boolean;         // se ha esercizio pianificato
+  mealsRemaining: number;           // pasti principali rimanenti
+  workHoursRemaining: number;       // ore lavoro rimanenti stimate
+}
+
+/** Pattern settimanale rilevato dai dati storici */
+export interface WeeklyPattern {
+  avgScoreByDayOfWeek: number[];    // 7 valori (0=dom, 6=sab), -1 se dato mancante
+  bestDay: number;                  // giorno con media piu alta
+  worstDay: number;                 // giorno con media piu bassa
+  weekdayAvg: number;              // media lun-ven
+  weekendAvg: number;              // media sab-dom
+  isWeekendBetter: boolean;
+  trendDescription: string;         // descrizione in italiano
+}
+
+/** Prospettiva futura completa della giornata */
+export interface RoutineOutlook {
+  events: FutureEvent[];
+  lifestyleProjection: LifestyleProjection;
+  weeklyPattern: WeeklyPattern;
+  dailySummary: string;             // riassunto in italiano della giornata prevista
+  optimalActionNow: string;         // cosa fare adesso per massimizzare la giornata
+}
+
 export interface EnergyBreakdown {
   overall: number;          // 0-100
   circadian: number;        // 0-25
@@ -63,6 +104,8 @@ export interface EnergyBreakdown {
   hoursAwake: number;       // Hours since detected wake
   wakeTime: number;         // Detected wake hour (e.g. 7.5 = 7:30)
   interactionPenalty: number; // Cross-component penalty applied
+  // Future outlook: routine + lifestyle projection + weekly patterns
+  futureOutlook: RoutineOutlook;
   // Component explanations (Italian, for UI)
   explanations: {
     circadian: string;
@@ -244,15 +287,23 @@ async function gatherAllData(userId: number): Promise<AllData> {
 
 interface DetectedRoutine {
   wakeTime: number;         // decimal hour
+  bedTime: number;          // decimal hour (target bedtime)
   mealTimes: number[];      // decimal hours of today's meals
   mealGIEstimates: number[]; // estimated glycemic load per meal (0-1)
+  futureMealTimes: number[]; // meal times not yet happened (from profile)
   workStartEstimate: number;
+  workEndEstimate: number;   // when work/study ends
+  exerciseTime: number | null;  // planned exercise time (decimal hour)
+  exerciseDone: boolean;     // already exercised today
   lastActivityTime: number | null;
+  optimalSleepHours: number; // individual optimal (profile vs default 8h)
 }
 
 function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
   const params = CHRONO_PARAMS[chronotype];
   const profile = data.profile;
+  const now = new Date();
+  const currentHour = now.getHours() + now.getMinutes() / 60;
 
   // 1. Wake time: prefer profile data > checkin detection > chronotype default
   let wakeTime = params.typicalWake;
@@ -266,11 +317,23 @@ function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
     }
   }
 
-  // 2. Meal times: combine profile defaults + actual checkin/food data
+  // 2. Bed time: profile > heuristic from wake + sleep hours
+  const optimalSleepHours = profile?.sleepHours ?? OPTIMAL_SLEEP_H;
+  let bedTime = 23; // default
+  if (profile?.typicalBedTime) {
+    bedTime = timeToDecimal(profile.typicalBedTime);
+  } else {
+    // Estimate: 24h - wake + optimal sleep (adjusted for typical range)
+    bedTime = clamp(wakeTime + 24 - optimalSleepHours, 21, 25.5);
+    if (bedTime >= 24) bedTime -= 24; // normalize
+  }
+
+  // 3. Meal times: combine profile defaults + actual checkin/food data
   const mealTimes: number[] = [];
   const mealGIs: number[] = [];
+  const futureMealTimes: number[] = [];
 
-  // Use profile meal times as baseline (if user ate at all, timing is approximate)
+  // Profile meal defaults
   const profileMealDefaults: number[] = [];
   if (profile?.lunchTime) profileMealDefaults.push(timeToDecimal(profile.lunchTime));
   if (profile?.dinnerTime) profileMealDefaults.push(timeToDecimal(profile.dinnerTime));
@@ -286,9 +349,6 @@ function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
   }
 
   // If no actual meal data today but profile has meal times, use those
-  // (predicts post-prandial dips even before the meal is logged)
-  const now = new Date();
-  const currentHour = now.getHours() + now.getMinutes() / 60;
   if (mealTimes.length === 0) {
     for (const defaultTime of profileMealDefaults) {
       if (defaultTime <= currentHour) {
@@ -298,23 +358,59 @@ function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
     }
   }
 
-  // 3. Work start: prefer profile > heuristic
+  // Future meals: profile defaults that haven't happened yet
+  for (const defaultTime of profileMealDefaults) {
+    if (defaultTime > currentHour && !mealTimes.some(mt => Math.abs(mt - defaultTime) < 1)) {
+      futureMealTimes.push(defaultTime);
+    }
+  }
+
+  // 4. Work schedule: start + end
   const workStart = profile?.workStartTime
     ? timeToDecimal(profile.workStartTime)
     : wakeTime + 1.5;
 
-  // 4. Last activity time
+  const workEnd = profile?.workEndTime
+    ? timeToDecimal(profile.workEndTime)
+    : workStart + (profile?.dailyWorkHours ?? 8);
+
+  // 5. Exercise: check if done today, or when planned
   const actCheckins = data.todayCheckins.filter(c => c.type === 'activity_done');
+  const sportCheckins = data.todayCheckins.filter(c => c.type === 'current_activity' && c.value === 4);
+  const exerciseDone = actCheckins.some(c => c.value >= 3) || sportCheckins.length > 0;
+
+  let exerciseTime: number | null = null;
+  if (!exerciseDone && profile?.exerciseTime && profile.exerciseTime !== 'none') {
+    // Map exercise preference to approximate time
+    const exerciseTimeMap: Record<string, number> = {
+      morning: Math.max(wakeTime + 0.5, 7),
+      afternoon: 15,
+      evening: 18.5,
+    };
+    exerciseTime = exerciseTimeMap[profile.exerciseTime] ?? null;
+    // Only include if it's still in the future
+    if (exerciseTime != null && exerciseTime <= currentHour) {
+      exerciseTime = null; // already passed but not logged as done
+    }
+  }
+
+  // 6. Last activity time
   const lastAct = actCheckins.length > 0
     ? timeToDecimal(actCheckins[actCheckins.length - 1].time)
     : null;
 
   return {
     wakeTime,
+    bedTime,
     mealTimes,
     mealGIEstimates: mealGIs,
+    futureMealTimes,
     workStartEstimate: workStart,
+    workEndEstimate: workEnd,
+    exerciseTime,
+    exerciseDone,
     lastActivityTime: lastAct,
+    optimalSleepHours,
   };
 }
 
@@ -1111,6 +1207,586 @@ function identifyBottleneck(
 }
 
 // ---------------------------------------------------------------------------
+// 11. Weekly Pattern Recognition
+//     Analizza i dati degli ultimi 28 giorni per rilevare pattern settimanali
+// ---------------------------------------------------------------------------
+
+function analyzeWeeklyPattern(recentScores: ScientificEnergyScore[], recentLogs: EnergyLog[]): WeeklyPattern {
+  // Default fallback
+  const defaultPattern: WeeklyPattern = {
+    avgScoreByDayOfWeek: [-1, -1, -1, -1, -1, -1, -1],
+    bestDay: -1,
+    worstDay: -1,
+    weekdayAvg: -1,
+    weekendAvg: -1,
+    isWeekendBetter: false,
+    trendDescription: 'Dati insufficienti per rilevare pattern settimanali',
+  };
+
+  // Combine scientific scores and energy logs to get per-day scores
+  const dayScores: number[][] = [[], [], [], [], [], [], []]; // Sun(0)..Sat(6)
+
+  for (const score of recentScores) {
+    const dayOfWeek = new Date(score.date + 'T12:00:00').getDay();
+    dayScores[dayOfWeek].push(score.overallScore);
+  }
+
+  // Supplement with energy logs (converted to 0-100 scale) if scientific scores are sparse
+  if (recentScores.length < 7) {
+    for (const log of recentLogs) {
+      const dayOfWeek = new Date(log.date + 'T12:00:00').getDay();
+      const logScore = Math.round(((log.physical + log.mental + log.emotional) / 3) * 10);
+      dayScores[dayOfWeek].push(logScore);
+    }
+  }
+
+  // Need at least 3 different days with data
+  const daysWithData = dayScores.filter(d => d.length > 0).length;
+  if (daysWithData < 3) return defaultPattern;
+
+  // Compute averages per day
+  const avgByDay = dayScores.map(scores =>
+    scores.length > 0 ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : -1
+  );
+
+  // Find best/worst day (only among days with data)
+  const validDays = avgByDay
+    .map((v, i) => ({ day: i, avg: v }))
+    .filter(d => d.avg >= 0);
+
+  if (validDays.length === 0) return defaultPattern;
+
+  validDays.sort((a, b) => b.avg - a.avg);
+  const bestDay = validDays[0].day;
+  const worstDay = validDays[validDays.length - 1].day;
+
+  // Weekday (Mon-Fri = 1-5) vs weekend (Sat=6, Sun=0)
+  const weekdayScores = [1, 2, 3, 4, 5].flatMap(d => dayScores[d]);
+  const weekendScores = [0, 6].flatMap(d => dayScores[d]);
+
+  const weekdayAvg = weekdayScores.length > 0
+    ? Math.round(weekdayScores.reduce((s, v) => s + v, 0) / weekdayScores.length)
+    : -1;
+  const weekendAvg = weekendScores.length > 0
+    ? Math.round(weekendScores.reduce((s, v) => s + v, 0) / weekendScores.length)
+    : -1;
+
+  const isWeekendBetter = weekendAvg > weekdayAvg && weekdayAvg >= 0 && weekendAvg >= 0;
+
+  // Generate description
+  const dayNames = ['domenica', 'lunedi', 'martedi', 'mercoledi', 'giovedi', 'venerdi', 'sabato'];
+  const parts: string[] = [];
+
+  if (weekdayAvg >= 0 && weekendAvg >= 0) {
+    const diff = weekendAvg - weekdayAvg;
+    if (Math.abs(diff) >= 5) {
+      parts.push(isWeekendBetter
+        ? `Energia +${diff}pt nel weekend rispetto alla settimana lavorativa`
+        : `Energia ${diff}pt nel weekend (piu attivo durante la settimana)`
+      );
+    }
+  }
+
+  if (bestDay >= 0 && avgByDay[bestDay] >= 0) {
+    parts.push(`Giorno migliore: ${dayNames[bestDay]} (media ${avgByDay[bestDay]})`);
+  }
+  if (worstDay >= 0 && avgByDay[worstDay] >= 0 && worstDay !== bestDay) {
+    parts.push(`Giorno critico: ${dayNames[worstDay]} (media ${avgByDay[worstDay]})`);
+  }
+
+  return {
+    avgScoreByDayOfWeek: avgByDay,
+    bestDay,
+    worstDay,
+    weekdayAvg,
+    weekendAvg,
+    isWeekendBetter,
+    trendDescription: parts.length > 0 ? parts.join('. ') : 'Pattern settimanale regolare',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 12. Lifestyle Projection
+//     Proietta idratazione, caffeina, screen time, pasti e lavoro a fine giornata
+// ---------------------------------------------------------------------------
+
+function projectLifestyle(
+  data: AllData,
+  routine: DetectedRoutine,
+  currentHour: number,
+  lifestyleAnalysis: LifestyleAnalysis,
+): LifestyleProjection {
+  const profile = data.profile;
+
+  // Hydration projection: current rate extrapolated to bedtime
+  const hoursElapsed = Math.max(1, currentHour - routine.wakeTime);
+  const waterPerHour = lifestyleAnalysis.waterGlasses / hoursElapsed;
+  const hoursRemaining = Math.max(0, (routine.bedTime > currentHour ? routine.bedTime : routine.bedTime + 24) - currentHour);
+  const dailyTarget = profile
+    ? Math.round((profile.weightKg * HYDRATION_ML_PER_KG) / GLASS_ML)
+    : 8;
+  const projectedWater = lifestyleAnalysis.waterGlasses + waterPerHour * hoursRemaining;
+  const projectedHydrationPct = dailyTarget > 0 ? Math.round((projectedWater / dailyTarget) * 100) : 100;
+
+  // Caffeine at bedtime: compute remaining mg at bedtime from all today's intakes
+  const bedTimeEffective = routine.bedTime < currentHour ? routine.bedTime + 24 : routine.bedTime;
+  const cafCheckins = data.todayCheckins.filter(c => c.type === 'caffeine');
+  let caffeineAtBedtime = 0;
+  for (const ci of cafCheckins) {
+    const intakeHour = timeToDecimal(ci.time);
+    const hoursUntilBed = bedTimeEffective - intakeHour;
+    if (hoursUntilBed > 0) {
+      const initialMg = ci.value * CAFFEINE_MG_PER_ESPRESSO;
+      caffeineAtBedtime += initialMg * Math.pow(0.5, hoursUntilBed / CAFFEINE_HALF_LIFE_H);
+    }
+  }
+
+  // Screen time projection
+  const screenRate = data.screenTime?.minutes
+    ? data.screenTime.minutes / hoursElapsed
+    : 0;
+  const projectedScreenMinutes = Math.round(
+    (data.screenTime?.minutes ?? 0) + screenRate * hoursRemaining
+  );
+
+  // Meals remaining
+  const mealsEaten = data.todayCheckins.filter(c => c.type === 'meal_time').length;
+  const expectedMeals = 3; // colazione + pranzo + cena standard
+  const mealsRemaining = Math.max(0, expectedMeals - mealsEaten);
+
+  // Work hours remaining
+  let workHoursRemaining = 0;
+  if (currentHour < routine.workEndEstimate) {
+    workHoursRemaining = Math.max(0, routine.workEndEstimate - currentHour);
+  }
+
+  return {
+    projectedHydrationPct: clamp(projectedHydrationPct, 0, 200),
+    caffeineAtBedtime: Math.round(caffeineAtBedtime),
+    projectedScreenMinutes,
+    exerciseDone: routine.exerciseDone,
+    exercisePlanned: routine.exerciseTime != null,
+    mealsRemaining,
+    workHoursRemaining: Math.round(workHoursRemaining * 10) / 10,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 13. Future Event Timeline Generator
+//     Genera la sequenza di eventi futuri con impatto energetico previsto
+// ---------------------------------------------------------------------------
+
+function formatHour(decimalHour: number): string {
+  const h = Math.floor(decimalHour) % 24;
+  const m = Math.round((decimalHour % 1) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function generateFutureTimeline(
+  routine: DetectedRoutine,
+  currentHour: number,
+  currentScore: number,
+  chronotype: Chronotype,
+  lifestyleAnalysis: LifestyleAnalysis,
+  lifestyleProjection: LifestyleProjection,
+  predictedCurve: number[],
+  sleepDebt: number,
+): FutureEvent[] {
+  const events: FutureEvent[] = [];
+  const bedTimeEffective = routine.bedTime < currentHour ? routine.bedTime + 24 : routine.bedTime;
+  const hoursUntilBed = bedTimeEffective - currentHour;
+
+  // --- Future meals from profile ---
+  for (const mealTime of routine.futureMealTimes) {
+    if (mealTime > currentHour) {
+      const isLunch = mealTime >= 11 && mealTime <= 14.5;
+      events.push({
+        time: mealTime,
+        timeLabel: formatHour(mealTime),
+        type: 'meal',
+        label: isLunch ? 'Pranzo previsto' : 'Cena prevista',
+        impact: -0.2, // post-prandial dip incoming
+        advice: isLunch
+          ? 'Pasto bilanciato con proteine e carboidrati complessi per minimizzare il calo post-prandiale'
+          : 'Cena leggera per non disturbare il sonno. Evita pasti pesanti nelle 2h prima di dormire',
+      });
+    }
+  }
+
+  // --- Work end ---
+  if (currentHour < routine.workEndEstimate && routine.workEndEstimate <= bedTimeEffective) {
+    events.push({
+      time: routine.workEndEstimate,
+      timeLabel: formatHour(routine.workEndEstimate),
+      type: 'work_end',
+      label: `Fine lavoro prevista`,
+      impact: 0.3,
+      advice: lifestyleProjection.workHoursRemaining > 3
+        ? 'Lunga giornata davanti. Pianifica pause regolari ogni 90 minuti (ciclo BRAC)'
+        : 'Quasi finito. Prepara una transizione graduale verso il relax',
+    });
+  }
+
+  // --- Exercise ---
+  if (routine.exerciseTime != null && routine.exerciseTime > currentHour) {
+    events.push({
+      time: routine.exerciseTime,
+      timeLabel: formatHour(routine.exerciseTime),
+      type: 'exercise',
+      label: 'Esercizio pianificato',
+      impact: 0.5,
+      advice: currentScore < 40
+        ? 'Energia bassa: considera un allenamento leggero (camminata, stretching) invece di sessioni intense'
+        : 'Buon momento per allenarti. L\'esercizio dara un boost di energia (effetto POMS)',
+    });
+  } else if (!routine.exerciseDone && routine.exerciseTime == null && currentHour < 20) {
+    // Suggest exercise if not done and not planned
+    const suggestedTime = currentHour < 16 ? currentHour + 1 : 18;
+    if (suggestedTime < bedTimeEffective - 2) {
+      events.push({
+        time: suggestedTime,
+        timeLabel: formatHour(suggestedTime),
+        type: 'exercise',
+        label: 'Esercizio consigliato',
+        impact: 0.4,
+        advice: 'Anche 15-20 minuti di movimento moderato possono aumentare l\'energia per le ore successive',
+      });
+    }
+  }
+
+  // --- Caffeine cutoff ---
+  const caffeineCutoff = routine.bedTime - CAFFEINE_HALF_LIFE_H; // 5h prima di dormire
+  const cutoffEffective = caffeineCutoff < 0 ? caffeineCutoff + 24 : caffeineCutoff;
+  if (currentHour < cutoffEffective && cutoffEffective < bedTimeEffective) {
+    const hasCaffeine = lifestyleAnalysis.caffeineCount > 0;
+    events.push({
+      time: cutoffEffective,
+      timeLabel: formatHour(cutoffEffective),
+      type: 'caffeine_cutoff',
+      label: 'Limite caffeina per il sonno',
+      impact: hasCaffeine ? -0.1 : 0,
+      advice: lifestyleProjection.caffeineAtBedtime > 50
+        ? `Caffeina residua a letto stimata: ${lifestyleProjection.caffeineAtBedtime}mg. Smetti di bere caffe adesso per dormire meglio`
+        : 'Nessuna caffeina dopo quest\'ora per proteggere la qualita del sonno',
+    });
+  }
+
+  // --- Hydration check ---
+  const waterRatio = lifestyleAnalysis.targetWater > 0
+    ? lifestyleAnalysis.waterGlasses / lifestyleAnalysis.targetWater
+    : 1;
+  if (waterRatio < 0.7 && hoursUntilBed > 2) {
+    const checkTime = currentHour + 1;
+    events.push({
+      time: checkTime,
+      timeLabel: formatHour(checkTime),
+      type: 'hydration_check',
+      label: 'Promemoria idratazione',
+      impact: 0.2,
+      advice: lifestyleProjection.projectedHydrationPct < 70
+        ? `Al ritmo attuale raggiungerai solo il ${lifestyleProjection.projectedHydrationPct}% del target. Bevi 2-3 bicchieri nelle prossime ore`
+        : 'Bevi un bicchiere d\'acqua per mantenere l\'idratazione',
+    });
+  }
+
+  // --- Break needed (if working for long consecutive period) ---
+  if (lifestyleProjection.workHoursRemaining > 2 && currentHour >= routine.workStartEstimate) {
+    const breakTime = currentHour + 1.5; // suggest break after ~90 min (BRAC cycle)
+    if (breakTime < routine.workEndEstimate) {
+      events.push({
+        time: breakTime,
+        timeLabel: formatHour(breakTime),
+        type: 'break_needed',
+        label: 'Pausa suggerita (ciclo BRAC)',
+        impact: 0.15,
+        advice: 'Ciclo ultrardiano di 90 minuti in arrivo. Una pausa di 10-15 minuti migliora la concentrazione',
+      });
+    }
+  }
+
+  // --- Energy peak and dip from predicted curve ---
+  if (predictedCurve.length > 2) {
+    let peakIdx = 0;
+    let dipIdx = 0;
+    for (let i = 1; i < predictedCurve.length; i++) {
+      if (predictedCurve[i] > predictedCurve[peakIdx]) peakIdx = i;
+      if (predictedCurve[i] < predictedCurve[dipIdx]) dipIdx = i;
+    }
+
+    const peakHour = currentHour + peakIdx + 1;
+    const dipHour = currentHour + dipIdx + 1;
+
+    if (predictedCurve[peakIdx] > currentScore + 5 && peakHour < bedTimeEffective) {
+      events.push({
+        time: peakHour,
+        timeLabel: formatHour(peakHour % 24),
+        type: 'energy_peak',
+        label: `Picco energia previsto (${predictedCurve[peakIdx]}pt)`,
+        impact: 0.6,
+        advice: 'Finestra ideale per attivita ad alta concentrazione, decisioni importanti o lavoro creativo',
+      });
+    }
+
+    if (predictedCurve[dipIdx] < currentScore - 5 && dipHour < bedTimeEffective && Math.abs(peakIdx - dipIdx) > 1) {
+      events.push({
+        time: dipHour,
+        timeLabel: formatHour(dipHour % 24),
+        type: 'energy_dip',
+        label: `Calo energia previsto (${predictedCurve[dipIdx]}pt)`,
+        impact: -0.4,
+        advice: 'Previsto un calo. Pianifica attivita a basso impegno cognitivo o una pausa attiva',
+      });
+    }
+  }
+
+  // --- Bedtime approach ---
+  if (hoursUntilBed > 0 && hoursUntilBed <= 14) {
+    // Wind-down suggestion 1h before bed
+    const windDownTime = bedTimeEffective - 1;
+    if (windDownTime > currentHour) {
+      events.push({
+        time: windDownTime % 24,
+        timeLabel: formatHour(windDownTime % 24),
+        type: 'bedtime',
+        label: 'Inizio routine serale',
+        impact: 0,
+        advice: sleepDebt > 3
+          ? `Debito sonno di ${sleepDebt.toFixed(1)}h. Vai a letto puntuale e evita schermi nell'ultima ora`
+          : 'Inizia il rilassamento: luci basse, niente schermi, attivita calme',
+      });
+    }
+  }
+
+  // Sort by time
+  events.sort((a, b) => {
+    const aTime = a.time < currentHour ? a.time + 24 : a.time;
+    const bTime = b.time < currentHour ? b.time + 24 : b.time;
+    return aTime - bTime;
+  });
+
+  return events;
+}
+
+// ---------------------------------------------------------------------------
+// 14. Routine Outlook Summary
+//     Genera il riassunto giornaliero e il consiglio ottimale per adesso
+// ---------------------------------------------------------------------------
+
+function generateDailySummary(
+  currentScore: number,
+  routine: DetectedRoutine,
+  events: FutureEvent[],
+  weeklyPattern: WeeklyPattern,
+  lifestyleProjection: LifestyleProjection,
+  sleepDebt: number,
+  allostaticAnalysis: AllostaticAnalysis,
+): { dailySummary: string; optimalActionNow: string } {
+  const parts: string[] = [];
+  const now = new Date();
+  const currentHour = now.getHours() + now.getMinutes() / 60;
+  const dayOfWeek = now.getDay();
+
+  // Energy trajectory
+  const positiveEvents = events.filter(e => e.impact > 0.2);
+  const negativeEvents = events.filter(e => e.impact < -0.2);
+
+  if (currentScore >= 70) {
+    parts.push('Energia buona');
+  } else if (currentScore >= 45) {
+    parts.push('Energia nella media');
+  } else {
+    parts.push('Energia sotto la media');
+  }
+
+  // Work context
+  if (lifestyleProjection.workHoursRemaining > 0) {
+    parts.push(`${lifestyleProjection.workHoursRemaining}h di lavoro rimanenti`);
+  } else if (currentHour > routine.workEndEstimate) {
+    parts.push('giornata lavorativa conclusa');
+  }
+
+  // Lifestyle alerts
+  if (lifestyleProjection.projectedHydrationPct < 60) {
+    parts.push(`idratazione prevista solo ${lifestyleProjection.projectedHydrationPct}%`);
+  }
+  if (lifestyleProjection.caffeineAtBedtime > 80) {
+    parts.push(`caffeina residua alta a letto (~${lifestyleProjection.caffeineAtBedtime}mg)`);
+  }
+
+  // Weekly context
+  if (weeklyPattern.avgScoreByDayOfWeek[dayOfWeek] >= 0) {
+    const todayAvg = weeklyPattern.avgScoreByDayOfWeek[dayOfWeek];
+    if (currentScore > todayAvg + 10) {
+      parts.push(`sopra la tua media per questo giorno della settimana (+${currentScore - todayAvg}pt)`);
+    } else if (currentScore < todayAvg - 10) {
+      parts.push(`sotto la tua media per questo giorno (-${todayAvg - currentScore}pt)`);
+    }
+  }
+
+  // Sleep debt context
+  if (sleepDebt > 3) {
+    parts.push(`debito sonno ${sleepDebt.toFixed(1)}h da recuperare`);
+  }
+
+  // Burnout context
+  if (allostaticAnalysis.burnoutRisk === 'high' || allostaticAnalysis.burnoutRisk === 'critical') {
+    parts.push('attenzione al rischio burnout');
+  }
+
+  const dailySummary = parts.join('. ') + '.';
+
+  // Optimal action now
+  let optimalActionNow: string;
+  if (currentScore <= 30) {
+    optimalActionNow = 'Priorita al recupero: pausa, idratazione, respirazione profonda. Rimanda attivita cognitive intense.';
+  } else if (currentScore <= 50) {
+    if (lifestyleProjection.workHoursRemaining > 3) {
+      optimalActionNow = 'Gestisci le energie: alterna blocchi di 25 min di lavoro con pause di 5 min (Pomodoro). Bevi acqua.';
+    } else {
+      optimalActionNow = 'Completa i compiti essenziali e passa ad attivita piu leggere. Il corpo chiede di rallentare.';
+    }
+  } else if (currentScore >= 75) {
+    if (currentHour < routine.workEndEstimate) {
+      optimalActionNow = 'Momento ideale per il lavoro piu impegnativo. Sfrutta questo picco per decisioni importanti e compiti creativi.';
+    } else {
+      optimalActionNow = 'Ottima energia. Sfruttala per attivita personali di valore: sport, studio, progetti creativi.';
+    }
+  } else {
+    // 50-75 range
+    if (!routine.exerciseDone && routine.exerciseTime == null && currentHour < 20) {
+      optimalActionNow = 'Buon livello energetico. Un po\' di movimento fisico ora potrebbe darti un boost per il resto della giornata.';
+    } else if (positiveEvents.length > 0) {
+      optimalActionNow = `Fase stabile. Nelle prossime ore previsto: ${positiveEvents[0].label.toLowerCase()}. Gestisci i compiti con ritmo regolare.`;
+    } else {
+      optimalActionNow = 'Energia stabile. Procedi con le attivita pianificate e mantieni idratazione e pause regolari.';
+    }
+  }
+
+  return { dailySummary, optimalActionNow };
+}
+
+// ---------------------------------------------------------------------------
+// 15. Enhanced Prediction Curve (routine-aware)
+//     Migliora la previsione includendo eventi routine e pattern settimanali
+// ---------------------------------------------------------------------------
+
+function predictEnergyCurveEnhanced(
+  chronotype: Chronotype,
+  currentHour: number,
+  currentScore: number,
+  sleepDebt: number,
+  caffeineRemaining: number,
+  routine: DetectedRoutine,
+  hoursAwake: number,
+  sleepQuality01: number,
+  weeklyPattern: WeeklyPattern,
+  allostaticAnalysis: AllostaticAnalysis,
+): number[] {
+  const predicted: number[] = [];
+  const bedTimeEffective = routine.bedTime < currentHour ? routine.bedTime + 24 : routine.bedTime;
+
+  for (let offset = 1; offset <= 12; offset++) {
+    const futureHour = (currentHour + offset) % 24;
+    const futureHoursAwake = hoursAwake + offset;
+
+    // --- Base circadian model ---
+    const circAlertness = computeCircadianAlertness(chronotype, futureHour);
+    const futureS = computeProcessS(futureHoursAwake, sleepQuality01);
+
+    // --- Post-prandial dip (include future meals from profile) ---
+    const allMealTimes = [...routine.mealTimes, ...routine.futureMealTimes];
+    // Add default meals if not present
+    if (!allMealTimes.some(t => t >= 12 && t <= 14) && futureHour >= 12) {
+      allMealTimes.push(13);
+    }
+    if (!allMealTimes.some(t => t >= 19 && t <= 21) && futureHour >= 19) {
+      allMealTimes.push(20);
+    }
+    const ppDip = computePostPrandialDip(futureHour, allMealTimes,
+      allMealTimes.map(() => 0.5));
+
+    // --- Caffeine decay ---
+    const cafDecay = caffeineRemaining * Math.pow(0.5, offset / CAFFEINE_HALF_LIFE_H);
+    const cafBoost = clamp(cafDecay / (3 * CAFFEINE_MG_PER_ESPRESSO), 0, 0.08);
+
+    // --- Sleep debt drag (increases with wakefulness) ---
+    const debtDrag = Math.min(0.15, sleepDebt * 0.015 * (1 + futureHoursAwake * 0.01));
+
+    // --- Work fatigue factor ---
+    // Cognitive load accumulates during work hours, reduces after work ends
+    let workFatigueModifier = 0;
+    if (futureHour >= routine.workStartEstimate && futureHour <= routine.workEndEstimate) {
+      // During work: progressive fatigue
+      const workHoursSoFar = futureHour - routine.workStartEstimate;
+      workFatigueModifier = -0.02 * Math.max(0, workHoursSoFar - 4); // fatigue after 4h
+    } else if (futureHour > routine.workEndEstimate && futureHour < routine.workEndEstimate + 2) {
+      // Post-work recovery bounce (relief effect)
+      workFatigueModifier = 0.03;
+    }
+
+    // --- Exercise boost/recovery ---
+    let exerciseModifier = 0;
+    if (routine.exerciseTime != null) {
+      const hoursAfterExercise = futureHour - routine.exerciseTime;
+      if (hoursAfterExercise >= 0 && hoursAfterExercise < 0.5) {
+        exerciseModifier = -0.05; // during/immediate post = slight dip
+      } else if (hoursAfterExercise >= 0.5 && hoursAfterExercise < 3) {
+        // POMS vigor boost: peaks ~1h after, lasts 2-3h
+        exerciseModifier = 0.08 * gaussian(hoursAfterExercise, 1.5, 1.0);
+      }
+    }
+
+    // --- Bedtime approach: natural wind-down ---
+    let windDownModifier = 0;
+    const hoursUntilBed = bedTimeEffective - (currentHour + offset);
+    if (hoursUntilBed >= 0 && hoursUntilBed < 2) {
+      windDownModifier = -0.05 * (1 - hoursUntilBed / 2); // gradual decrease
+    }
+
+    // --- Allostatic cumulative drag ---
+    let allostaticDrag = 0;
+    if (allostaticAnalysis.burnoutRisk === 'critical') allostaticDrag = -0.05;
+    else if (allostaticAnalysis.burnoutRisk === 'high') allostaticDrag = -0.03;
+    else if (allostaticAnalysis.burnoutRisk === 'moderate') allostaticDrag = -0.01;
+
+    // --- Weekly pattern adjustment ---
+    let weeklyAdj = 0;
+    const dayOfWeek = new Date().getDay();
+    if (weeklyPattern.avgScoreByDayOfWeek[dayOfWeek] >= 0 && weeklyPattern.weekdayAvg >= 0) {
+      const dayAvg = weeklyPattern.avgScoreByDayOfWeek[dayOfWeek];
+      const overallAvg = weeklyPattern.weekdayAvg;
+      // If today is typically better/worse than average, adjust slightly
+      weeklyAdj = clamp((dayAvg - overallAvg) / 100 * 0.3, -0.05, 0.05);
+    }
+
+    // --- Combined future alertness ---
+    const futureAlertness = clamp(
+      circAlertness
+      - futureS * 0.35
+      - ppDip
+      + cafBoost
+      - debtDrag
+      + workFatigueModifier
+      + exerciseModifier
+      + windDownModifier
+      + allostaticDrag
+      + weeklyAdj,
+      0.05, 1,
+    );
+
+    const futureScore = Math.round(futureAlertness * 100);
+
+    // Blend: closer hours lean toward current score, farther toward model prediction
+    const blendFactor = offset / 12;
+    const blended = lerp(currentScore, futureScore, blendFactor);
+
+    predicted.push(clamp(Math.round(blended), 0, 100));
+  }
+
+  return predicted;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -1118,6 +1794,7 @@ function identifyBottleneck(
  * Calcola il punteggio energetico scientifico v2.
  * Integra TUTTE le fonti dati: profilo, checkin, food scanner, screen time,
  * Sahha biomarkers, sleep debt, caffeine pharmacokinetics, HRV.
+ * Include proiezione futura basata su routine e stile di vita dell'utente.
  */
 export async function computeScientificEnergy(userId: number): Promise<EnergyBreakdown> {
   // 1. Gather ALL data
@@ -1126,7 +1803,7 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
   // 2. Estimate chronotype
   const chronotype = estimateChronotype(data.profile);
 
-  // 3. Detect routine
+  // 3. Detect routine (enhanced: includes bedtime, exercise, work end)
   const routine = detectRoutine(data, chronotype);
 
   // 4. Current time calculations
@@ -1157,41 +1834,83 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
   const rawTotal = circResult.score + sleepResult.score + lifestyleResult.score + allostaticResult.score;
   const overall = clamp(rawTotal - interactionPenalty, 0, 100);
 
-  // 9. Predicted curve (12 hours)
-  const predictedCurve = predictEnergyCurve(
+  // 9. Weekly pattern analysis (from historical scores + logs)
+  const [recentScores] = await Promise.all([
+    db.scientificEnergyScores.where('userId').equals(userId).toArray()
+      .then(scores => scores.sort((a, b) => a.date.localeCompare(b.date)).slice(-28))
+      .catch(() => [] as ScientificEnergyScore[]),
+  ]);
+  const weeklyPattern = analyzeWeeklyPattern(recentScores, data.recentEnergyLogs);
+
+  // 10. Predicted curve (12 hours) — enhanced with routine + weekly patterns
+  const predictedCurve = predictEnergyCurveEnhanced(
     chronotype, currentHour, overall, sleepResult.sleepDebt,
     lifestyleResult.caffeineRemaining, routine, hoursAwake, sleepQuality01,
+    weeklyPattern, allostaticResult,
   );
 
-  // 10. Bottleneck
+  // 11. Bottleneck
   const bottleneck = identifyBottleneck(sleepResult, lifestyleResult, allostaticResult, circResult.score);
 
-  // 11. Detailed factors for AI and storage
+  // 12. Lifestyle projection (future projections for the rest of the day)
+  const lifestyleProjection = projectLifestyle(data, routine, currentHour, lifestyleResult);
+
+  // 13. Future event timeline
+  const futureEvents = generateFutureTimeline(
+    routine, currentHour, overall, chronotype,
+    lifestyleResult, lifestyleProjection, predictedCurve, sleepResult.sleepDebt,
+  );
+
+  // 14. Daily summary and optimal action
+  const { dailySummary, optimalActionNow } = generateDailySummary(
+    overall, routine, futureEvents, weeklyPattern,
+    lifestyleProjection, sleepResult.sleepDebt, allostaticResult,
+  );
+
+  // 15. Compose future outlook
+  const futureOutlook: RoutineOutlook = {
+    events: futureEvents,
+    lifestyleProjection,
+    weeklyPattern,
+    dailySummary,
+    optimalActionNow,
+  };
+
+  // 16. Detailed factors for AI and storage
   const factors: Record<string, number> = {
     // Circadian
     process_c: Math.round(circResult.processC * 100) / 100,
     process_s: Math.round(circResult.processS * 100) / 100,
     hours_awake: Math.round(hoursAwake * 10) / 10,
     wake_time: Math.round(routine.wakeTime * 10) / 10,
+    bed_time: Math.round(routine.bedTime * 10) / 10,
     // Sleep
     sleep_quality: sleepResult.lastNightQuality ?? -1,
     sleep_hours: sleepResult.lastNightHours ?? -1,
     sleep_debt_hours: Math.round(sleepResult.sleepDebt * 10) / 10,
     nap_recovery: Math.round(sleepResult.napRecovery * 10) / 10,
+    optimal_sleep_hours: routine.optimalSleepHours,
     // Lifestyle
     water_glasses: lifestyleResult.waterGlasses,
     water_target: lifestyleResult.targetWater,
     caffeine_count: lifestyleResult.caffeineCount,
     caffeine_remaining_mg: Math.round(lifestyleResult.caffeineRemaining),
+    caffeine_at_bedtime_mg: lifestyleProjection.caffeineAtBedtime,
     meal_quality: lifestyleResult.mealQuality ?? -1,
     meals_logged: lifestyleResult.mealsLogged,
+    meals_remaining: lifestyleProjection.mealsRemaining,
+    projected_hydration_pct: lifestyleProjection.projectedHydrationPct,
     activity_level: lifestyleResult.activityLevel ?? -1,
+    exercise_done: routine.exerciseDone ? 1 : 0,
     stress_level: lifestyleResult.stressLevel ?? -1,
     mood_level: lifestyleResult.moodLevel ?? -1,
     focus_level: lifestyleResult.focusLevel ?? -1,
     screen_minutes: lifestyleResult.screenMinutes,
+    projected_screen_minutes: lifestyleProjection.projectedScreenMinutes,
     // Allostatic
     work_hours: allostaticResult.workHours,
+    work_hours_remaining: lifestyleProjection.workHoursRemaining,
+    work_end_time: Math.round(routine.workEndEstimate * 10) / 10,
     // work_effort_type: 1=mental, 2=physical, 3=mixed, 4=creative, 5=social, 0=unknown
     work_effort_type: data.profile?.workEffortType === 'mental' ? 1
       : data.profile?.workEffortType === 'physical' ? 2
@@ -1201,6 +1920,9 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
     consecutive_low_days: allostaticResult.consecutiveLowDays,
     stress_trend: Math.round(allostaticResult.stressTrend * 100) / 100,
     hrv_indicator: allostaticResult.hrvIndicator ?? -1,
+    // Weekly pattern
+    weekday_avg: weeklyPattern.weekdayAvg,
+    weekend_avg: weeklyPattern.weekendAvg,
     // Meta
     interaction_penalty: interactionPenalty,
     smoking: data.profile?.smokingFrequency === 'heavy' ? 3
@@ -1229,6 +1951,7 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
     hoursAwake,
     wakeTime: routine.wakeTime,
     interactionPenalty,
+    futureOutlook,
     explanations: {
       circadian: circResult.explanation,
       sleep: sleepResult.explanation,
