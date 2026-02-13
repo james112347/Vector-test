@@ -131,11 +131,11 @@ function PredictedCurve({
   const minVal = Math.min(...allValues);
   const range = maxVal - minVal || 1;
 
-  const width = 400;
-  const height = 100;
-  const paddingX = 30;
-  const paddingTop = 18;
-  const paddingBottom = 22;
+  const width = 360;
+  const height = 160;
+  const paddingX = 32;
+  const paddingTop = 24;
+  const paddingBottom = 28;
   const chartW = width - 2 * paddingX;
   const chartH = height - paddingTop - paddingBottom;
 
@@ -146,7 +146,7 @@ function PredictedCurve({
     hour: (hour + i) % 24,
   }));
 
-  // Build smooth bezier path
+  // Smooth bezier path
   const pathD = points
     .map((p, i) => {
       if (i === 0) return `M ${p.x},${p.y}`;
@@ -156,162 +156,135 @@ function PredictedCurve({
     })
     .join(' ');
 
-  // Area fill under the curve
+  // Gradient fill
   const areaD = `${pathD} L ${points[points.length - 1].x},${paddingTop + chartH} L ${paddingX},${paddingTop + chartH} Z`;
 
-  // Find peak and dip
+  // Peak and dip
   const peakIdx = allValues.indexOf(Math.max(...allValues));
   const dipIdx = allValues.indexOf(Math.min(...allValues));
   const peakPoint = points[peakIdx];
   const dipPoint = points[dipIdx];
 
-  // Hour labels: show every 3 hours for clarity
+  // Hour labels every 3h + last
   const hourLabels = points.filter((_, i) => i % 3 === 0 || i === points.length - 1);
-
-  // Format hour as HH:00
   const fmtHour = (h: number): string => `${String(h).padStart(2, '0')}:00`;
 
+  // Unique ID for gradient
+  const gradId = 'energyGrad';
+
   return (
-    <div className="mt-1">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-        <TrendingUp className="h-3.5 w-3.5" />
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <p className="text-xs font-semibold text-foreground mb-3 flex items-center gap-1.5">
+        <TrendingUp className="h-4 w-4 text-primary" />
         Curva Energetica - prossime 12 ore
       </p>
 
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height: 120 }}>
-        {/* Horizontal grid lines */}
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height: 180 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
         {[0.25, 0.5, 0.75].map((frac) => {
           const y = paddingTop + (1 - frac) * chartH;
           return (
             <line
               key={frac}
-              x1={paddingX}
-              y1={y}
-              x2={paddingX + chartW}
-              y2={y}
+              x1={paddingX} y1={y}
+              x2={paddingX + chartW} y2={y}
               stroke="currentColor"
-              className="text-muted"
+              className="text-border"
               strokeWidth="0.5"
-              strokeDasharray="3,3"
+              strokeDasharray="4,4"
             />
           );
         })}
 
-        {/* Area fill */}
-        <path d={areaD} fill="var(--color-primary)" fillOpacity="0.08" />
+        {/* Gradient area fill */}
+        <path d={areaD} fill={`url(#${gradId})`} />
 
-        {/* Main curve line */}
+        {/* Main curve */}
         <path
           d={pathD}
           fill="none"
           stroke="var(--color-primary)"
-          strokeWidth="2.5"
+          strokeWidth="3"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {/* Current point (larger, highlighted) */}
-        <circle
-          cx={points[0].x}
-          cy={points[0].y}
-          r={4}
-          fill="var(--color-primary)"
-          stroke="var(--color-background)"
-          strokeWidth="2"
+        {/* Current point (now) */}
+        <circle cx={points[0].x} cy={points[0].y} r={5}
+          fill="var(--color-primary)" stroke="var(--color-background)" strokeWidth="2.5"
         />
+        <text
+          x={points[0].x} y={points[0].y - 10}
+          textAnchor="middle" className="fill-primary"
+          fontSize="11" fontWeight="700"
+        >
+          {allValues[0]}
+        </text>
 
         {/* Peak annotation */}
         {peakIdx > 0 && (
           <>
-            <circle
-              cx={peakPoint.x}
-              cy={peakPoint.y}
-              r={3}
-              fill="#22c55e"
-              stroke="var(--color-background)"
-              strokeWidth="1.5"
+            <circle cx={peakPoint.x} cy={peakPoint.y} r={4}
+              fill="#22c55e" stroke="var(--color-background)" strokeWidth="2"
             />
             <text
-              x={peakPoint.x}
-              y={peakPoint.y - 8}
-              textAnchor="middle"
-              className="fill-green-600 dark:fill-green-400"
-              fontSize="9"
-              fontWeight="600"
+              x={peakPoint.x} y={peakPoint.y - 10}
+              textAnchor="middle" className="fill-green-600 dark:fill-green-400"
+              fontSize="11" fontWeight="700"
             >
-              Picco {peakPoint.value}
+              {peakPoint.value}
             </text>
           </>
         )}
 
-        {/* Dip annotation (only if different from peak and meaningful) */}
-        {dipIdx > 0 && dipIdx !== peakIdx && Math.abs(peakPoint.x - dipPoint.x) > 40 && (
+        {/* Dip annotation */}
+        {dipIdx > 0 && dipIdx !== peakIdx && Math.abs(peakPoint.x - dipPoint.x) > 35 && (
           <>
-            <circle
-              cx={dipPoint.x}
-              cy={dipPoint.y}
-              r={3}
-              fill="#ef4444"
-              stroke="var(--color-background)"
-              strokeWidth="1.5"
+            <circle cx={dipPoint.x} cy={dipPoint.y} r={4}
+              fill="#ef4444" stroke="var(--color-background)" strokeWidth="2"
             />
             <text
-              x={dipPoint.x}
-              y={dipPoint.y + 14}
-              textAnchor="middle"
-              className="fill-red-500 dark:fill-red-400"
-              fontSize="9"
-              fontWeight="600"
+              x={dipPoint.x} y={dipPoint.y + 16}
+              textAnchor="middle" className="fill-red-500 dark:fill-red-400"
+              fontSize="11" fontWeight="700"
             >
-              Calo {dipPoint.value}
+              {dipPoint.value}
             </text>
           </>
         )}
 
-        {/* Hour labels along bottom */}
+        {/* Hour labels */}
         {hourLabels.map((p, i) => (
           <text
-            key={i}
-            x={p.x}
-            y={height - 4}
-            textAnchor="middle"
-            className="fill-muted-foreground"
-            fontSize="9"
+            key={i} x={p.x} y={height - 6}
+            textAnchor="middle" className="fill-muted-foreground"
+            fontSize="10"
           >
             {fmtHour(p.hour)}
           </text>
         ))}
 
-        {/* Y-axis value labels */}
-        <text
-          x={paddingX - 4}
-          y={paddingTop + 3}
-          textAnchor="end"
-          className="fill-muted-foreground"
-          fontSize="8"
-        >
-          {maxVal}
-        </text>
-        <text
-          x={paddingX - 4}
-          y={paddingTop + chartH + 3}
-          textAnchor="end"
-          className="fill-muted-foreground"
-          fontSize="8"
-        >
-          {minVal}
-        </text>
+        {/* Y axis */}
+        <text x={paddingX - 5} y={paddingTop + 4} textAnchor="end" className="fill-muted-foreground" fontSize="10">{maxVal}</text>
+        <text x={paddingX - 5} y={paddingTop + chartH + 4} textAnchor="end" className="fill-muted-foreground" fontSize="10">{minVal}</text>
       </svg>
 
-      {/* Peak / Dip summary below chart */}
-      <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground mt-1">
-        <span className="flex items-center gap-1">
-          <Sun className="h-3 w-3 text-green-500" />
+      {/* Legend below */}
+      <div className="flex items-center justify-center gap-5 text-xs mt-2">
+        <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
+          <Sun className="h-3.5 w-3.5" />
           Picco: {fmtHour(points[peakIdx].hour)}
         </span>
         {dipIdx !== peakIdx && (
-          <span className="flex items-center gap-1">
-            <Moon className="h-3 w-3 text-red-400" />
+          <span className="flex items-center gap-1.5 text-red-500 dark:text-red-400 font-medium">
+            <Moon className="h-3.5 w-3.5" />
             Calo: {fmtHour(points[dipIdx].hour)}
           </span>
         )}
@@ -602,27 +575,41 @@ export default function ScientificEnergyCard({ userId }: Props) {
 
             <hr className="border-border" />
 
-            {/* Component explanations from engine */}
+            {/* Component explanations - compact cards */}
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Spiegazioni componenti
+              Perche questi punteggi
             </p>
-            <div className="space-y-1">
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-medium" style={{ color: SUB_COLORS.circadian }}>Ritmo:</span>{' '}
-                {breakdown.explanations.circadian}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-medium" style={{ color: SUB_COLORS.sleep }}>Sonno:</span>{' '}
-                {breakdown.explanations.sleep}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-medium" style={{ color: SUB_COLORS.lifestyle }}>Vita:</span>{' '}
-                {breakdown.explanations.lifestyle}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-medium" style={{ color: SUB_COLORS.allostatic }}>Carico:</span>{' '}
-                {breakdown.explanations.allostatic}
-              </p>
+            <div className="grid grid-cols-1 gap-2">
+              {([
+                { key: 'circadian', label: 'Ritmo', score: breakdown.circadian, max: 25 },
+                { key: 'sleep', label: 'Sonno', score: breakdown.sleep, max: 25 },
+                { key: 'lifestyle', label: 'Vita', score: breakdown.lifestyle, max: 25 },
+                { key: 'allostatic', label: 'Carico', score: breakdown.allostatic, max: 25 },
+              ] as const).map(({ key, label, score, max }) => {
+                const color = SUB_COLORS[key];
+                const pct = Math.round((score / max) * 100);
+                const level = pct >= 75 ? 'Ottimo' : pct >= 50 ? 'Buono' : pct >= 25 ? 'Basso' : 'Critico';
+                return (
+                  <div key={key} className="flex items-start gap-2.5 rounded-md bg-background/60 border border-border/50 p-2">
+                    <div className="flex flex-col items-center shrink-0 w-10">
+                      <span className="text-sm font-bold" style={{ color }}>{score}</span>
+                      <span className="text-[8px] text-muted-foreground">/{max}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-semibold">{label}</span>
+                        <span className="text-[9px] px-1 py-0.5 rounded" style={{
+                          color,
+                          backgroundColor: `${color}15`,
+                        }}>{level}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        {breakdown.explanations[key]}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
