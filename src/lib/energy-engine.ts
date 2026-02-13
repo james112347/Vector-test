@@ -45,7 +45,8 @@ export type Chronotype = 'lion' | 'bear' | 'wolf' | 'dolphin';
 export type Bottleneck =
   | 'sleep' | 'hydration' | 'nutrition' | 'stress'
   | 'overwork' | 'inactivity' | 'caffeine_late' | 'screen_fatigue'
-  | 'burnout_risk' | 'sleep_debt' | 'none';
+  | 'burnout_risk' | 'sleep_debt' | 'circadian_misalignment'
+  | 'hrv_low' | 'rhr_elevated' | 'emotional_drain' | 'none';
 
 /** Evento futuro nella giornata con impatto energetico previsto */
 export interface FutureEvent {
@@ -115,6 +116,66 @@ export interface EnergyBreakdown {
   };
   // Detailed factors for AI and debug
   factors: Record<string, number>;
+  // --- v3 Enhanced fields ---
+  /** Confidence in the score based on data completeness and baseline maturity */
+  confidence: DataConfidence;
+  /** Personal baselines computed via EWMA (14-day rolling) */
+  baselines: PersonalBaselines;
+  /** Top 3 bottlenecks ranked by severity (not just 1) */
+  topBottlenecks: RankedBottleneck[];
+  /** Adaptive component weights (adjusted per individual sensitivity) */
+  componentWeights: ComponentWeights;
+  /** Score deviation from personal baseline (positive = above average) */
+  baselineDeviation: number;
+  /** Score stability indicator 0-1 (1 = very stable across recent calculations) */
+  scoreStability: number;
+}
+
+// ---------------------------------------------------------------------------
+// v3 Enhanced Types — Personal Baselines, Confidence, Adaptive Weights
+// ---------------------------------------------------------------------------
+
+/** EWMA-based personal baselines (Oura/WHOOP approach: compare to self, not population) */
+export interface PersonalBaselines {
+  avgScore: number;           // EWMA of overall scores
+  avgSleep: number;           // EWMA of sleep component
+  avgLifestyle: number;       // EWMA of lifestyle component
+  avgAllostatic: number;      // EWMA of allostatic component
+  avgCircadian: number;       // EWMA of circadian component
+  avgHRV: number;             // EWMA of HRV indicator (0-1, -1 if no data)
+  avgRHR: number;             // EWMA of resting heart rate bpm (-1 if no data)
+  avgSleepHours: number;      // EWMA of nightly sleep hours
+  avgStress: number;          // EWMA of stress levels (1-5)
+  avgMood: number;            // EWMA of mood levels (1-5)
+  avgSteps: number;           // EWMA of daily steps (-1 if no data)
+  daysOfData: number;         // total days of historical data
+  stdScore: number;           // std deviation of overall scores
+  isReliable: boolean;        // true if daysOfData >= MIN_BASELINE_DAYS
+}
+
+/** Data confidence — how reliable is this score? */
+export interface DataConfidence {
+  overall: number;            // 0-1 composite confidence
+  dataCompleteness: number;   // 0-1 how many checkin types logged today
+  baselineMaturity: number;   // 0-1 how mature EWMA baselines are
+  sensorQuality: number;      // 0-1 wearable/sensor data availability
+  explanation: string;        // Italian description
+}
+
+/** Ranked bottleneck with severity and action */
+export interface RankedBottleneck {
+  type: Bottleneck;
+  severity: number;           // 0-25 severity score
+  label: string;              // Italian label
+  action: string;             // Italian actionable advice
+}
+
+/** Adaptive component weights (sum = 100) */
+export interface ComponentWeights {
+  circadian: number;          // default 25
+  sleep: number;              // default 25
+  lifestyle: number;          // default 25
+  allostatic: number;         // default 25
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +222,42 @@ const CHRONO_PARAMS: Record<Chronotype, {
   wolf:    { peak: 18, amplitude: 0.35, base: 0.55, typicalWake: 9.0 },
   dolphin: { peak: 12, amplitude: 0.25, base: 0.50, typicalWake: 7.5 },
 };
+
+// ---------------------------------------------------------------------------
+// v3 Enhanced Constants — EWMA, Confidence, Adaptive Scoring
+// ---------------------------------------------------------------------------
+
+/** EWMA alpha for 14-day effective window: α = 2/(N+1) where N=14 */
+const EWMA_ALPHA = 0.133;
+/** Faster EWMA for 7-day short-term trends */
+const EWMA_FAST_ALPHA = 0.25;
+/** Minimum days of data before personal baselines are considered reliable */
+const MIN_BASELINE_DAYS = 3;
+/** Days for fully mature baselines (Oura uses ~14 days) */
+const MATURE_BASELINE_DAYS = 14;
+/** Minimum today checkin types for decent confidence */
+const MIN_CHECKINS_FOR_CONFIDENCE = 3;
+/** Checkin types for maximum data confidence */
+const FULL_CONFIDENCE_CHECKINS = 7;
+/** Max score change per recalculation for stability (anti-jitter) */
+const SCORE_SMOOTHING_ALPHA = 0.7; // blend 70% new + 30% previous
+/** Caffeine half-life age adjustment (Nehlig 2018: range 1.5-9.5h, CYP1A2 dependent) */
+const CAFFEINE_HALF_LIFE_YOUNG = 4.5;    // <30 years: faster metabolism
+const CAFFEINE_HALF_LIFE_MIDDLE = 5.0;   // 30-50 years: average
+const CAFFEINE_HALF_LIFE_SENIOR = 6.0;   // >50 years: slower metabolism
+/** RHR thresholds (Shaffer 2017 — resting heart rate health indicators) */
+const RHR_EXCELLENT = 55;      // athlete level
+const RHR_GOOD = 65;           // healthy
+const RHR_ELEVATED = 80;       // concerning
+const RHR_HIGH = 90;           // high stress / poor fitness
+/** Respiratory rate normal range (breaths per minute during sleep) */
+const RESP_RATE_LOW = 12;
+const RESP_RATE_HIGH = 20;
+/** Steps thresholds */
+const STEPS_SEDENTARY = 3000;
+const STEPS_LIGHT = 5000;
+const STEPS_MODERATE = 7500;
+const STEPS_ACTIVE = 10000;
 
 // ---------------------------------------------------------------------------
 // Helpers
