@@ -1032,7 +1032,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
         <div className="px-4 pb-3 space-y-3">
 
           {/* Phase questions window — always visible */}
-          <div className="rounded-xl border border-border shadow-sm bg-card overflow-hidden">
+          <div className="rounded-xl border border-border shadow-sm bg-card">
             <div className="max-h-52 overflow-y-auto" style={{ touchAction: 'pan-y', overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
               {allPhaseQuestions.map((q, i) => {
                 const answered = answeredPhaseQuestions.find(a => a.question.type === q.type);
@@ -1170,15 +1170,15 @@ export default function QuickCheckins({ userId }: { userId: number }) {
             );
           })()}
 
-          {/* When complete: full day summary window */}
-          {allDone && !editingType && todaySummary.length > 0 && (
-            <div className="rounded-xl border border-border shadow-sm bg-card overflow-hidden">
+          {/* Day summary window — always visible when there are logged items */}
+          {!editingType && todaySummary.length > 0 && (
+            <div className="rounded-xl border border-border shadow-sm bg-card">
               <div className="bg-muted/30 px-3 py-1.5 border-b border-border flex items-center gap-2">
                 <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
                 <span className="text-[11px] font-semibold text-foreground">Riepilogo giornata</span>
                 <span className="text-[10px] text-muted-foreground ml-auto">{todaySummary.length} parametri</span>
               </div>
-              <div className="max-h-44 overflow-y-auto divide-y divide-border/30" style={{ touchAction: 'pan-y', overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
+              <div className="max-h-56 overflow-y-auto divide-y divide-border/30" style={{ touchAction: 'pan-y', overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
                 {todaySummary.map(item => {
                   const Icon = item.icon;
                   const phaseAnswer = answeredPhaseQuestions.find(a => a.question.type === item.type);
