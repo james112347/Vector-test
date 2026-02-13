@@ -6,7 +6,7 @@ import {
   Sunset, CloudMoon, UtensilsCrossed, BedDouble,
   Pill, MonitorOff, Plus, Minus, Pencil, X,
   BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2,
-  Users, Car, Clock, Square, Play, Pause,
+  Users, Car, Clock, Square, Pause,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins, deleteCheckin } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
