@@ -631,6 +631,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [savingActivity, setSavingActivity] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -983,36 +984,57 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   const PhaseIcon = config.icon;
 
+  // Count of all unique types that have been logged today
+  const completedCount = allLoggedTypes.size;
+  const totalTrackedCount = ALL_TRACKED_TYPES.length;
+
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-visible">
       <CardContent className="p-0">
 
-        {/* ---- Unified check-in section ---- */}
-        <div className="px-4 pt-4 pb-3 space-y-3">
-
-          {/* Header: phase icon, greeting, progress badge */}
-          <div className="flex items-center gap-2">
-            <PhaseIcon className={`h-4 w-4 ${config.iconColor}`} />
-            <span className="text-sm font-semibold text-foreground">
-              {config.greeting}
+        {/* ---- Collapsible header: tap to toggle ---- */}
+        <button
+          onClick={() => setIsOpen(prev => !prev)}
+          className="w-full flex items-center gap-2 px-4 pt-4 pb-3 text-left"
+        >
+          <PhaseIcon className={`h-4 w-4 ${config.iconColor}`} />
+          <span className="text-sm font-semibold text-foreground">
+            {isOpen ? config.greeting : 'Check-in'}
+          </span>
+          {!isOpen && completedCount > 0 && (
+            <span className="text-[11px] bg-green-500/10 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-bold tabular-nums">
+              {completedCount} completat{completedCount === 1 ? 'o' : 'i'}
             </span>
-            {allDone ? (
-              <div className="ml-auto flex items-center gap-1.5">
-                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                  <Check className="h-3.5 w-3.5" />
-                  <span className="text-xs font-semibold">Completato</span>
-                </div>
+          )}
+          {!isOpen && completedCount === 0 && (
+            <span className="text-[11px] text-muted-foreground">
+              Tocca per aprire
+            </span>
+          )}
+          {isOpen && allDone ? (
+            <div className="ml-auto flex items-center gap-1.5">
+              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                <Check className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">Completato</span>
               </div>
-            ) : (
-              <span className="ml-auto text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold tabular-nums">
-                {answeredPhaseQuestions.length}/{allPhaseQuestions.length}
-              </span>
-            )}
-          </div>
+            </div>
+          ) : isOpen ? (
+            <span className="ml-auto text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold tabular-nums">
+              {answeredPhaseQuestions.length}/{allPhaseQuestions.length}
+            </span>
+          ) : null}
+          <ChevronDown className={`h-4 w-4 text-muted-foreground ml-auto shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* ---- Collapsible content ---- */}
+        {isOpen && <>
+
+        {/* ---- Unified check-in section ---- */}
+        <div className="px-4 pb-3 space-y-3">
 
           {/* Phase questions window — always visible */}
           <div className="rounded-xl border border-border shadow-sm bg-card overflow-hidden">
-            <div className="max-h-52 overflow-y-auto">
+            <div className="max-h-52 overflow-y-auto" style={{ touchAction: 'pan-y', overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
               {allPhaseQuestions.map((q, i) => {
                 const answered = answeredPhaseQuestions.find(a => a.question.type === q.type);
                 const isCurrentQ = !allDone && !editingType && currentQuestion?.type === q.type;
@@ -1157,7 +1179,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                 <span className="text-[11px] font-semibold text-foreground">Riepilogo giornata</span>
                 <span className="text-[10px] text-muted-foreground ml-auto">{todaySummary.length} parametri</span>
               </div>
-              <div className="max-h-44 overflow-y-auto divide-y divide-border/30">
+              <div className="max-h-44 overflow-y-auto divide-y divide-border/30" style={{ touchAction: 'pan-y', overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
                 {todaySummary.map(item => {
                   const Icon = item.icon;
                   const phaseAnswer = answeredPhaseQuestions.find(a => a.question.type === item.type);
@@ -1583,8 +1605,10 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           )}
         </div>
 
+        </>}
+
         {/* ---- Completion tracker -- filled/empty circles with text ---- */}
-        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border bg-muted/20 flex-wrap">
+        <div className={`flex items-center gap-1.5 px-4 py-2 border-t border-border bg-muted/20 flex-wrap ${!isOpen ? 'hidden' : ''}`}>
           {ALL_TRACKED_TYPES.map(({ type, label }) => {
             const done = allLoggedTypes.has(type);
             return (
