@@ -1302,16 +1302,18 @@ const CHANGELOG = [
 
 function ChangelogSection() {
   const [expanded, setExpanded] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const location = useLocation();
   const changelogRef = useRef<HTMLDivElement>(null);
-  const visibleEntries = expanded ? CHANGELOG : CHANGELOG.slice(0, 2);
+  const visibleEntries = showAll ? CHANGELOG : CHANGELOG.slice(0, 2);
 
-  // Auto-scroll when arriving from update notification or "Scopri le novità"
+  // Auto-scroll and auto-expand when arriving from update notification or "Scopri le novità"
   useEffect(() => {
     const shouldScroll =
       (location.state as any)?.scrollToChangelog ||
       location.hash === '#changelog';
     if (shouldScroll && changelogRef.current) {
+      setExpanded(true);
       setTimeout(() => {
         changelogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 300);
@@ -1319,57 +1321,76 @@ function ChangelogSection() {
   }, [location]);
 
   return (
-    <Card ref={changelogRef} id="changelog">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    <Card ref={changelogRef} id="changelog" className="overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full text-left"
+      >
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </div>
+              <div>
+                <CardTitle className="text-base">Novità e Aggiornamenti</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Tutte le correzioni e le nuove funzionalità</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
+                v{CHANGELOG[0].version}
+              </span>
+              <svg
+                className={`w-5 h-5 text-muted-foreground transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
-            <CardTitle className="text-lg">Novità e Aggiornamenti</CardTitle>
           </div>
-          <span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
-            v{CHANGELOG[0].version}
-          </span>
-        </div>
-        <CardDescription>Tutte le correzioni e le nuove funzionalità</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {visibleEntries.map((release, i) => (
-          <div key={release.version}>
-            {i > 0 && <Separator className="mb-4" />}
-            <div className="flex items-baseline justify-between mb-2.5">
-              <h4 className="text-sm font-bold">Versione {release.version}</h4>
-              <span className="text-[11px] text-muted-foreground">{release.date}</span>
-            </div>
-            <div className="space-y-1.5">
-              {release.entries.map((entry, j) => (
-                <div key={j} className="flex items-start gap-2">
-                  <span className={`mt-0.5 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                    entry.type === 'new'
-                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  }`}>
-                    {entry.type === 'new' ? 'NUOVO' : 'FIX'}
-                  </span>
-                  <p className="text-sm text-muted-foreground">{entry.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        </CardHeader>
+      </button>
 
-        {CHANGELOG.length > 2 && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="w-full text-sm text-primary hover:text-primary/80 font-medium py-2 transition-colors"
-          >
-            {expanded ? 'Mostra meno' : `Mostra tutte le versioni (${CHANGELOG.length})`}
-          </button>
-        )}
-      </CardContent>
+      {expanded && (
+        <CardContent className="pt-0 space-y-4">
+          <Separator className="mb-3" />
+          {visibleEntries.map((release, i) => (
+            <div key={release.version}>
+              {i > 0 && <Separator className="mb-4" />}
+              <div className="flex items-baseline justify-between mb-2.5">
+                <h4 className="text-sm font-bold">Versione {release.version}</h4>
+                <span className="text-[11px] text-muted-foreground">{release.date}</span>
+              </div>
+              <div className="space-y-1.5">
+                {release.entries.map((entry, j) => (
+                  <div key={j} className="flex items-start gap-2">
+                    <span className={`mt-0.5 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      entry.type === 'new'
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    }`}>
+                      {entry.type === 'new' ? 'NUOVO' : 'FIX'}
+                    </span>
+                    <p className="text-sm text-muted-foreground">{entry.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {CHANGELOG.length > 2 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAll(!showAll); }}
+              className="w-full text-sm text-primary hover:text-primary/80 font-medium py-2 transition-colors"
+            >
+              {showAll ? 'Mostra meno' : `Mostra tutte le versioni (${CHANGELOG.length})`}
+            </button>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }
