@@ -799,123 +799,145 @@ function SahhaQRSection({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
+  const [expanded, setExpanded] = useState(false);
+
   if (loading) return null;
   if (!qrImage && !isAdmin) return null;
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-            </div>
-            <CardTitle className="text-lg">Registrazione Sahha</CardTitle>
-          </div>
-          <CardDescription>QR per collegare l'account Sahha dei partecipanti</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {qrImage ? (
-            <>
-              {/* Tip banner: show to another user */}
-              <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-1.5">
-                <div className="flex items-start gap-2.5">
-                  <svg className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-left"
+        >
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                   </svg>
-                  <div>
-                    <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                      Devi mostrare questo QR a un altro utente
-                    </p>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                      Un utente che deve registrarsi su Sahha deve inquadrare questo codice dal <strong>suo</strong> telefono con l'app Sahha.
-                      Tocca il pulsante qui sotto per mostrarglielo a schermo intero.
-                    </p>
-                  </div>
+                </div>
+                <div>
+                  <CardTitle className="text-base">Registrazione Sahha</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">QR per collegare l'account Sahha dei partecipanti</p>
                 </div>
               </div>
-
-              {/* Show to friend button */}
-              <Button
-                className="w-full h-11"
-                onClick={() => setShowShareMode(true)}
+              <svg
+                className={`w-5 h-5 text-muted-foreground transition-transform duration-200 shrink-0 ${expanded ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                Mostra QR a un altro utente
-              </Button>
-
-              {/* Compact QR preview */}
-              <button
-                onClick={() => setShowFullscreen(true)}
-                className="w-full flex flex-col items-center py-2"
-              >
-                <div className="bg-white rounded-xl p-2 shadow-sm border border-border">
-                  <img
-                    src={qrImage}
-                    alt="QR Code Sahha"
-                    className="w-32 h-32 object-contain"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1.5">Tocca per ingrandire</p>
-              </button>
-
-              {/* Admin controls */}
-              {isAdmin && (
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 h-9"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                  >
-                    Sostituisci QR
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-9"
-                    onClick={handleDelete}
-                    disabled={uploading}
-                  >
-                    Rimuovi
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : isAdmin ? (
-            <div className="text-center py-4 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Carica il codice QR del tuo progetto Sahha per permettere agli utenti di registrarsi.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="h-10"
-              >
-                {uploading ? 'Caricamento...' : 'Carica QR Code'}
-              </Button>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
-          ) : null}
+          </CardHeader>
+        </button>
 
-          {error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-          )}
+        {expanded && (
+          <CardContent className="pt-0 space-y-4">
+            <Separator className="mb-3" />
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleUpload}
-          />
-        </CardContent>
+            {qrImage ? (
+              <>
+                {/* Tip banner */}
+                <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-1.5">
+                  <div className="flex items-start gap-2.5">
+                    <svg className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        Devi mostrare questo QR a un altro utente
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                        Un utente che deve registrarsi su Sahha deve inquadrare questo codice dal <strong>suo</strong> telefono con l'app Sahha.
+                        Tocca il pulsante qui sotto per mostrarglielo a schermo intero.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Show to friend button */}
+                <Button
+                  className="w-full h-11"
+                  onClick={() => setShowShareMode(true)}
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Mostra QR a un altro utente
+                </Button>
+
+                {/* Compact QR preview */}
+                <button
+                  onClick={() => setShowFullscreen(true)}
+                  className="w-full flex flex-col items-center py-2"
+                >
+                  <div className="bg-white rounded-xl p-2 shadow-sm border border-border">
+                    <img
+                      src={qrImage}
+                      alt="QR Code Sahha"
+                      className="w-32 h-32 object-contain"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Tocca per ingrandire</p>
+                </button>
+
+                {/* Admin controls */}
+                {isAdmin && (
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-9"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      Sostituisci QR
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-9"
+                      onClick={handleDelete}
+                      disabled={uploading}
+                    >
+                      Rimuovi
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : isAdmin ? (
+              <div className="text-center py-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Carica il codice QR del tuo progetto Sahha per permettere agli utenti di registrarsi.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="h-10"
+                >
+                  {uploading ? 'Caricamento...' : 'Carica QR Code'}
+                </Button>
+              </div>
+            ) : null}
+
+            {error && (
+              <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleUpload}
+            />
+          </CardContent>
+        )}
       </Card>
 
       {/* Fullscreen QR Modal */}
