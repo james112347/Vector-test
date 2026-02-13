@@ -33,7 +33,7 @@ export function useAdminNotifications() {
             body: `Hai ${newCount} ${newCount === 1 ? 'nuovo feedback' : 'nuovi feedback'} da leggere.`,
             tag: 'new-feedback',
             navigateTo: '/Vector-test/admin/feedback',
-          } as any);
+          });
         }
 
         // Update app badge counter
@@ -67,7 +67,7 @@ export function useAdminNotifications() {
               body: `${email} ha inviato: ${cat}`,
               tag: 'new-feedback',
               navigateTo: '/Vector-test/admin/feedback',
-            } as any);
+            });
             // Update stored count and badge
             getUnreadFeedbackCount().then(c => {
               localStorage.setItem(LAST_COUNT_KEY, String(c));

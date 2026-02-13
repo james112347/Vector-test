@@ -194,7 +194,7 @@ function cacheAIInsight(data: AIOrientationInsight, stateLevel: string, timeSlot
     sessionStorage.setItem(AI_ORIENT_CACHE_KEY, JSON.stringify({
       data, stateLevel, timeSlot, ts: Date.now(),
     }));
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 // ---------------------------------------------------------------------------

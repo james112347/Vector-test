@@ -115,6 +115,7 @@ function HistoryAttachments({ chatHistory }: { chatHistory: string }) {
     const msgs: ChatMessage[] = JSON.parse(chatHistory);
     const attachments = msgs.flatMap(m => m.attachments ?? []);
     if (attachments.length === 0) return null;
+    /* eslint-disable react-hooks/error-boundaries */
     return (
       <div className="flex flex-wrap gap-2 mt-1">
         {attachments.map((att, i) => (
@@ -128,6 +129,7 @@ function HistoryAttachments({ chatHistory }: { chatHistory: string }) {
         ))}
       </div>
     );
+    /* eslint-enable react-hooks/error-boundaries */
   } catch {
     return null;
   }

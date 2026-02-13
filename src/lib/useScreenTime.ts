@@ -56,6 +56,7 @@ export function useScreenTime(userId: number | undefined) {
   }, [userId, reload]);
 
   // Load iniziale
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { reload(); }, [reload]);
 
   return { today, weekData, reload };

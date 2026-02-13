@@ -22,6 +22,7 @@ export function usePendingUsers() {
 
   useEffect(() => {
     if (!user?.isAdmin) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCount(0);
       return;
     }

@@ -339,5 +339,5 @@ export function getCachedPatterns(): HabitPattern[] | null {
 export function cachePatterns(data: HabitPattern[]): void {
   try {
     sessionStorage.setItem(HABIT_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
-  } catch {}
+  } catch { /* ignored */ }
 }

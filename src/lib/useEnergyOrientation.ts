@@ -50,7 +50,7 @@ function getCached(): OrientationResult | null {
 function setCache(data: OrientationResult): void {
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 export function useEnergyOrientation(userId: number | undefined): UseEnergyOrientationReturn {

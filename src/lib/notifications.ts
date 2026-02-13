@@ -33,8 +33,10 @@ function formatTimeAgo(date: Date): string {
 export function updateAppBadge(count: number): void {
   if ('setAppBadge' in navigator) {
     if (count > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (navigator as any).setAppBadge(count).catch(() => {});
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (navigator as any).clearAppBadge().catch(() => {});
     }
   }

@@ -84,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('notificationclose', () => {
   self.registration.getNotifications().then((notifications) => {
     if (notifications.length === 0 && 'clearAppBadge' in navigator) {
-      (navigator as any).clearAppBadge().catch(() => {});
+      (navigator as unknown as { clearAppBadge: () => Promise<void> }).clearAppBadge().catch(() => {});
     }
   });
 });

@@ -3,7 +3,7 @@ import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
 import { sendNotification } from '../lib/notifications';
 import { getAppSettings } from '../lib/useAppSettings';
 
-let resolveReady: ((reg: ServiceWorkerRegistration | undefined) => void) | null = null;
+const resolveReady: ((reg: ServiceWorkerRegistration | undefined) => void) | null = null;
 let swRegistration: ServiceWorkerRegistration | undefined;
 let updateSWFn: ((reloadPage?: boolean) => Promise<void>) | null = null;
 
@@ -13,6 +13,7 @@ let notifyUpdate: (() => void) | null = null;
 /**
  * Called from main.tsx to wire up the SW registration.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function initSW(registerSW: (options: RegisterSWOptions) => (reloadPage?: boolean) => Promise<void>) {
   updateSWFn = registerSW({
     onRegisteredSW(_swUrl, registration) {

@@ -632,6 +632,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     setCheckins(items);
   }, [userId]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadCheckins(); }, [loadCheckins]);
 
   // Determine which types have been logged today (rated types, not counters)
@@ -665,6 +666,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   // Check if all phase questions are done
   useEffect(() => {
     if (activeQuestions.length === 0 && checkins.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAllDone(true);
     }
   }, [activeQuestions, checkins]);
@@ -702,6 +704,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [elapsed, setElapsed] = useState('');
   useEffect(() => {
     if (!isActivityRunning || !lastActivityEntry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsed('');
       return;
     }

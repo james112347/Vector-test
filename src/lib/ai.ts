@@ -526,7 +526,7 @@ export function getCachedQuickTip(date: string): AIQuickTip | null {
 }
 
 export function cacheQuickTip(data: AIQuickTip, date: string): void {
-  try { sessionStorage.setItem(QUICK_TIP_KEY, JSON.stringify({ data, date, ts: Date.now() })); } catch {}
+  try { sessionStorage.setItem(QUICK_TIP_KEY, JSON.stringify({ data, date, ts: Date.now() })); } catch { /* ignored */ }
 }
 
 export function getCachedWeeklyAnalysis(logCount: number, latestDate: string): AIWeeklyAnalysis | null {
@@ -540,7 +540,7 @@ export function getCachedWeeklyAnalysis(logCount: number, latestDate: string): A
 }
 
 export function cacheWeeklyAnalysis(data: AIWeeklyAnalysis, logCount: number, latestDate: string): void {
-  try { sessionStorage.setItem(WEEKLY_KEY, JSON.stringify({ data, logCount, latestDate, ts: Date.now() })); } catch {}
+  try { sessionStorage.setItem(WEEKLY_KEY, JSON.stringify({ data, logCount, latestDate, ts: Date.now() })); } catch { /* ignored */ }
 }
 
 export function getCachedLowEnergyAlert(date: string): AILowEnergyAlert | null {
@@ -554,7 +554,7 @@ export function getCachedLowEnergyAlert(date: string): AILowEnergyAlert | null {
 }
 
 export function cacheLowEnergyAlert(data: AILowEnergyAlert, date: string): void {
-  try { sessionStorage.setItem(ALERT_KEY, JSON.stringify({ data, date, ts: Date.now() })); } catch {}
+  try { sessionStorage.setItem(ALERT_KEY, JSON.stringify({ data, date, ts: Date.now() })); } catch { /* ignored */ }
 }
 
 // --- Main insights generator (enhanced with predictions AI-03 and stress type AI-07) ---

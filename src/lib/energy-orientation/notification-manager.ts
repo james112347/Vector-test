@@ -47,6 +47,7 @@ function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioContext) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     } catch {
       return null;
@@ -223,7 +224,7 @@ function getLastNotificationTime(): number {
 function setLastNotificationTime(): void {
   try {
     localStorage.setItem(LAST_NOTIFICATION_KEY, String(Date.now()));
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**

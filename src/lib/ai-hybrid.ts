@@ -522,5 +522,5 @@ export function getCachedHybridAnalysis(): HybridAnalysis | null {
 export function cacheHybridAnalysis(data: HybridAnalysis): void {
   try {
     sessionStorage.setItem(HYBRID_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
-  } catch {}
+  } catch { /* ignored */ }
 }

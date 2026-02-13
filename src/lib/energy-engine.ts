@@ -225,39 +225,8 @@ const CHRONO_PARAMS: Record<Chronotype, {
 
 // ---------------------------------------------------------------------------
 // v3 Enhanced Constants — EWMA, Confidence, Adaptive Scoring
+// (Reserved for future v3 implementation — currently v2 engine active)
 // ---------------------------------------------------------------------------
-
-/** EWMA alpha for 14-day effective window: α = 2/(N+1) where N=14 */
-const EWMA_ALPHA = 0.133;
-/** Faster EWMA for 7-day short-term trends */
-const EWMA_FAST_ALPHA = 0.25;
-/** Minimum days of data before personal baselines are considered reliable */
-const MIN_BASELINE_DAYS = 3;
-/** Days for fully mature baselines (Oura uses ~14 days) */
-const MATURE_BASELINE_DAYS = 14;
-/** Minimum today checkin types for decent confidence */
-const MIN_CHECKINS_FOR_CONFIDENCE = 3;
-/** Checkin types for maximum data confidence */
-const FULL_CONFIDENCE_CHECKINS = 7;
-/** Max score change per recalculation for stability (anti-jitter) */
-const SCORE_SMOOTHING_ALPHA = 0.7; // blend 70% new + 30% previous
-/** Caffeine half-life age adjustment (Nehlig 2018: range 1.5-9.5h, CYP1A2 dependent) */
-const CAFFEINE_HALF_LIFE_YOUNG = 4.5;    // <30 years: faster metabolism
-const CAFFEINE_HALF_LIFE_MIDDLE = 5.0;   // 30-50 years: average
-const CAFFEINE_HALF_LIFE_SENIOR = 6.0;   // >50 years: slower metabolism
-/** RHR thresholds (Shaffer 2017 — resting heart rate health indicators) */
-const RHR_EXCELLENT = 55;      // athlete level
-const RHR_GOOD = 65;           // healthy
-const RHR_ELEVATED = 80;       // concerning
-const RHR_HIGH = 90;           // high stress / poor fitness
-/** Respiratory rate normal range (breaths per minute during sleep) */
-const RESP_RATE_LOW = 12;
-const RESP_RATE_HIGH = 20;
-/** Steps thresholds */
-const STEPS_SEDENTARY = 3000;
-const STEPS_LIGHT = 5000;
-const STEPS_MODERATE = 7500;
-const STEPS_ACTIVE = 10000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -629,6 +598,7 @@ interface SleepAnalysis {
   explanation: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function analyzeSleep(data: AllData, _chronotype: Chronotype): Promise<SleepAnalysis> {
   // 1. Last night quality from today's checkin
   const sleepCheckins = data.todayCheckins.filter(c => c.type === 'sleep_quality');
@@ -1183,6 +1153,7 @@ function identifyBottleneck(
   sleepAnalysis: SleepAnalysis,
   lifestyleAnalysis: LifestyleAnalysis,
   allostaticAnalysis: AllostaticAnalysis,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _circadianScore: number,
 ): Bottleneck {
   const issues: { type: Bottleneck; severity: number }[] = [];
@@ -1996,6 +1967,36 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
       allostatic: allostaticResult.explanation,
     },
     factors,
+    // v3 stub defaults (populated when v3 engine is implemented)
+    confidence: {
+      overall: 0.5,
+      dataCompleteness: 0.5,
+      baselineMaturity: 0,
+      sensorQuality: 0,
+      explanation: 'Baseline v3 non ancora attivo — valori predefiniti.',
+    },
+    baselines: {
+      avgScore: overall,
+      avgSleep: sleepResult.score,
+      avgLifestyle: lifestyleResult.score,
+      avgAllostatic: allostaticResult.score,
+      avgCircadian: circResult.score,
+      avgHRV: -1,
+      avgRHR: -1,
+      avgSleepHours: -1,
+      avgStress: -1,
+      avgMood: -1,
+      avgSteps: -1,
+      daysOfData: 0,
+      stdScore: 0,
+      isReliable: false,
+    },
+    topBottlenecks: bottleneck !== 'none'
+      ? [{ type: bottleneck, severity: 15, label: bottleneck, action: '' }]
+      : [],
+    componentWeights: { circadian: 25, sleep: 25, lifestyle: 25, allostatic: 25 },
+    baselineDeviation: 0,
+    scoreStability: 0.5,
   };
 }
 
@@ -2127,6 +2128,10 @@ export const BOTTLENECK_ACTIONS: Record<Bottleneck, string> = {
   screen_fatigue: 'Fai una pausa dallo schermo. Guarda lontano per 20 secondi ogni 20 minuti.',
   burnout_risk: 'Priorita al recupero oggi. Riposo, natura, zero sovraccarico cognitivo.',
   sleep_debt: 'Dormi 1 ora in piu per le prossime notti per recuperare il debito.',
+  circadian_misalignment: 'Cerca di svegliarti e andare a letto alla stessa ora ogni giorno.',
+  hrv_low: 'HRV bassa: priorita al recupero. Evita allenamenti intensi oggi.',
+  rhr_elevated: 'Frequenza cardiaca alta: riposo, idratazione e gestione dello stress.',
+  emotional_drain: 'Stanchezza emotiva: prenditi del tempo per te, evita decisioni importanti.',
   none: 'Tutto nella norma. Sfrutta questo stato per attivita ad alto valore.',
 };
 
@@ -2141,6 +2146,10 @@ export const BOTTLENECK_LABELS: Record<Bottleneck, string> = {
   screen_fatigue: 'Affaticamento da schermo',
   burnout_risk: 'Rischio burnout',
   sleep_debt: 'Debito di sonno accumulato',
+  circadian_misalignment: 'Disallineamento circadiano',
+  hrv_low: 'HRV bassa',
+  rhr_elevated: 'Frequenza cardiaca elevata',
+  emotional_drain: 'Esaurimento emotivo',
   none: 'Nessun problema critico',
 };
 

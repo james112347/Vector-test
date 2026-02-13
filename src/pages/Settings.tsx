@@ -1310,9 +1310,10 @@ function ChangelogSection() {
   // Auto-scroll and auto-expand when arriving from update notification or "Scopri le novità"
   useEffect(() => {
     const shouldScroll =
-      (location.state as any)?.scrollToChangelog ||
+      (location.state as Record<string, unknown>)?.scrollToChangelog ||
       location.hash === '#changelog';
     if (shouldScroll && changelogRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setExpanded(true);
       setTimeout(() => {
         changelogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

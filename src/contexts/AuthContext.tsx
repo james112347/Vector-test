@@ -106,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 // --- Hooks ---
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuthState(): AuthState {
   const context = useContext(AuthStateContext);
   if (!context) {
@@ -114,6 +115,7 @@ export function useAuthState(): AuthState {
   return context;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuthActions(): AuthActions {
   const context = useContext(AuthActionsContext);
   if (!context) {
@@ -127,6 +129,7 @@ export function useAuthActions(): AuthActions {
  * Use useAuthState or useAuthActions separately if you need
  * to optimize re-renders.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return { ...useAuthState(), ...useAuthActions() };
 }

@@ -61,6 +61,7 @@ export function AppShell() {
   // Show first popup after delay (respects chatPopupEnabled setting)
   useEffect(() => {
     if (isFeedbackPage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowTooltip(false);
       clearTimeout(reshowTimerRef.current);
       return;

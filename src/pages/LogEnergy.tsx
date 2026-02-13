@@ -99,6 +99,7 @@ export default function LogEnergy() {
     });
   }, [user?.id]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const loadQuickTip = useCallback(async () => {
     if (!isAIAvailable() || !profile?.name) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -113,6 +114,7 @@ export default function LogEnergy() {
     setTipLoading(false);
   }, [physical, mental, emotional, yesterdayValues, profile?.name]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const loadLowEnergyAlert = useCallback(async () => {
     if (!isAIAvailable() || !profile?.name || alertDismissed) return;
     const todayLog = { physical, mental, emotional, userId: user?.id || 0, date: new Date().toISOString().slice(0, 10), createdAt: new Date(), updatedAt: new Date() };

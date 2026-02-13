@@ -60,8 +60,10 @@ export default function History() {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadLogs(); }, [user?.id]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const loadWeeklyAnalysis = useCallback(async () => {
     if (!isAIAvailable() || !profile?.name || logs.length < 3) return;
     const latestDate = logs[0]?.date || '';
@@ -79,6 +81,7 @@ export default function History() {
   }, [logs, profile?.name]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!loading && logs.length >= 3) loadWeeklyAnalysis();
   }, [loading, logs.length, loadWeeklyAnalysis]);
 

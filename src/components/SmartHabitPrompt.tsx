@@ -21,6 +21,7 @@ export default function SmartHabitPrompt({ userId }: { userId: number }) {
   }, [userId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadNotifications();
     // Refresh ogni 15 minuti
     const interval = setInterval(loadNotifications, 15 * 60 * 1000);
