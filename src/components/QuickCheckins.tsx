@@ -823,14 +823,6 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     await loadCheckins();
   };
 
-  // Reset to re-answer
-  const handleRestart = () => {
-    setAllDone(false);
-    setCurrentIdx(0);
-    setSelectedValue(null);
-    setEditingType(null);
-  };
-
   // Phase start hour for filtering phase-specific checkins
   const phaseStartHour = phase === 'morning' ? 5 : phase === 'midday' ? 11 : phase === 'afternoon' ? 14 : 18;
 
@@ -990,7 +982,6 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   }, [checkins]);
 
   const PhaseIcon = config.icon;
-  const ratings = currentQuestion?.ratings ?? DEFAULT_RATINGS;
 
   return (
     <Card className="overflow-hidden">
