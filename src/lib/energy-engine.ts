@@ -431,6 +431,8 @@ interface SleepAnalysis {
   lastNightQuality: number | null;   // 1-5
   lastNightHours: number | null;
   napRecovery: number;               // hours recovered from naps
+  sahhaReadiness: number;            // 0-1 or -1 if unavailable
+  sahhaSleepScore: number;           // 0-1 or -1 if unavailable
   explanation: string;
 }
 
@@ -556,7 +558,12 @@ async function analyzeSleep(data: AllData, _chronotype: Chronotype): Promise<Sle
   if (alcoholSleepPenalty > 0) parts.push('impatto alcol sulla qualita');
   const explanation = parts.length > 0 ? parts.join(', ') : 'Dati sonno insufficienti';
 
-  return { score, sleepDebt, lastNightQuality, lastNightHours, napRecovery, explanation };
+  return {
+    score, sleepDebt, lastNightQuality, lastNightHours, napRecovery,
+    sahhaReadiness: readinessScore?.score ?? -1,
+    sahhaSleepScore: sahhaSleepScore?.score ?? -1,
+    explanation,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1137,6 +1144,9 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
     alcohol: data.profile?.alcoholFrequency === 'daily' ? 3
       : data.profile?.alcoholFrequency === 'weekly' ? 2
       : data.profile?.alcoholFrequency === 'occasional' ? 1 : 0,
+    // Sahha wearable scores (0-1, or -1 if unavailable)
+    sahha_readiness: sleepResult.sahhaReadiness,
+    sahha_sleep_score: sleepResult.sahhaSleepScore,
   };
 
   return {
