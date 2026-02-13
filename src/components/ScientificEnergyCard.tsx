@@ -8,6 +8,10 @@ import {
   type EnergyBreakdown,
 } from '../lib/energy-engine';
 import {
+  generateOrientation,
+  type OrientationResult,
+} from '../lib/energy-orientation';
+import {
   Zap,
   RefreshCw,
   Moon,
@@ -20,11 +24,26 @@ import {
   Heart,
   ChevronDown,
   ChevronUp,
+  BarChart3,
+  Sparkles,
+  Lightbulb,
+  Loader2,
+  Droplets,
+  Coffee,
+  Utensils,
+  Dumbbell,
+  Briefcase,
+  MonitorSmartphone,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+type ToolPanel = 'fattori' | 'analisi' | 'consigli' | null;
 
 interface Props {
   userId: number;
@@ -322,6 +341,302 @@ function TechnicalDetail({
 }
 
 // ---------------------------------------------------------------------------
+// Factor icon helper
+// ---------------------------------------------------------------------------
+
+const FACTOR_ICONS: Record<string, typeof Brain> = {
+  sleep: Moon,
+  hydration: Droplets,
+  caffeine: Coffee,
+  meal: Utensils,
+  activity: Dumbbell,
+  work_hours: Briefcase,
+  stress: AlertTriangle,
+  biometric: MonitorSmartphone,
+};
+
+function getImpactColor(impact: number): string {
+  if (impact >= 0.3) return '#22c55e';
+  if (impact > 0) return '#86efac';
+  if (impact > -0.3) return '#f59e0b';
+  return '#ef4444';
+}
+
+function getImpactIcon(impact: number) {
+  if (impact > 0.1) return ArrowUpRight;
+  if (impact < -0.1) return ArrowDownRight;
+  return Minus;
+}
+
+// ---------------------------------------------------------------------------
+// FactorsPanel: Shows data influencing the score
+// ---------------------------------------------------------------------------
+
+function FactorsPanel({
+  orientation,
+  breakdown,
+}: {
+  orientation: OrientationResult | null;
+  breakdown: EnergyBreakdown;
+}) {
+  const factors = orientation?.energyState.factors ?? [];
+  const hasFactors = factors.length > 0;
+
+  // Additional raw factors from the engine
+  const rawExtras: { label: string; value: string; color: string; Icon: typeof Brain }[] = [];
+  if (breakdown.factors.caffeine_remaining_mg > 0) {
+    rawExtras.push({
+      label: 'Caffeina residua',
+      value: `${breakdown.factors.caffeine_remaining_mg}mg`,
+      color: '#f59e0b',
+      Icon: Coffee,
+    });
+  }
+  if (breakdown.factors.hrv_indicator >= 0) {
+    rawExtras.push({
+      label: 'HRV (recupero)',
+      value: `${Math.round(breakdown.factors.hrv_indicator * 100)}%`,
+      color: breakdown.factors.hrv_indicator > 0.5 ? '#22c55e' : '#ef4444',
+      Icon: Heart,
+    });
+  }
+  if (breakdown.sleepDebt > 0.5) {
+    rawExtras.push({
+      label: 'Debito sonno',
+      value: `${breakdown.sleepDebt.toFixed(1)}h`,
+      color: breakdown.sleepDebt > 2 ? '#ef4444' : '#f59e0b',
+      Icon: Moon,
+    });
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+        <BarChart3 className="h-3.5 w-3.5 text-indigo-500" />
+        Dati che incidono sul punteggio
+      </p>
+
+      {hasFactors ? (
+        <div className="space-y-1.5">
+          {factors.map((f, i) => {
+            const FIcon = FACTOR_ICONS[f.type] || Activity;
+            const ImpactIcon = getImpactIcon(f.impact);
+            const impactColor = getImpactColor(f.impact);
+            return (
+              <div key={i} className="flex items-start gap-2 rounded-md bg-muted/40 p-2">
+                <FIcon className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: impactColor }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] text-foreground leading-snug">{f.description}</p>
+                </div>
+                <ImpactIcon className="h-3.5 w-3.5 shrink-0" style={{ color: impactColor }} />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          Registra check-in per visualizzare i fattori che influenzano la tua energia.
+        </p>
+      )}
+
+      {/* Raw engine extras */}
+      {rawExtras.length > 0 && (
+        <>
+          <hr className="border-border/50" />
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Dati dal motore scientifico</p>
+          <div className="flex flex-wrap gap-1.5">
+            {rawExtras.map((extra, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium border"
+                style={{
+                  color: extra.color,
+                  borderColor: `${extra.color}30`,
+                  backgroundColor: `${extra.color}10`,
+                }}
+              >
+                <extra.Icon className="h-3 w-3" />
+                {extra.label}: {extra.value}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AIAnalysisPanel: Shows AI-powered analysis
+// ---------------------------------------------------------------------------
+
+function AIAnalysisPanel({ orientation }: { orientation: OrientationResult | null }) {
+  const ai = orientation?.aiInsight;
+
+  if (!ai) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          Analisi IA
+        </p>
+        <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-2.5">
+          <p className="text-[11px] text-muted-foreground">
+            L'analisi IA non e' disponibile al momento. Verifica la configurazione API Groq nelle impostazioni.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+        Analisi IA
+      </p>
+
+      {/* State analysis */}
+      <div className="rounded-md bg-muted/40 p-2.5">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Stato attuale</p>
+        <p className="text-[11px] text-foreground leading-relaxed">{ai.stateAnalysis}</p>
+      </div>
+
+      {/* Short term forecast */}
+      <div className="rounded-md bg-muted/40 p-2.5">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Previsione prossime ore</p>
+        <p className="text-[11px] text-foreground leading-relaxed">{ai.shortTermForecast}</p>
+      </div>
+
+      {/* Recommendation rationale */}
+      {ai.recommendationRationale && (
+        <div className="rounded-md bg-muted/40 p-2.5">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Motivazione raccomandazioni</p>
+          <p className="text-[11px] text-foreground leading-relaxed">{ai.recommendationRationale}</p>
+        </div>
+      )}
+
+      {/* Urgency badge */}
+      {ai.urgencyLevel && ai.urgencyLevel !== 'none' && (
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            ai.urgencyLevel === 'critical' ? 'bg-red-500/15 text-red-500 border border-red-500/30' :
+            ai.urgencyLevel === 'high' ? 'bg-orange-500/15 text-orange-500 border border-orange-500/30' :
+            ai.urgencyLevel === 'medium' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30' :
+            'bg-blue-500/15 text-blue-500 border border-blue-500/30'
+          }`}>
+            <AlertTriangle className="h-3 w-3" />
+            Urgenza: {ai.urgencyLevel}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AdvicePanel: Shows actionable recommendations
+// ---------------------------------------------------------------------------
+
+function AdvicePanel({ orientation }: { orientation: OrientationResult | null }) {
+  const recs = orientation?.recommendations ?? [];
+  const ai = orientation?.aiInsight;
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+        <Lightbulb className="h-3.5 w-3.5 text-green-500" />
+        Consigli personalizzati
+      </p>
+
+      {/* AI primary advice - highlighted */}
+      {ai?.primaryAdvice && (
+        <div className="rounded-md bg-green-500/10 border border-green-500/20 p-2.5">
+          <div className="flex items-start gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wide mb-0.5">Consiglio IA principale</p>
+              <p className="text-[11px] text-foreground leading-relaxed">{ai.primaryAdvice}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity recommendations */}
+      {recs.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Attivita suggerite</p>
+          {recs.slice(0, 3).map((rec, i) => {
+            const priorityColor =
+              rec.priority === 'urgent' ? '#ef4444' :
+              rec.priority === 'recommended' ? '#22c55e' : '#64748b';
+            return (
+              <div key={i} className="flex items-start gap-2 rounded-md bg-muted/40 p-2.5">
+                <div
+                  className="h-6 w-6 rounded-md flex items-center justify-center shrink-0 text-[10px] font-bold"
+                  style={{
+                    backgroundColor: `${priorityColor}15`,
+                    color: priorityColor,
+                  }}
+                >
+                  {rec.matchScore}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold">{rec.activity.name}</span>
+                    <span
+                      className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                      style={{
+                        color: priorityColor,
+                        backgroundColor: `${priorityColor}15`,
+                      }}
+                    >
+                      {rec.priority === 'urgent' ? 'Urgente' : rec.priority === 'recommended' ? 'Consigliato' : 'Suggerito'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{rec.reason}</p>
+                  <div className="flex gap-2 mt-1">
+                    <span className="text-[9px] text-muted-foreground">
+                      {rec.durationMin}min
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">
+                      Intensita: {Math.round(rec.intensity * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          Registra l'energia di oggi per ricevere consigli personalizzati.
+        </p>
+      )}
+
+      {/* AI auto-responses / scheduled tips */}
+      {ai?.autoResponses && ai.autoResponses.length > 0 && (
+        <>
+          <hr className="border-border/50" />
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Promemoria programmati</p>
+          <div className="space-y-1">
+            {ai.autoResponses.map((auto, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-md bg-muted/30 p-2">
+                <Clock className="h-3 w-3 shrink-0 mt-0.5 text-muted-foreground" />
+                <div>
+                  <p className="text-[10px] font-medium text-foreground">{auto.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{auto.trigger} — {auto.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -329,6 +644,9 @@ export default function ScientificEnergyCard({ userId }: Props) {
   const [breakdown, setBreakdown] = useState<EnergyBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
+  const [activePanel, setActivePanel] = useState<ToolPanel>(null);
+  const [orientation, setOrientation] = useState<OrientationResult | null>(null);
+  const [orientLoading, setOrientLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -345,6 +663,27 @@ export default function ScientificEnergyCard({ userId }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Load orientation data when a tool panel is opened for the first time
+  const loadOrientation = useCallback(async () => {
+    if (orientation || orientLoading) return;
+    setOrientLoading(true);
+    try {
+      const result = await generateOrientation(userId);
+      setOrientation(result);
+    } catch (e) {
+      console.error('Orientation error:', e);
+    } finally {
+      setOrientLoading(false);
+    }
+  }, [userId, orientation, orientLoading]);
+
+  const togglePanel = useCallback((panel: ToolPanel) => {
+    setActivePanel(prev => prev === panel ? null : panel);
+    if (!orientation && !orientLoading) {
+      loadOrientation();
+    }
+  }, [orientation, orientLoading, loadOrientation]);
 
   // Loading state
   if (loading || !breakdown) {
@@ -457,6 +796,51 @@ export default function ScientificEnergyCard({ userId }: Props) {
             Penalita combinata: -{breakdown.interactionPenalty} (piu fattori critici insieme)
           </p>
         )}
+
+        {/* ---- TOOLBAR: Fattori | Analisi IA | Consigli ---- */}
+        <div className="rounded-lg border border-border bg-muted/20 p-1.5">
+          <div className="flex gap-1">
+            {([
+              { key: 'fattori' as const, label: 'Fattori', Icon: BarChart3, color: '#6366f1' },
+              { key: 'analisi' as const, label: 'Analisi IA', Icon: Sparkles, color: '#f59e0b' },
+              { key: 'consigli' as const, label: 'Consigli', Icon: Lightbulb, color: '#22c55e' },
+            ]).map(({ key, label, Icon, color }) => {
+              const isActive = activePanel === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => togglePanel(key)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-background shadow-sm border border-border'
+                      : 'hover:bg-muted/60 text-muted-foreground'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" style={isActive ? { color } : undefined} />
+                  <span style={isActive ? { color } : undefined}>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ---- Panel content ---- */}
+          {activePanel && (
+            <div className="mt-2 rounded-md bg-background border border-border p-3">
+              {orientLoading && !orientation ? (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Caricamento...</span>
+                </div>
+              ) : activePanel === 'fattori' ? (
+                <FactorsPanel orientation={orientation} breakdown={breakdown} />
+              ) : activePanel === 'analisi' ? (
+                <AIAnalysisPanel orientation={orientation} />
+              ) : activePanel === 'consigli' ? (
+                <AdvicePanel orientation={orientation} />
+              ) : null}
+            </div>
+          )}
+        </div>
 
         {/* ---- 4. Bottleneck + actionable advice (merged) ---- */}
         {hasBottleneck ? (
