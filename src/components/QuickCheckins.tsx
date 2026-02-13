@@ -786,14 +786,18 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     await addCheckin(userId, currentQuestion.type, value);
     await loadCheckins();
 
-    // Brief visual feedback before advancing
+    // Brief visual feedback then clear state.
+    // The answered question is auto-removed from activeQuestions via loggedTypes,
+    // so currentIdx now naturally points to the next unanswered question.
     setTimeout(() => {
       setSaving(false);
       setSelectedValue(null);
-      if (currentIdx + 1 < activeQuestions.length) {
-        setCurrentIdx(currentIdx + 1);
-      } else {
+      if (activeQuestions.length <= 1) {
+        // This was the last question
         setAllDone(true);
+      } else {
+        // Clamp index in case user was at the end after skipping
+        setCurrentIdx(prev => Math.min(prev, activeQuestions.length - 2));
       }
     }, 300);
   };
@@ -871,11 +875,27 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     return new Set(checkins.map(c => c.type));
   }, [checkins]);
 
+  // All questions visible for this phase (including answered, excluding skipIfLogged from previous phases)
+  const allPhaseQuestions = useMemo(() => {
+    return config.questions.filter(q => {
+      if (q.skipIfLogged) {
+        // Only hide if logged BEFORE this phase
+        return !checkins.some(c => {
+          if (c.type !== q.type) return false;
+          const [h] = c.time.split(':').map(Number);
+          return h < phaseStartHour;
+        });
+      }
+      return true;
+    });
+  }, [config.questions, checkins, phaseStartHour]);
+
   // Full day summary for the scrollable completion window
   const todaySummary = useMemo(() => {
     const counterTypes: CheckinType[] = ['water', 'caffeine', 'nap', 'supplement', 'screen_break'];
     const items: Array<{
       key: string;
+      type: CheckinType;
       icon: typeof Moon;
       label: string;
       displayValue: string;
@@ -897,6 +917,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       const opt = MEAL_RATINGS.find(r => r.value === entry.value);
       items.push({
         key: `meal_${entry.id ?? entry.time}`,
+        type: 'meal_time',
         icon: UtensilsCrossed,
         label: getMealLabel(entry.time),
         displayValue: opt ? `${opt.label} (${entry.value}/5)` : `${entry.value}/5`,
@@ -914,6 +935,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       const opt = scale.find(r => r.value === latest.value);
       items.push({
         key: type,
+        type: type as CheckinType,
         icon: meta.icon,
         label: meta.label,
         displayValue: opt ? `${opt.label} (${latest.value}/5)` : `${latest.value}/5`,
@@ -930,6 +952,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       if (act) {
         items.push({
           key: 'current_activity',
+          type: 'current_activity',
           icon: Clock,
           label: 'Attivita',
           displayValue: latest.value > 0 ? act.label : 'Inattivo',
@@ -955,6 +978,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       if (!meta) continue;
       items.push({
         key: cType,
+        type: cType as CheckinType,
         icon: meta.icon,
         label: meta.label,
         displayValue: meta.format(total),
@@ -972,185 +996,203 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     <Card className="overflow-hidden">
       <CardContent className="p-0">
 
-        {/* ---- Phase greeting + question area ---- */}
-        {!allDone && !editingType && currentQuestion && (
-          <div className="px-4 pt-4 pb-3 space-y-3">
-            {/* Greeting + total progress */}
-            <div className="flex items-center gap-2">
-              <PhaseIcon className={`h-4 w-4 ${config.iconColor}`} />
-              <span className="text-sm font-semibold text-foreground">
-                {config.greeting}
+        {/* ---- Unified check-in section ---- */}
+        <div className="px-4 pt-4 pb-3 space-y-3">
+
+          {/* Header: phase icon, greeting, progress badge */}
+          <div className="flex items-center gap-2">
+            <PhaseIcon className={`h-4 w-4 ${config.iconColor}`} />
+            <span className="text-sm font-semibold text-foreground">
+              {config.greeting}
+            </span>
+            {allDone ? (
+              <div className="ml-auto flex items-center gap-1.5">
+                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                  <Check className="h-3.5 w-3.5" />
+                  <span className="text-xs font-semibold">Completato</span>
+                </div>
+              </div>
+            ) : (
+              <span className="ml-auto text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold tabular-nums">
+                {answeredPhaseQuestions.length}/{allPhaseQuestions.length}
               </span>
-              <span className="text-xs text-muted-foreground ml-auto tabular-nums">
-                {answeredPhaseQuestions.length + currentIdx + 1}/{answeredPhaseQuestions.length + activeQuestions.length}
-              </span>
-            </div>
-
-            {/* Question */}
-            <div className="flex items-center gap-2">
-              {(() => {
-                const QIcon = currentQuestion.icon;
-                return <QIcon className="h-4 w-4 text-muted-foreground shrink-0" />;
-              })()}
-              <p className="text-sm font-medium text-foreground">
-                {currentQuestion.question}
-              </p>
-            </div>
-
-            {/* 5-point tap rating -- clean numbered buttons */}
-            <div className="flex gap-1.5">
-              {ratings.map((opt) => (
-                <RatingButton
-                  key={opt.value}
-                  option={opt}
-                  selected={selectedValue === opt.value}
-                  onSelect={() => handleRate(opt.value)}
-                />
-              ))}
-            </div>
-
-            {/* Skip / advance hint */}
-            {activeQuestions.length > 1 && currentIdx < activeQuestions.length - 1 && (
-              <button
-                onClick={() => {
-                  setSelectedValue(null);
-                  setCurrentIdx(currentIdx + 1);
-                }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ChevronRight className="h-3 w-3" />
-                Salta
-              </button>
             )}
+          </div>
 
-            {/* Previously answered — tap to correct */}
-            {answeredPhaseQuestions.length > 0 && (
-              <div className="space-y-1 pt-1 border-t border-border/50">
-                {answeredPhaseQuestions.map(({ question, value }) => {
-                  const scale = question.ratings ?? DEFAULT_RATINGS;
-                  const option = scale.find(r => r.value === value);
-                  const QIcon = question.icon;
+          {/* Phase questions window — always visible */}
+          <div className="rounded-xl border border-border shadow-sm bg-card overflow-hidden">
+            <div className="max-h-52 overflow-y-auto">
+              {allPhaseQuestions.map((q, i) => {
+                const answered = answeredPhaseQuestions.find(a => a.question.type === q.type);
+                const isCurrentQ = !allDone && !editingType && currentQuestion?.type === q.type;
+                const isEditingQ = editingType === q.type;
+                const QIcon = q.icon;
+                const hasBorder = i < allPhaseQuestions.length - 1;
+
+                // ---- Answered question: green check, value, clickable to edit ----
+                if (answered) {
+                  const scale = q.ratings ?? DEFAULT_RATINGS;
+                  const opt = scale.find(r => r.value === answered.value);
                   return (
                     <button
-                      key={question.type}
-                      onClick={() => setEditingType(question.type)}
-                      className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/40 transition-colors"
+                      key={q.type}
+                      onClick={() => setEditingType(q.type)}
+                      className={`
+                        w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors
+                        ${hasBorder ? 'border-b border-border/30' : ''}
+                        ${isEditingQ ? 'bg-amber-500/10' : 'hover:bg-muted/30'}
+                      `}
                     >
-                      <QIcon className={`h-3.5 w-3.5 shrink-0 ${option?.color ?? 'text-muted-foreground'}`} />
-                      <span className="text-xs text-muted-foreground">{question.label}</span>
-                      <span className={`text-xs font-medium ${option?.color ?? ''}`}>
-                        {option?.label ?? String(value)}
+                      <div className="w-5 h-5 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+                        <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                      </div>
+                      <QIcon className={`h-3.5 w-3.5 shrink-0 ${opt?.color ?? 'text-muted-foreground'}`} />
+                      <span className="text-xs text-muted-foreground">{q.label}</span>
+                      <span className={`text-xs font-semibold ${opt?.color ?? ''}`}>
+                        {opt?.label ?? String(answered.value)}
                       </span>
-                      <Pencil className="h-2.5 w-2.5 text-muted-foreground/50 ml-auto" />
+                      <Pencil className="h-2.5 w-2.5 text-muted-foreground/40 ml-auto shrink-0" />
                     </button>
+                  );
+                }
+
+                // ---- Current question: highlighted with indicator ----
+                if (isCurrentQ) {
+                  return (
+                    <div
+                      key={q.type}
+                      className={`
+                        flex items-center gap-2.5 px-3 py-2.5 bg-primary/5 border-l-2 border-l-primary
+                        ${hasBorder ? 'border-b border-border/30' : ''}
+                      `}
+                    >
+                      <div className="w-5 h-5 rounded-full border-2 border-primary/50 flex items-center justify-center shrink-0">
+                        <ChevronRight className="h-3 w-3 text-primary" />
+                      </div>
+                      <QIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span className="text-xs font-semibold text-foreground">{q.label}</span>
+                      <span className="text-[10px] text-primary font-medium ml-auto">attuale</span>
+                    </div>
+                  );
+                }
+
+                // ---- Pending question: grayed out ----
+                return (
+                  <div
+                    key={q.type}
+                    className={`
+                      flex items-center gap-2.5 px-3 py-2.5 opacity-40
+                      ${hasBorder ? 'border-b border-border/30' : ''}
+                    `}
+                  >
+                    <div className="w-5 h-5 rounded-full border border-muted-foreground/30 shrink-0" />
+                    <QIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{q.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Rating buttons — for current question OR editing question */}
+          {(() => {
+            const activeQ = editingType
+              ? config.questions.find(q => q.type === editingType)
+              : (!allDone ? currentQuestion : null);
+            if (!activeQ) return null;
+            const isEditing = editingType != null;
+            const activeRatings = activeQ.ratings ?? DEFAULT_RATINGS;
+            const currentVal = isEditing
+              ? (answeredPhaseQuestions.find(a => a.question.type === editingType)?.value ?? null)
+              : null;
+            const QIcon = activeQ.icon;
+
+            return (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <QIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <p className="text-sm font-medium text-foreground">{activeQ.question}</p>
+                  {isEditing && (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium ml-auto">
+                      Correzione
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  {activeRatings.map(opt => (
+                    <RatingButton
+                      key={opt.value}
+                      option={opt}
+                      selected={isEditing
+                        ? (selectedValue === opt.value || (selectedValue === null && currentVal === opt.value))
+                        : selectedValue === opt.value
+                      }
+                      onSelect={() => isEditing
+                        ? handleEditRate(editingType!, opt.value)
+                        : handleRate(opt.value)
+                      }
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  {isEditing && (
+                    <button
+                      onClick={() => { setEditingType(null); setSelectedValue(null); }}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronRight className="h-3 w-3 rotate-180" />
+                      Annulla
+                    </button>
+                  )}
+                  {!isEditing && activeQuestions.length > 1 && currentIdx < activeQuestions.length - 1 && (
+                    <button
+                      onClick={() => { setSelectedValue(null); setCurrentIdx(currentIdx + 1); }}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronRight className="h-3 w-3" />
+                      Salta
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* When complete: full day summary window */}
+          {allDone && !editingType && todaySummary.length > 0 && (
+            <div className="rounded-xl border border-border shadow-sm bg-card overflow-hidden">
+              <div className="bg-muted/30 px-3 py-1.5 border-b border-border flex items-center gap-2">
+                <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                <span className="text-[11px] font-semibold text-foreground">Riepilogo giornata</span>
+                <span className="text-[10px] text-muted-foreground ml-auto">{todaySummary.length} parametri</span>
+              </div>
+              <div className="max-h-44 overflow-y-auto divide-y divide-border/30">
+                {todaySummary.map(item => {
+                  const Icon = item.icon;
+                  const phaseAnswer = answeredPhaseQuestions.find(a => a.question.type === item.type);
+                  return (
+                    <div key={item.key} className="flex items-center gap-2.5 px-3 py-2">
+                      <Icon className={`h-3.5 w-3.5 shrink-0 ${item.color}`} />
+                      <span className="text-xs text-muted-foreground shrink-0">{item.label}</span>
+                      <span className={`text-xs font-medium ${item.color} truncate`}>{item.displayValue}</span>
+                      {item.time && (
+                        <span className="text-[10px] text-muted-foreground/50 tabular-nums ml-auto shrink-0">{item.time}</span>
+                      )}
+                      {phaseAnswer && (
+                        <button
+                          onClick={() => setEditingType(phaseAnswer.question.type)}
+                          className="shrink-0 ml-auto w-6 h-6 rounded-full flex items-center justify-center hover:bg-muted/50 transition-colors"
+                        >
+                          <Pencil className="h-2.5 w-2.5 text-muted-foreground hover:text-primary" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* ---- Editing a specific rated answer ---- */}
-        {editingType && (() => {
-          const q = config.questions.find(q => q.type === editingType);
-          if (!q) return null;
-          const editRatings = q.ratings ?? DEFAULT_RATINGS;
-          const currentVal = answeredPhaseQuestions.find(a => a.question.type === editingType)?.value ?? null;
-          const QIcon = q.icon;
-          return (
-            <div className="px-4 pt-4 pb-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <QIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                <p className="text-sm font-medium text-foreground">
-                  {q.question}
-                </p>
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium ml-auto">
-                  Correzione
-                </span>
-              </div>
-              <div className="flex gap-1.5">
-                {editRatings.map((opt) => (
-                  <RatingButton
-                    key={opt.value}
-                    option={opt}
-                    selected={selectedValue === opt.value || (selectedValue === null && currentVal === opt.value)}
-                    onSelect={() => handleEditRate(editingType, opt.value)}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={() => { setEditingType(null); setSelectedValue(null); }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ChevronRight className="h-3 w-3 rotate-180" />
-                Annulla
-              </button>
             </div>
-          );
-        })()}
-
-        {/* ---- Completion state — scrollable parameters window ---- */}
-        {allDone && !editingType && (
-          <div className="px-4 pt-4 pb-3 space-y-3">
-            {/* Header */}
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center">
-                <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">
-                  Check-in completato
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {todaySummary.length} parametri raccolti oggi
-                </p>
-              </div>
-              <button
-                onClick={handleRestart}
-                className="text-xs text-primary font-medium hover:underline"
-              >
-                Aggiorna
-              </button>
-            </div>
-
-            {/* Scrollable parameters window */}
-            {todaySummary.length > 0 && (
-              <div className="rounded-lg border border-border bg-muted/10 max-h-56 overflow-y-auto">
-                <div className="divide-y divide-border/50">
-                  {todaySummary.map((item) => {
-                    const Icon = item.icon;
-                    // Check if this item can be corrected (current phase rated answer)
-                    const phaseAnswer = answeredPhaseQuestions.find(a => a.question.type === item.key);
-                    return (
-                      <div key={item.key} className="flex items-center gap-2.5 px-3 py-2">
-                        <Icon className={`h-3.5 w-3.5 shrink-0 ${item.color}`} />
-                        <span className="text-xs text-muted-foreground min-w-0 shrink-0">
-                          {item.label}
-                        </span>
-                        <span className={`text-xs font-medium ${item.color} truncate`}>
-                          {item.displayValue}
-                        </span>
-                        {item.time && (
-                          <span className="text-[10px] text-muted-foreground/60 tabular-nums ml-auto shrink-0">
-                            {item.time}
-                          </span>
-                        )}
-                        {phaseAnswer && (
-                          <button
-                            onClick={() => setEditingType(phaseAnswer.question.type)}
-                            className="shrink-0 ml-auto flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary font-medium transition-colors"
-                          >
-                            <Pencil className="h-2.5 w-2.5" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
         {/* ---- "Cosa stai facendo?" — Activity tracking with start/stop ---- */}
         <div className="border-t border-border px-4 py-3 space-y-2.5">
