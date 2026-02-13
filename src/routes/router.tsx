@@ -15,6 +15,7 @@ import ProfileEdit from '../pages/ProfileEdit';
 import FeedbackChat from '../pages/FeedbackChat';
 import Orientation from '../pages/Orientation';
 import Goals from '../pages/Goals';
+import Insights from '../pages/Insights';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
           { path: '/feedback', element: <FeedbackChat /> },
           { path: '/orientation', element: <Orientation /> },
           { path: '/goals', element: <Goals /> },
+          { path: '/insights', element: <Insights /> },
         ],
       },
     ],

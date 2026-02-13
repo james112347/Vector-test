@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from './ui/card';
 import {
-  Moon, Sun, Brain, Heart, Zap, Coffee, Droplets, Pill,
-  MonitorOff, Check, ChevronRight, Activity, CloudSun,
+  Moon, Sun, Brain, Heart, Zap, Coffee, Droplets,
+  Check, ChevronRight, Activity, CloudSun,
   Sunset, CloudMoon, UtensilsCrossed,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
@@ -278,26 +278,6 @@ const COUNTERS: CounterConfig[] = [
     target: WATER_TARGET,
     unitPerTap: ML_PER_GLASS,
     unitSuffix: 'ml',
-  },
-  {
-    type: 'supplement',
-    icon: Pill,
-    label: 'Integratori',
-    unit: '',
-    color: 'text-violet-500',
-    activeColor: 'bg-violet-100 dark:bg-violet-900/30',
-    unitPerTap: 1,
-    unitSuffix: '',
-  },
-  {
-    type: 'screen_break',
-    icon: MonitorOff,
-    label: 'Pause schermo',
-    unit: '',
-    color: 'text-cyan-500',
-    activeColor: 'bg-cyan-100 dark:bg-cyan-900/30',
-    unitPerTap: 1,
-    unitSuffix: '',
   },
 ];
 
