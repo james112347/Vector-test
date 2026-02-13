@@ -700,6 +700,14 @@ function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis
     else if (activityLevel <= 1 && currentHour > 15) score -= 2; // prolonged inactivity
   }
 
+  // Current activity context: pausa/sport = recovery bonus
+  const curActCheckins = data.todayCheckins.filter(c => c.type === 'current_activity');
+  const curActivity = curActCheckins.length > 0
+    ? curActCheckins[curActCheckins.length - 1].value
+    : null;
+  if (curActivity === 3) score += 1;       // pausa = micro-recovery
+  if (curActivity === 4) score += 1;       // sport = vigor boost
+
   // Smoking penalty (chronic vasoconstriction, reduced O2 transport)
   if (profile) {
     switch (profile.smokingFrequency) {
@@ -734,6 +742,8 @@ function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis
   if (waterRatio < 0.6) parts.push(`idratazione ${Math.round(waterRatio * 100)}% del target`);
   if (caffeineCount > 4) parts.push(`caffeina elevata (${caffeineCount} tazzine)`);
   if (activityLevel != null && activityLevel >= 4) parts.push('buona attivita fisica');
+  if (curActivity === 3) parts.push('in pausa (recupero)');
+  if (curActivity === 4) parts.push('sport (boost energia)');
   if (profile?.smokingFrequency === 'daily' || profile?.smokingFrequency === 'heavy') parts.push('impatto fumo');
   if (screenMinutes > 180) parts.push(`${Math.round(screenMinutes / 60)}h screen time`);
   const explanation = parts.length > 0 ? parts.join(', ') : 'Stile di vita nella norma';
@@ -874,6 +884,15 @@ function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
   if (todayFocus.length > 0) {
     const focusVal = todayFocus[todayFocus.length - 1].value;
     if (focusVal <= 2) score -= 2; // cognitive exhaustion
+  }
+
+  // Current activity context: studio/lavoro prolungato = carico cognitivo
+  const curActAlloCheckins = data.todayCheckins.filter(c => c.type === 'current_activity');
+  if (curActAlloCheckins.length >= 3) {
+    // Conteggio sessioni consecutive studio/lavoro senza pausa
+    const recent = curActAlloCheckins.slice(-4);
+    const consecutiveWork = recent.filter(c => c.value === 1 || c.value === 2).length;
+    if (consecutiveWork >= 3) score -= 2;  // lavoro/studio senza pause
   }
 
   // Recovery factors

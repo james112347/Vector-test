@@ -88,7 +88,18 @@ export interface UserProfile {
 // Quick Check-ins (micro-feedback durante la giornata)
 // ---------------------------------------------------------------------------
 
-export type CheckinType = 'sleep_quality' | 'water' | 'caffeine' | 'meal_time' | 'focus' | 'activity_done' | 'stress' | 'mood' | 'nap' | 'supplement' | 'screen_break';
+export type CheckinType = 'sleep_quality' | 'water' | 'caffeine' | 'meal_time' | 'focus' | 'activity_done' | 'stress' | 'mood' | 'nap' | 'supplement' | 'screen_break' | 'current_activity';
+
+/**
+ * Mappa valori current_activity:
+ * 1 = Studio/concentrazione
+ * 2 = Lavoro
+ * 3 = Pausa/riposo
+ * 4 = Sport/esercizio
+ * 5 = Tempo libero/relax
+ * 6 = Sociale/famiglia
+ * 7 = Spostamenti/commissioni
+ */
 
 export interface QuickCheckin {
   id?: number;

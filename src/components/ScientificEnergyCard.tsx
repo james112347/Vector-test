@@ -38,7 +38,14 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  BookOpen,
+  PauseCircle,
+  Gamepad2,
+  Users,
+  Car,
 } from 'lucide-react';
+import { addCheckin } from '../lib/checkins';
+import type { CheckinType } from '../db/schema';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -648,6 +655,66 @@ function AdvicePanel({ orientation }: { orientation: OrientationResult | null })
 }
 
 // ---------------------------------------------------------------------------
+// ActivityStrip: Quick current-activity selector
+// ---------------------------------------------------------------------------
+
+const CURRENT_ACTIVITIES = [
+  { value: 1, label: 'Studio', short: 'Studio', Icon: BookOpen, color: '#6366f1' },
+  { value: 2, label: 'Lavoro', short: 'Lavoro', Icon: Briefcase, color: '#3b82f6' },
+  { value: 3, label: 'Pausa', short: 'Pausa', Icon: PauseCircle, color: '#22c55e' },
+  { value: 4, label: 'Sport', short: 'Sport', Icon: Dumbbell, color: '#f97316' },
+  { value: 5, label: 'Relax', short: 'Relax', Icon: Gamepad2, color: '#8b5cf6' },
+  { value: 6, label: 'Sociale', short: 'Sociale', Icon: Users, color: '#ec4899' },
+  { value: 7, label: 'In giro', short: 'In giro', Icon: Car, color: '#64748b' },
+] as const;
+
+function ActivityStrip({
+  userId,
+  currentActivity,
+  onActivityChange,
+}: {
+  userId: number;
+  currentActivity: number | null;
+  onActivityChange: (value: number) => void;
+}) {
+  const handleSelect = async (value: number) => {
+    // Se clicchi la stessa attivita, non fare nulla
+    if (value === currentActivity) return;
+    onActivityChange(value);
+    await addCheckin(userId, 'current_activity' as CheckinType, value);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+        <Activity className="h-3 w-3" />
+        Cosa stai facendo?
+      </p>
+      <div className="flex gap-1 overflow-x-auto pb-0.5">
+        {CURRENT_ACTIVITIES.map(({ value, short, Icon, color }) => {
+          const isActive = currentActivity === value;
+          return (
+            <button
+              key={value}
+              onClick={() => handleSelect(value)}
+              className={`flex flex-col items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all shrink-0 ${
+                isActive
+                  ? 'bg-background shadow-sm border-2'
+                  : 'bg-muted/40 border border-transparent hover:bg-muted/70'
+              }`}
+              style={isActive ? { borderColor: color, color } : undefined}
+            >
+              <Icon className="h-4 w-4" style={isActive ? { color } : undefined} />
+              <span>{short}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -655,9 +722,11 @@ export default function ScientificEnergyCard({ userId }: Props) {
   const [breakdown, setBreakdown] = useState<EnergyBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
   const [activePanel, setActivePanel] = useState<ToolPanel>(null);
   const [orientation, setOrientation] = useState<OrientationResult | null>(null);
   const [orientLoading, setOrientLoading] = useState(false);
+  const [currentActivity, setCurrentActivity] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -671,8 +740,44 @@ export default function ScientificEnergyCard({ userId }: Props) {
     }
   }, [userId]);
 
+  // Carica attivita corrente dal DB
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    import('../db/db').then(({ db }) => {
+      db.quickCheckins
+        .where('[userId+date+type]')
+        .equals([userId, today, 'current_activity'])
+        .toArray()
+        .then(checkins => {
+          if (checkins.length > 0) {
+            const latest = checkins.sort((a, b) => a.time.localeCompare(b.time));
+            setCurrentActivity(latest[latest.length - 1].value);
+          }
+        })
+        .catch(() => {});
+    });
+  }, [userId]);
+
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Auto-refresh: ogni 30 min + quando l'app torna visibile
+  useEffect(() => {
+    const REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minuti
+    const interval = setInterval(() => load(), REFRESH_INTERVAL);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        load();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [load]);
 
   // Load orientation data when a tool panel is opened for the first time
@@ -688,6 +793,12 @@ export default function ScientificEnergyCard({ userId }: Props) {
       setOrientLoading(false);
     }
   }, [userId, orientation, orientLoading]);
+
+  // Quando l'utente cambia attivita, ricalcola lo score
+  const handleActivityChange = useCallback((value: number) => {
+    setCurrentActivity(value);
+    setTimeout(() => load(), 500);
+  }, [load]);
 
   // Force-reload orientation (per retry IA)
   const retryOrientation = useCallback(async () => {
@@ -786,6 +897,13 @@ export default function ScientificEnergyCard({ userId }: Props) {
           {/* Score label */}
           <p className="text-xs text-muted-foreground mt-1.5">{scoreLabel}</p>
         </div>
+
+        {/* ---- 1b. Quick activity selector ---- */}
+        <ActivityStrip
+          userId={userId}
+          currentActivity={currentActivity}
+          onActivityChange={handleActivityChange}
+        />
 
         {/* ---- 2. Four sub-scores as compact rectangular cards ---- */}
         <div className="grid grid-cols-4 gap-2">
@@ -916,94 +1034,102 @@ export default function ScientificEnergyCard({ userId }: Props) {
           </div>
         )}
 
-        {/* ---- 5. Predicted curve - full width, large, annotated ---- */}
-        <PredictedCurve curve={breakdown.predictedCurve} currentScore={breakdown.overall} />
+        {/* ---- 5. Perche questi risultati — collapsible ---- */}
+        <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+          <button
+            onClick={() => setShowWhy(!showWhy)}
+            className="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 transition-colors"
+          >
+            <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Brain className="h-4 w-4 text-primary" />
+              Perche questi risultati
+            </span>
+            {showWhy ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
 
-        {/* ---- 6. Perche questi risultati — always visible explanation ---- */}
-        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-            <Brain className="h-4 w-4 text-primary" />
-            Perche questi risultati
-          </p>
-
-          {/* What influences the score */}
-          <div className="space-y-2">
-            {([
-              {
-                key: 'circadian' as const,
-                label: 'Ritmo circadiano',
-                score: breakdown.circadian,
-                max: 25,
-                influence: 'Il tuo orologio biologico interno. Dipende dal cronotipo, dall\'ora del giorno, da quanto tempo sei sveglio e dai pasti recenti.',
-                icon: Sun,
-              },
-              {
-                key: 'sleep' as const,
-                label: 'Qualita del sonno',
-                score: breakdown.sleep,
-                max: 25,
-                influence: 'Quanto e come hai dormito. Considera qualita percepita, ore di sonno, debito cumulativo degli ultimi 7 giorni e pisolini.',
-                icon: Moon,
-              },
-              {
-                key: 'lifestyle' as const,
-                label: 'Stile di vita',
-                score: breakdown.lifestyle,
-                max: 25,
-                influence: 'Le tue abitudini di oggi: idratazione, alimentazione (qualita e macro), caffeina (farmacocinetica), attivita fisica e tempo schermo.',
-                icon: Activity,
-              },
-              {
-                key: 'allostatic' as const,
-                label: 'Carico allostatico',
-                score: breakdown.allostatic,
-                max: 25,
-                influence: 'Lo stress accumulato sul corpo. Ore di lavoro, stress percepito, umore, trend energetico settimanale, HRV e rischio burnout.',
-                icon: Heart,
-              },
-            ]).map(({ key, label, score, max, influence, icon: Icon }) => {
-              const color = SUB_COLORS[key];
-              const pct = Math.round((score / max) * 100);
-              const level = pct >= 75 ? 'Ottimo' : pct >= 50 ? 'Buono' : pct >= 25 ? 'Basso' : 'Critico';
-              return (
-                <div key={key} className="rounded-md bg-background/60 border border-border/50 p-2.5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color }} />
-                    <span className="text-[11px] font-semibold flex-1">{label}</span>
-                    <span className="text-sm font-bold" style={{ color }}>{score}</span>
-                    <span className="text-[8px] text-muted-foreground">/{max}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{
-                      color,
-                      backgroundColor: `${color}15`,
-                    }}>{level}</span>
+          {showWhy && (
+            <div className="px-3 pb-3 space-y-2">
+              {([
+                {
+                  key: 'circadian' as const,
+                  label: 'Ritmo circadiano',
+                  score: breakdown.circadian,
+                  max: 25,
+                  influence: 'Il tuo orologio biologico interno. Dipende dal cronotipo, dall\'ora del giorno, da quanto tempo sei sveglio e dai pasti recenti.',
+                  icon: Sun,
+                },
+                {
+                  key: 'sleep' as const,
+                  label: 'Qualita del sonno',
+                  score: breakdown.sleep,
+                  max: 25,
+                  influence: 'Quanto e come hai dormito. Considera qualita percepita, ore di sonno, debito cumulativo degli ultimi 7 giorni e pisolini.',
+                  icon: Moon,
+                },
+                {
+                  key: 'lifestyle' as const,
+                  label: 'Stile di vita',
+                  score: breakdown.lifestyle,
+                  max: 25,
+                  influence: 'Le tue abitudini di oggi: idratazione, alimentazione (qualita e macro), caffeina (farmacocinetica), attivita fisica e tempo schermo.',
+                  icon: Activity,
+                },
+                {
+                  key: 'allostatic' as const,
+                  label: 'Carico allostatico',
+                  score: breakdown.allostatic,
+                  max: 25,
+                  influence: 'Lo stress accumulato sul corpo. Ore di lavoro, stress percepito, umore, trend energetico settimanale, HRV e rischio burnout.',
+                  icon: Heart,
+                },
+              ]).map(({ key, label, score, max, influence, icon: Icon }) => {
+                const color = SUB_COLORS[key];
+                const pct = Math.round((score / max) * 100);
+                const level = pct >= 75 ? 'Ottimo' : pct >= 50 ? 'Buono' : pct >= 25 ? 'Basso' : 'Critico';
+                return (
+                  <div key={key} className="rounded-md bg-background/60 border border-border/50 p-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color }} />
+                      <span className="text-[11px] font-semibold flex-1">{label}</span>
+                      <span className="text-sm font-bold" style={{ color }}>{score}</span>
+                      <span className="text-[8px] text-muted-foreground">/{max}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{
+                        color,
+                        backgroundColor: `${color}15`,
+                      }}>{level}</span>
+                    </div>
+                    <p className="text-[11px] text-foreground/80 leading-snug">
+                      {breakdown.explanations[key]}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1 leading-snug italic">
+                      {influence}
+                    </p>
                   </div>
-                  {/* What the engine detected */}
-                  <p className="text-[11px] text-foreground/80 leading-snug">
-                    {breakdown.explanations[key]}
-                  </p>
-                  {/* What influences this component */}
-                  <p className="text-[10px] text-muted-foreground mt-1 leading-snug italic">
-                    {influence}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
 
-          {/* How reasoning works */}
-          <div className="rounded-md bg-primary/5 border border-primary/10 p-2.5">
-            <p className="text-[11px] font-semibold text-foreground mb-1">Come funziona il calcolo</p>
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Il punteggio totale (0-100) e la somma di 4 componenti (0-25 ciascuna) basate sul
-              Modello Borbely (Two-Process Model), farmacocinetica della caffeina
-              e il modello di carico allostatico di McEwen.
-              Quando piu fattori sono critici insieme, si applica una penalita di interazione
-              perche la fatica ha un effetto moltiplicativo, non solo additivo.
-              La curva predittiva proietta la tua energia nelle prossime 12 ore usando
-              il ritmo circadiano del tuo cronotipo ({chrono.name}) e i dati raccolti oggi.
-            </p>
-          </div>
+              <div className="rounded-md bg-primary/5 border border-primary/10 p-2.5">
+                <p className="text-[11px] font-semibold text-foreground mb-1">Come funziona il calcolo</p>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Il punteggio totale (0-100) e la somma di 4 componenti (0-25 ciascuna) basate sul
+                  Modello Borbely (Two-Process Model), farmacocinetica della caffeina
+                  e il modello di carico allostatico di McEwen.
+                  Quando piu fattori sono critici insieme, si applica una penalita di interazione
+                  perche la fatica ha un effetto moltiplicativo, non solo additivo.
+                  La curva predittiva proietta la tua energia nelle prossime 12 ore usando
+                  il ritmo circadiano del tuo cronotipo ({chrono.name}) e i dati raccolti oggi.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* ---- 6. Predicted curve - full width, large, annotated ---- */}
+        <PredictedCurve curve={breakdown.predictedCurve} currentScore={breakdown.overall} />
 
         {/* ---- 7. Technical details (collapsed by default) ---- */}
         <button
