@@ -1319,6 +1319,8 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           )}
         </div>
 
+        </>}
+
         {/* ---- "Cosa stai facendo?" — Activity tracking with start/stop ---- */}
         <div className="border-t border-border px-4 py-3 space-y-2.5">
           {/* Header */}
@@ -1717,10 +1719,8 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           )}
         </div>
 
-        </>}
-
         {/* ---- Completion tracker -- filled/empty circles with text ---- */}
-        <div className={`flex items-center gap-1.5 px-4 py-2 border-t border-border bg-muted/20 flex-wrap ${!isOpen ? 'hidden' : ''}`}>
+        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border bg-muted/20 flex-wrap">
           {ALL_TRACKED_TYPES.map(({ type, label }) => {
             const done = allLoggedTypes.has(type);
             return (
