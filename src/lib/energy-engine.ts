@@ -1079,70 +1079,6 @@ function computeInteractionPenalty(
 }
 
 // ---------------------------------------------------------------------------
-// 9. Predicted Energy Curve (next 12 hours)
-// ---------------------------------------------------------------------------
-
-function predictEnergyCurve(
-  chronotype: Chronotype,
-  currentHour: number,
-  currentScore: number,
-  sleepDebt: number,
-  caffeineRemaining: number,
-  routine: DetectedRoutine,
-  hoursAwake: number,
-  sleepQuality01: number,
-): number[] {
-  const predicted: number[] = [];
-
-  for (let offset = 1; offset <= 12; offset++) {
-    const futureHour = (currentHour + offset) % 24;
-    const futureHoursAwake = hoursAwake + offset;
-
-    // Circadian base
-    const circAlertness = computeCircadianAlertness(chronotype, futureHour);
-
-    // Process S at future time
-    const futureS = computeProcessS(futureHoursAwake, sleepQuality01);
-
-    // Post-prandial dip (estimate future meals if not yet happened)
-    const futureMealTimes = [...routine.mealTimes];
-    // If no lunch yet and it's before 13, assume lunch at 13
-    if (!futureMealTimes.some(t => t >= 12 && t <= 14) && futureHour >= 12) {
-      futureMealTimes.push(13);
-    }
-    // If no dinner yet and it's before 20, assume dinner at 20
-    if (!futureMealTimes.some(t => t >= 19 && t <= 21) && futureHour >= 19) {
-      futureMealTimes.push(20);
-    }
-    const ppDip = computePostPrandialDip(futureHour, futureMealTimes,
-      futureMealTimes.map(() => 0.5));
-
-    // Caffeine decay
-    const cafDecay = caffeineRemaining * Math.pow(0.5, offset / CAFFEINE_HALF_LIFE_H);
-    const cafBoost = clamp(cafDecay / (3 * CAFFEINE_MG_PER_ESPRESSO), 0, 0.08);
-
-    // Sleep debt drag increases with wakefulness
-    const debtDrag = Math.min(0.15, sleepDebt * 0.015 * (1 + futureHoursAwake * 0.01));
-
-    // Combined future alertness
-    const futureAlertness = clamp(
-      circAlertness - futureS * 0.35 - ppDip + cafBoost - debtDrag,
-      0.05, 1,
-    );
-
-    const futureScore = Math.round(futureAlertness * 100);
-
-    // Blend: closer hours lean toward current score, farther toward model prediction
-    const blendFactor = offset / 12;
-    const blended = lerp(currentScore, futureScore, blendFactor);
-
-    predicted.push(clamp(Math.round(blended), 0, 100));
-  }
-
-  return predicted;
-}
-
-// ---------------------------------------------------------------------------
 // 10. Bottleneck Identification (ranked by severity)
 // ---------------------------------------------------------------------------
 
@@ -1386,7 +1322,7 @@ function generateFutureTimeline(
   routine: DetectedRoutine,
   currentHour: number,
   currentScore: number,
-  chronotype: Chronotype,
+  _chronotype: Chronotype,
   lifestyleAnalysis: LifestyleAnalysis,
   lifestyleProjection: LifestyleProjection,
   predictedCurve: number[],
@@ -1588,7 +1524,11 @@ function generateDailySummary(
 
   // Energy trajectory
   const positiveEvents = events.filter(e => e.impact > 0.2);
-  const negativeEvents = events.filter(e => e.impact < -0.2);
+  const challengeCount = events.filter(e => e.impact < -0.2).length;
+
+  if (challengeCount > 2) {
+    parts.push(`${challengeCount} sfide energetiche previste`);
+  }
 
   if (currentScore >= 70) {
     parts.push('Energia buona');

@@ -6,7 +6,6 @@ import {
   BOTTLENECK_ACTIONS,
   CHRONOTYPE_LABELS,
   type EnergyBreakdown,
-  type FutureEvent,
   type RoutineOutlook,
 } from '../lib/energy-engine';
 import {
