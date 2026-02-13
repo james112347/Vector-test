@@ -4,21 +4,17 @@ import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
 import { playSuggestionSound, playAlertSound, CATEGORY_LABELS, COGNITIVE_LOAD_LABELS } from '../lib/energy-orientation';
-import type { Recommendation, EnergyState, EnergyLevel, EnergyFactor, AIOrientationInsight } from '../lib/energy-orientation';
+import type { Recommendation, EnergyFactor, AIOrientationInsight } from '../lib/energy-orientation';
+import ScientificEnergyCard from '../components/ScientificEnergyCard';
 import {
-  Compass,
   RefreshCw,
   Check,
   X,
   TrendingUp,
-  TrendingDown,
   Minus,
   Volume2,
   BellRing,
   Zap,
-  Brain,
-  Heart,
-  AlertTriangle,
   Info,
   Sparkles,
   Clock,
@@ -28,104 +24,6 @@ import {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function EnergyGauge({ state }: { state: EnergyState }) {
-  const levelColors: Record<EnergyLevel, string> = {
-    critical: '#ef4444',
-    low: '#f59e0b',
-    moderate: '#eab308',
-    good: '#22c55e',
-    peak: '#10b981',
-  };
-  const levelLabels: Record<EnergyLevel, string> = {
-    critical: 'Critico',
-    low: 'Basso',
-    moderate: 'Nella media',
-    good: 'Buono',
-    peak: 'Al massimo',
-  };
-
-  const color = levelColors[state.level];
-  const percentage = state.overall * 10;
-  const radius = 50;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (percentage / 100) * circumference;
-
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-32 h-32">
-        <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
-          <circle
-            cx="60" cy="60" r={radius} fill="none"
-            stroke="currentColor" className="text-muted" strokeWidth="10"
-          />
-          <circle
-            cx="60" cy="60" r={radius} fill="none"
-            stroke={color} strokeWidth="10" strokeLinecap="round"
-            strokeDasharray={circumference} strokeDashoffset={offset}
-            className="transition-all duration-700"
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold" style={{ color }}>
-            {state.overall.toFixed(1)}
-          </span>
-          <span className="text-xs text-muted-foreground">/10</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 mt-2">
-        <span
-          className="px-2 py-0.5 rounded-full text-xs font-semibold text-white"
-          style={{ backgroundColor: color }}
-        >
-          {levelLabels[state.level]}
-        </span>
-        {state.trendVsYesterday !== 0 && (
-          <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-            {state.trendVsYesterday > 0 ? (
-              <TrendingUp className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-            )}
-            vs ieri
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EnergyDimensions({ state }: { state: EnergyState }) {
-  const dims = [
-    { label: 'Fisica', value: state.physical, icon: Zap, color: '#3b82f6' },
-    { label: 'Mentale', value: state.mental, icon: Brain, color: '#22c55e' },
-    { label: 'Emotiva', value: state.emotional, icon: Heart, color: '#f59e0b' },
-  ];
-
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      {dims.map(dim => {
-        const Icon = dim.icon;
-        const pct = dim.value * 10;
-        return (
-          <div key={dim.label} className="flex flex-col items-center gap-1">
-            <Icon className="h-4 w-4" style={{ color: dim.color }} />
-            <div className="w-full bg-muted rounded-full h-2">
-              <div
-                className="h-2 rounded-full transition-all duration-500"
-                style={{ width: `${pct}%`, backgroundColor: dim.color }}
-              />
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">{dim.label}</span>
-              <span className="text-xs font-bold">{dim.value}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function FactorsList({ factors }: { factors: EnergyFactor[] }) {
   if (factors.length === 0) return null;
@@ -357,6 +255,7 @@ export default function Orientation() {
   } = useEnergyOrientation(user?.id);
 
   const [testingSound, setTestingSound] = useState<string | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
 
   const testSound = useCallback(async (type: 'suggestion' | 'alert') => {
     setTestingSound(type);
@@ -386,8 +285,15 @@ export default function Orientation() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Compass className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-bold">Guida Energetica</h1>
+            <Zap className="h-5 w-5 text-primary" />
+            <h1 className="text-xl font-bold">Energy Score</h1>
+            <button
+              onClick={() => setShowInfo(true)}
+              className="w-6 h-6 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
+              aria-label="Info Energy Score"
+            >
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Cosa fare, quando e con quale intensita
@@ -404,36 +310,17 @@ export default function Orientation() {
         </Button>
       </div>
 
+      {/* Info Modal */}
+      {showInfo && <EnergyScoreInfoModal onClose={() => setShowInfo(false)} />}
+
       {error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
 
-      {/* Energy State */}
-      {energyState && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Stato energetico</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <EnergyGauge state={energyState} />
-            <EnergyDimensions state={energyState} />
-            {energyState.dominantFatigue && energyState.dominantFatigue !== 'balanced' && (
-              <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                <p className="text-xs">
-                  Fatica dominante: <span className="font-semibold">
-                    {energyState.dominantFatigue === 'physical' ? 'fisica'
-                      : energyState.dominantFatigue === 'mental' ? 'mentale' : 'emotiva'}
-                  </span>
-                </p>
-              </div>
-            )}
-            <FactorsList factors={energyState.factors} />
-          </CardContent>
-        </Card>
-      )}
+      {/* Energy Score Card */}
+      {user?.id && <ScientificEnergyCard userId={user.id} />}
 
       {/* AI Insight */}
       {result?.aiInsight && (
@@ -484,10 +371,10 @@ export default function Orientation() {
       )}
 
       {/* No data state */}
-      {!energyState && !error && !loading && (
+      {!user?.id && !error && !loading && (
         <Card>
           <CardContent className="py-8 text-center space-y-3">
-            <Compass className="h-10 w-10 mx-auto text-muted-foreground" />
+            <Zap className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               Registra la tua energia per ricevere raccomandazioni personalizzate
             </p>
@@ -534,8 +421,92 @@ export default function Orientation() {
 
       {/* Footer info */}
       <p className="text-[10px] text-center text-muted-foreground px-4">
-        Vector analizza il tuo stato energetico in tempo reale per guidarti su cosa fare, quando e con quale intensita — massimizzando risultati e sostenibilita.
+        Vector calcola il tuo Energy Score in tempo reale combinando dati scientifici, check-in e wearable per guidarti su cosa fare, quando e con quale intensita.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Energy Score Info Modal
+// ---------------------------------------------------------------------------
+
+function EnergyScoreInfoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-card border border-border shadow-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-bold">Cos'e l'Energy Score?</h3>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1" aria-label="Chiudi">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          L'Energy Score e un punteggio da <strong>0 a 100</strong> che rappresenta il tuo livello energetico complessivo in tempo reale. Sostituisce la semplice percezione soggettiva con un calcolo scientifico basato su dati reali.
+        </p>
+
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold">Come viene calcolato</h4>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            E la somma di 4 componenti (0-25 ciascuna), basate su modelli scientifici validati:
+          </p>
+          <div className="space-y-2">
+            {[
+              { color: '#6366f1', name: 'Ritmo circadiano', desc: 'Orologio biologico, cronotipo, ore sveglio, pasti' },
+              { color: '#8b5cf6', name: 'Sonno', desc: 'Qualita, durata, debito cumulativo, dati wearable' },
+              { color: '#22c55e', name: 'Stile di vita', desc: 'Idratazione, caffeina, pasti, attivita, screen time' },
+              { color: '#f59e0b', name: 'Carico allostatico', desc: 'Stress, lavoro, umore, HRV, rischio burnout' },
+            ].map(c => (
+              <div key={c.name} className="flex items-start gap-2">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: c.color }} />
+                <div>
+                  <span className="text-xs font-semibold">{c.name}</span>
+                  <span className="text-xs text-muted-foreground"> — {c.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">Cosa include</h4>
+          <ul className="space-y-1.5 text-xs text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+              <span><strong>Fattori</strong> — idratazione, caffeina, sonno, pasti e dati wearable Sahha</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+              <span><strong>Punto debole</strong> — identifica il fattore critico e ti dice cosa fare</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+              <span><strong>Curva predittiva</strong> — proietta la tua energia nelle prossime 12 ore</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+              <span><strong>Spiegazione</strong> — perche hai quel punteggio, componente per componente</span>
+            </li>
+          </ul>
+        </div>
+
+        <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Piu dati registri (check-in, energy log, wearable), piu il punteggio diventa preciso. Tutti i calcoli avvengono in locale sul tuo dispositivo.
+          </p>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          Ho capito
+        </button>
+      </div>
     </div>
   );
 }
