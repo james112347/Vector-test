@@ -66,15 +66,20 @@ export async function getRecentCheckins(userId: number, days = 7): Promise<Quick
 }
 
 /**
- * Update the value of an existing check-in entry.
- * Used for correcting activity type (e.g. wrong activity selected).
+ * Update fields of an existing check-in entry.
+ * Supports changing value (activity type) and/or time (HH:MM).
  */
 export async function updateCheckin(
   id: number,
-  newValue: number,
+  updates: { value?: number; time?: string },
   userId?: number,
 ): Promise<void> {
-  await db.quickCheckins.update(id, { value: newValue });
+  const patch: Record<string, unknown> = {};
+  if (updates.value != null) patch.value = updates.value;
+  if (updates.time != null) patch.time = updates.time;
+  if (Object.keys(patch).length === 0) return;
+
+  await db.quickCheckins.update(id, patch);
 
   if (userId) {
     db.users.get(userId).then(u => {

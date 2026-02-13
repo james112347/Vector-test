@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from './ui/card';
 import {
   Moon, Sun, Brain, Heart, Zap, Coffee, Droplets,
-  Check, ChevronRight, Activity, CloudSun,
+  Check, ChevronRight, ChevronDown, Activity, CloudSun,
   Sunset, CloudMoon, UtensilsCrossed, BedDouble,
   Pill, MonitorOff, Plus, Minus, Pencil, X,
   BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2,
@@ -607,6 +607,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [editingType, setEditingType] = useState<CheckinType | null>(null);
   const [savingActivity, setSavingActivity] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -736,9 +737,17 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   /** Edit a specific activity entry — change its activity type */
   const handleEditActivityValue = async (entryId: number, newValue: number) => {
     setSavingActivity(true);
-    await updateCheckin(entryId, newValue, userId);
+    await updateCheckin(entryId, { value: newValue }, userId);
     await loadCheckins();
     setEditingActivityId(null);
+    setTimeout(() => setSavingActivity(false), 300);
+  };
+
+  /** Edit the start time of an activity entry */
+  const handleEditActivityTime = async (entryId: number, newTime: string) => {
+    setSavingActivity(true);
+    await updateCheckin(entryId, { time: newTime }, userId);
+    await loadCheckins();
     setTimeout(() => setSavingActivity(false), 300);
   };
 
@@ -1067,131 +1076,239 @@ export default function QuickCheckins({ userId }: { userId: number }) {
             );
           })()}
 
-          {/* Activity timeline — today's logged activities with edit */}
-          {todayActivities.filter(e => e.value > 0).length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                La tua giornata
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {todayActivities.map((entry, i) => {
-                  const act = getActivityOption(entry.value);
-                  if (!act) return null;
-                  const Icon = act.icon;
-                  const isLast = i === todayActivities.length - 1 && entry.value > 0;
-                  const isEditing = editingActivityId === entry.id;
-                  // Show duration: from this entry to the next (or now)
-                  const nextEntry = todayActivities[i + 1];
-                  let dur = '';
-                  if (entry.value > 0) {
-                    const [sh, sm] = entry.time.split(':').map(Number);
-                    const startMin = sh * 60 + sm;
-                    let endMin: number;
-                    if (nextEntry) {
-                      const [nh, nm] = nextEntry.time.split(':').map(Number);
-                      endMin = nh * 60 + nm;
-                    } else {
-                      const now = new Date();
-                      endMin = now.getHours() * 60 + now.getMinutes();
-                    }
-                    const diff = Math.max(0, endMin - startMin);
-                    dur = diff < 60 ? `${diff}m` : `${Math.floor(diff / 60)}h${diff % 60 > 0 ? `${diff % 60}m` : ''}`;
-                  }
-                  return (
-                    <div key={entry.id ?? i} className="space-y-1.5">
-                      {/* Activity row — tappable */}
-                      <div
-                        className={`
-                          flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px]
-                          ${isLast ? `${act.bgSelected} text-white` : `${act.bg} ${act.color}`}
-                          ${isEditing ? 'ring-2 ring-amber-500/50' : ''}
-                          font-medium transition-all
-                        `}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="font-semibold">{act.label}</span>
-                        <span className={isLast ? 'text-white/70' : 'opacity-60'}>{entry.time}</span>
-                        {dur && <span className={isLast ? 'text-white/60' : 'opacity-50'}>({dur})</span>}
-                        {/* Edit button — always visible */}
-                        <button
-                          onClick={() => setEditingActivityId(isEditing ? null : (entry.id ?? null))}
-                          className={`
-                            ml-auto w-6 h-6 rounded-full flex items-center justify-center shrink-0
-                            transition-colors active:scale-90
-                            ${isEditing
-                              ? (isLast ? 'bg-white/40' : 'bg-amber-500/20')
-                              : (isLast ? 'bg-white/20 hover:bg-white/30' : 'bg-foreground/5 hover:bg-foreground/10')
-                            }
-                          `}
-                          aria-label="Modifica"
-                        >
-                          <Pencil className="h-2.5 w-2.5" />
-                        </button>
-                        {/* Delete button — always visible */}
-                        <button
-                          onClick={() => handleDeleteActivity(entry)}
-                          className={`
-                            w-6 h-6 rounded-full flex items-center justify-center shrink-0
-                            transition-colors active:scale-90
-                            ${isLast ? 'bg-white/20 hover:bg-red-400/40' : 'bg-foreground/5 hover:bg-red-500/15'}
-                          `}
-                          aria-label="Elimina"
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </div>
+          {/* ---- "La tua giornata" — collapsible window with preview bar ---- */}
+          {todayActivities.filter(e => e.value > 0).length > 0 && (() => {
+            // Compute timeline data for the preview bar
+            const activeEntries = todayActivities.filter(e => e.value > 0);
+            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+            const firstMin = (() => { const [h, m] = activeEntries[0].time.split(':').map(Number); return h * 60 + m; })();
+            const totalSpan = Math.max(1, nowMin - firstMin);
+            // Total active time
+            let totalActiveMins = 0;
+            for (let i = 0; i < todayActivities.length; i++) {
+              const e = todayActivities[i];
+              if (e.value <= 0) continue;
+              const [sh, sm] = e.time.split(':').map(Number);
+              const startM = sh * 60 + sm;
+              const next = todayActivities[i + 1];
+              const endM = next ? (() => { const [nh, nm] = next.time.split(':').map(Number); return nh * 60 + nm; })() : nowMin;
+              totalActiveMins += Math.max(0, endM - startM);
+            }
+            const totalDurLabel = totalActiveMins < 60
+              ? `${totalActiveMins}min`
+              : `${Math.floor(totalActiveMins / 60)}h${totalActiveMins % 60 > 0 ? `${totalActiveMins % 60}m` : ''}`;
 
-                      {/* Inline edit selector — shown under this entry */}
-                      {isEditing && (
-                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 ml-2">
-                          <div className="flex items-center gap-1.5">
-                            <Pencil className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
-                            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                              Cambia attivita
+            return (
+              <div className="rounded-lg border border-border bg-card overflow-hidden">
+                {/* Header — tap to toggle */}
+                <button
+                  onClick={() => setTimelineOpen(!timelineOpen)}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors"
+                >
+                  <Clock className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="text-[11px] font-semibold text-foreground">La tua giornata</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {activeEntries.length} attivita · {totalDurLabel}
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0 transition-transform ${timelineOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Preview bar — always visible (colored segments) */}
+                <div className="px-3 pb-2">
+                  <div className="flex h-3 rounded-full overflow-hidden bg-muted/30 gap-px">
+                    {todayActivities.map((entry, i) => {
+                      if (entry.value <= 0) return null;
+                      const act = getActivityOption(entry.value);
+                      if (!act) return null;
+                      const [sh, sm] = entry.time.split(':').map(Number);
+                      const startM = sh * 60 + sm;
+                      const next = todayActivities[i + 1];
+                      const endM = next ? (() => { const [nh, nm] = next.time.split(':').map(Number); return nh * 60 + nm; })() : nowMin;
+                      const dur = Math.max(1, endM - startM);
+                      const pct = Math.max(2, (dur / totalSpan) * 100);
+                      return (
+                        <div
+                          key={entry.id ?? i}
+                          className={`${act.bgSelected} rounded-sm relative group`}
+                          style={{ width: `${pct}%` }}
+                          title={`${act.label} ${entry.time} (${dur < 60 ? `${dur}m` : `${Math.floor(dur / 60)}h${dur % 60 > 0 ? `${dur % 60}m` : ''}`})`}
+                        />
+                      );
+                    })}
+                  </div>
+                  {/* Time labels under bar */}
+                  <div className="flex justify-between mt-0.5">
+                    <span className="text-[9px] text-muted-foreground">{activeEntries[0].time}</span>
+                    <span className="text-[9px] text-muted-foreground">adesso</span>
+                  </div>
+                </div>
+
+                {/* Expanded detail view */}
+                {timelineOpen && (
+                  <div className="border-t border-border px-3 py-2 space-y-1.5">
+                    {todayActivities.map((entry, i) => {
+                      const act = getActivityOption(entry.value);
+                      if (!act) return null;
+                      const Icon = act.icon;
+                      const isLast = i === todayActivities.length - 1 && entry.value > 0;
+                      const isEditing = editingActivityId === entry.id;
+                      const nextEntry = todayActivities[i + 1];
+                      // Duration calc
+                      let dur = '';
+                      let endTimeStr = '';
+                      if (entry.value > 0) {
+                        const [sh, sm] = entry.time.split(':').map(Number);
+                        const startM = sh * 60 + sm;
+                        let endM: number;
+                        if (nextEntry) {
+                          const [nh, nm] = nextEntry.time.split(':').map(Number);
+                          endM = nh * 60 + nm;
+                          endTimeStr = nextEntry.time;
+                        } else {
+                          const now = new Date();
+                          endM = now.getHours() * 60 + now.getMinutes();
+                          endTimeStr = now.toTimeString().slice(0, 5);
+                        }
+                        const diff = Math.max(0, endM - startM);
+                        dur = diff < 60 ? `${diff}m` : `${Math.floor(diff / 60)}h${diff % 60 > 0 ? `${diff % 60}m` : ''}`;
+                      }
+                      return (
+                        <div key={entry.id ?? i} className="space-y-1">
+                          {/* Main row */}
+                          <div
+                            className={`
+                              flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px]
+                              ${isLast ? `${act.bgSelected} text-white` : `${act.bg} ${act.color}`}
+                              ${isEditing ? 'ring-2 ring-amber-500/50' : ''}
+                              font-medium
+                            `}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="font-semibold min-w-0">{act.label}</span>
+                            {/* Time range */}
+                            <span className={`text-[10px] tabular-nums ${isLast ? 'text-white/70' : 'opacity-60'}`}>
+                              {entry.time} — {isLast ? 'ora' : endTimeStr}
                             </span>
+                            {dur && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isLast ? 'bg-white/20 text-white/80' : 'bg-foreground/5 text-muted-foreground'}`}>
+                                {dur}
+                              </span>
+                            )}
+                            {/* Edit */}
+                            <button
+                              onClick={() => setEditingActivityId(isEditing ? null : (entry.id ?? null))}
+                              className={`
+                                ml-auto w-6 h-6 rounded-full flex items-center justify-center shrink-0
+                                transition-colors active:scale-90
+                                ${isEditing
+                                  ? (isLast ? 'bg-white/40' : 'bg-amber-500/20')
+                                  : (isLast ? 'bg-white/20 hover:bg-white/30' : 'bg-foreground/5 hover:bg-foreground/10')
+                                }
+                              `}
+                              aria-label="Modifica"
+                            >
+                              <Pencil className="h-2.5 w-2.5" />
+                            </button>
+                            {/* Delete */}
+                            <button
+                              onClick={() => handleDeleteActivity(entry)}
+                              className={`
+                                w-6 h-6 rounded-full flex items-center justify-center shrink-0
+                                transition-colors active:scale-90
+                                ${isLast ? 'bg-white/20 hover:bg-red-400/40' : 'bg-foreground/5 hover:bg-red-500/15'}
+                              `}
+                              aria-label="Elimina"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
                           </div>
-                          <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-                            {ACTIVITY_OPTIONS.map(opt => {
-                              const OptIcon = opt.icon;
-                              const isCurrent = entry.value === opt.value;
-                              return (
-                                <button
-                                  key={opt.value}
-                                  onClick={() => {
-                                    if (!isCurrent && entry.id != null) {
-                                      handleEditActivityValue(entry.id, opt.value);
-                                    }
-                                  }}
-                                  disabled={savingActivity || isCurrent}
-                                  className={`
-                                    flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl shrink-0
-                                    transition-all duration-150 active:scale-95 border
-                                    ${isCurrent
-                                      ? `${opt.bgSelected} text-white shadow-sm border-transparent`
-                                      : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50'
-                                    }
-                                  `}
-                                >
-                                  <OptIcon className={`h-4 w-4 ${isCurrent ? 'text-white' : opt.color}`} />
-                                  <span className={`
-                                    text-[9px] font-semibold leading-tight whitespace-nowrap
-                                    ${isCurrent ? 'text-white/90' : 'text-muted-foreground'}
-                                  `}>
-                                    {opt.label}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
 
-            </div>
-          )}
+                          {/* Edit panel — activity type + time editing */}
+                          {isEditing && (
+                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 ml-2 space-y-2.5">
+                              {/* Time editing */}
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Orario</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-muted-foreground">Inizio:</span>
+                                    <input
+                                      type="time"
+                                      defaultValue={entry.time}
+                                      onBlur={(e) => {
+                                        const newTime = e.target.value;
+                                        if (newTime && newTime !== entry.time && entry.id != null) {
+                                          handleEditActivityTime(entry.id, newTime);
+                                        }
+                                      }}
+                                      className="h-7 px-1.5 text-[11px] rounded border border-border bg-background tabular-nums w-[70px]"
+                                    />
+                                  </div>
+                                  {nextEntry && nextEntry.id != null && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-muted-foreground">Fine:</span>
+                                      <input
+                                        type="time"
+                                        defaultValue={nextEntry.time}
+                                        onBlur={(e) => {
+                                          const newTime = e.target.value;
+                                          if (newTime && newTime !== nextEntry.time && nextEntry.id != null) {
+                                            handleEditActivityTime(nextEntry.id, newTime);
+                                          }
+                                        }}
+                                        className="h-7 px-1.5 text-[11px] rounded border border-border bg-background tabular-nums w-[70px]"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Activity type change */}
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Tipo attivita</span>
+                                <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+                                  {ACTIVITY_OPTIONS.map(opt => {
+                                    const OptIcon = opt.icon;
+                                    const isCurrent = entry.value === opt.value;
+                                    return (
+                                      <button
+                                        key={opt.value}
+                                        onClick={() => {
+                                          if (!isCurrent && entry.id != null) {
+                                            handleEditActivityValue(entry.id, opt.value);
+                                          }
+                                        }}
+                                        disabled={savingActivity || isCurrent}
+                                        className={`
+                                          flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl shrink-0
+                                          transition-all duration-150 active:scale-95 border
+                                          ${isCurrent
+                                            ? `${opt.bgSelected} text-white shadow-sm border-transparent`
+                                            : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50'
+                                          }
+                                        `}
+                                      >
+                                        <OptIcon className={`h-4 w-4 ${isCurrent ? 'text-white' : opt.color}`} />
+                                        <span className={`
+                                          text-[9px] font-semibold leading-tight whitespace-nowrap
+                                          ${isCurrent ? 'text-white/90' : 'text-muted-foreground'}
+                                        `}>
+                                          {opt.label}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ---- Quick counters with measurement units — horizontal scroll ---- */}
