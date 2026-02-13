@@ -443,15 +443,6 @@ function formatCaffeine(cups: number): string {
   return `~${mg}mg`;
 }
 
-/** Get meal label based on time of day */
-function getMealLabel(time: string): string {
-  const h = parseInt(time.split(':')[0]);
-  if (h < 11) return 'Colazione';
-  if (h < 14) return 'Pranzo';
-  if (h < 18) return 'Spuntino';
-  return 'Cena';
-}
-
 // ---------------------------------------------------------------------------
 // Meal slots — always 4, always visible, always in order
 // ---------------------------------------------------------------------------
