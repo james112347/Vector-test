@@ -986,7 +986,6 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
   // Count of all unique types that have been logged today
   const completedCount = allLoggedTypes.size;
-  const totalTrackedCount = ALL_TRACKED_TYPES.length;
 
   return (
     <Card className="overflow-visible">
