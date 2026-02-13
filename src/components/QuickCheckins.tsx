@@ -282,6 +282,13 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
         icon: Heart,
       },
       {
+        type: 'meal_time',
+        label: 'Spuntino',
+        question: 'Spuntino pomeridiano?',
+        icon: UtensilsCrossed,
+        ratings: MEAL_RATINGS,
+      },
+      {
         type: 'activity_done',
         label: 'Attivita',
         question: 'Movimento oggi?',
@@ -308,6 +315,13 @@ const PHASE_CONFIG: Record<TimePhase, PhaseConfig> = {
         label: 'Umore',
         question: "Com'e' andata oggi?",
         icon: Heart,
+      },
+      {
+        type: 'meal_time',
+        label: 'Cena',
+        question: 'Cena?',
+        icon: UtensilsCrossed,
+        ratings: MEAL_RATINGS,
       },
       {
         type: 'stress',
