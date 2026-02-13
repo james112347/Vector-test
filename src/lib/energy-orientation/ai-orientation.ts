@@ -189,14 +189,28 @@ function cacheAIInsight(data: AIOrientationInsight, stateLevel: string, timeSlot
  * Usa Groq per analizzare stato, raccomandazioni e contesto.
  * Ritorna null se IA non disponibile.
  */
+/** Ragione dell'ultimo fallimento IA (esposta per la UI) */
+export let lastAIFailureReason: string | null = null;
+
 export async function generateAIOrientationInsight(
   userId: number,
   state: EnergyState,
   recommendations: Recommendation[],
 ): Promise<AIOrientationInsight | null> {
-  if (!isAIAvailable()) return null;
+  lastAIFailureReason = null;
+
+  if (!isAIAvailable()) {
+    lastAIFailureReason = 'Chiave API Groq non configurata. Aggiungi VITE_GROQ_API_KEY nel file .env o nella tabella app_config di Supabase.';
+    console.warn('[AI Orientation] IA non disponibile:', lastAIFailureReason);
+    return null;
+  }
+
   const apiKey = await getApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    lastAIFailureReason = 'Chiave API Groq non trovata. Verifica che VITE_GROQ_API_KEY sia impostata correttamente.';
+    console.warn('[AI Orientation]', lastAIFailureReason);
+    return null;
+  }
 
   // Check cache
   const cached = getCachedAIInsight(state.level, state.timeSlot);
@@ -249,16 +263,35 @@ export async function generateAIOrientationInsight(
       }),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      if (response.status === 401) {
+        lastAIFailureReason = 'Chiave API Groq non valida o scaduta. Genera una nuova chiave su console.groq.com.';
+      } else if (response.status === 429) {
+        lastAIFailureReason = 'Limite richieste Groq raggiunto. Riprova tra qualche minuto.';
+      } else {
+        lastAIFailureReason = `Errore API Groq (${response.status}): ${errorText.slice(0, 200)}`;
+      }
+      console.error('[AI Orientation]', lastAIFailureReason);
+      return null;
+    }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
+    if (!content) {
+      lastAIFailureReason = 'Risposta vuota dall\'API Groq.';
+      console.warn('[AI Orientation]', lastAIFailureReason);
+      return null;
+    }
 
     const parsed = JSON.parse(content) as AIOrientationInsight;
 
     // Validazione minima
-    if (!parsed.stateAnalysis || !parsed.primaryAdvice) return null;
+    if (!parsed.stateAnalysis || !parsed.primaryAdvice) {
+      lastAIFailureReason = 'Risposta IA incompleta (mancano campi obbligatori).';
+      console.warn('[AI Orientation]', lastAIFailureReason);
+      return null;
+    }
 
     // Assicura che autoResponses sia un array
     if (!Array.isArray(parsed.autoResponses)) {
@@ -267,7 +300,9 @@ export async function generateAIOrientationInsight(
 
     cacheAIInsight(parsed, state.level, state.timeSlot);
     return parsed;
-  } catch {
+  } catch (err) {
+    lastAIFailureReason = `Errore di rete o parsing: ${(err as Error).message}`;
+    console.error('[AI Orientation]', lastAIFailureReason);
     return null;
   }
 }

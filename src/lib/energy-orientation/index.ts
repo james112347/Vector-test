@@ -61,4 +61,4 @@ export {
 } from './notification-manager';
 
 // AI orientation
-export { generateAIOrientationInsight } from './ai-orientation';
+export { generateAIOrientationInsight, lastAIFailureReason } from './ai-orientation';

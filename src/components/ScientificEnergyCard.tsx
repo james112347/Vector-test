@@ -9,6 +9,7 @@ import {
 } from '../lib/energy-engine';
 import {
   generateOrientation,
+  lastAIFailureReason,
   type OrientationResult,
 } from '../lib/energy-orientation';
 import {
@@ -470,10 +471,11 @@ function FactorsPanel({
 // AIAnalysisPanel: Shows AI-powered analysis
 // ---------------------------------------------------------------------------
 
-function AIAnalysisPanel({ orientation }: { orientation: OrientationResult | null }) {
+function AIAnalysisPanel({ orientation, onRetry }: { orientation: OrientationResult | null; onRetry?: () => void }) {
   const ai = orientation?.aiInsight;
 
   if (!ai) {
+    const reason = lastAIFailureReason;
     return (
       <div className="space-y-2">
         <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
@@ -482,8 +484,17 @@ function AIAnalysisPanel({ orientation }: { orientation: OrientationResult | nul
         </p>
         <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-2.5">
           <p className="text-[11px] text-muted-foreground">
-            L'analisi IA non e' disponibile al momento. Verifica la configurazione API Groq nelle impostazioni.
+            {reason || 'L\'analisi IA non e\' disponibile al momento. Verifica la configurazione API Groq nelle impostazioni.'}
           </p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-600 hover:bg-amber-500/30 transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Riprova
+            </button>
+          )}
         </div>
       </div>
     );
@@ -678,6 +689,20 @@ export default function ScientificEnergyCard({ userId }: Props) {
     }
   }, [userId, orientation, orientLoading]);
 
+  // Force-reload orientation (per retry IA)
+  const retryOrientation = useCallback(async () => {
+    if (orientLoading) return;
+    setOrientLoading(true);
+    try {
+      const result = await generateOrientation(userId);
+      setOrientation(result);
+    } catch (e) {
+      console.error('Orientation retry error:', e);
+    } finally {
+      setOrientLoading(false);
+    }
+  }, [userId, orientLoading]);
+
   const togglePanel = useCallback((panel: ToolPanel) => {
     setActivePanel(prev => prev === panel ? null : panel);
     if (!orientation && !orientLoading) {
@@ -834,7 +859,7 @@ export default function ScientificEnergyCard({ userId }: Props) {
               ) : activePanel === 'fattori' ? (
                 <FactorsPanel orientation={orientation} breakdown={breakdown} />
               ) : activePanel === 'analisi' ? (
-                <AIAnalysisPanel orientation={orientation} />
+                <AIAnalysisPanel orientation={orientation} onRetry={retryOrientation} />
               ) : activePanel === 'consigli' ? (
                 <AdvicePanel orientation={orientation} />
               ) : null}
