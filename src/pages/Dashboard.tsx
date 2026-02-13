@@ -222,10 +222,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 3. Scientific Energy Card — most important, the energy score */}
+      {/* 3. Quick Check-ins — data collection (in alto per priorita) */}
+      {user?.id && <QuickCheckins userId={user.id} />}
+
+      {/* 4. Scientific Energy Card — energy score */}
       {user?.id && <ScientificEnergyCard userId={user.id} />}
 
-      {/* 4. Cosa fare adesso — top recommendation from orientation system */}
+      {/* 5. Cosa fare adesso — top recommendation from orientation system */}
       {topRec && (
         <button
           onClick={() => navigate('/orientation')}
@@ -245,9 +248,6 @@ export default function Dashboard() {
           </div>
         </button>
       )}
-
-      {/* 5. Quick Check-ins — data collection */}
-      {user?.id && <QuickCheckins userId={user.id} />}
 
       {/* 6. Goals Widget (if goals exist) */}
       {activeGoals.length > 0 && (

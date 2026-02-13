@@ -173,7 +173,7 @@ function PredictedCurve({
   const gradId = 'energyGrad';
 
   return (
-    <div className="rounded-lg border border-border bg-muted/20 p-3">
+    <div className="rounded-lg border border-border bg-muted/40 p-3">
       <p className="text-xs font-semibold text-foreground mb-3 flex items-center gap-1.5">
         <TrendingUp className="h-4 w-4 text-primary" />
         Curva Energetica - prossime 12 ore
@@ -182,8 +182,8 @@ function PredictedCurve({
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height: 180 }}>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.08" />
           </linearGradient>
         </defs>
 
@@ -196,8 +196,8 @@ function PredictedCurve({
               x1={paddingX} y1={y}
               x2={paddingX + chartW} y2={y}
               stroke="currentColor"
-              className="text-border"
-              strokeWidth="0.5"
+              className="text-muted-foreground/30"
+              strokeWidth="0.7"
               strokeDasharray="4,4"
             />
           );
@@ -211,14 +211,16 @@ function PredictedCurve({
           d={pathD}
           fill="none"
           stroke="var(--color-primary)"
-          strokeWidth="3"
+          strokeWidth="3.5"
           strokeLinecap="round"
           strokeLinejoin="round"
+          filter="drop-shadow(0 1px 3px rgba(0,0,0,0.15))"
         />
 
         {/* Current point (now) */}
-        <circle cx={points[0].x} cy={points[0].y} r={5}
-          fill="var(--color-primary)" stroke="var(--color-background)" strokeWidth="2.5"
+        <circle cx={points[0].x} cy={points[0].y} r={6}
+          fill="var(--color-primary)" stroke="var(--color-background)" strokeWidth="3"
+          filter="drop-shadow(0 1px 3px rgba(0,0,0,0.2))"
         />
         <text
           x={points[0].x} y={points[0].y - 10}
@@ -231,8 +233,9 @@ function PredictedCurve({
         {/* Peak annotation */}
         {peakIdx > 0 && (
           <>
-            <circle cx={peakPoint.x} cy={peakPoint.y} r={4}
-              fill="#22c55e" stroke="var(--color-background)" strokeWidth="2"
+            <circle cx={peakPoint.x} cy={peakPoint.y} r={5}
+              fill="#22c55e" stroke="var(--color-background)" strokeWidth="2.5"
+              filter="drop-shadow(0 1px 2px rgba(34,197,94,0.3))"
             />
             <text
               x={peakPoint.x} y={peakPoint.y - 10}
@@ -247,8 +250,9 @@ function PredictedCurve({
         {/* Dip annotation */}
         {dipIdx > 0 && dipIdx !== peakIdx && Math.abs(peakPoint.x - dipPoint.x) > 35 && (
           <>
-            <circle cx={dipPoint.x} cy={dipPoint.y} r={4}
-              fill="#ef4444" stroke="var(--color-background)" strokeWidth="2"
+            <circle cx={dipPoint.x} cy={dipPoint.y} r={5}
+              fill="#ef4444" stroke="var(--color-background)" strokeWidth="2.5"
+              filter="drop-shadow(0 1px 2px rgba(239,68,68,0.3))"
             />
             <text
               x={dipPoint.x} y={dipPoint.y + 16}
@@ -506,7 +510,93 @@ export default function ScientificEnergyCard({ userId }: Props) {
         {/* ---- 5. Predicted curve - full width, large, annotated ---- */}
         <PredictedCurve curve={breakdown.predictedCurve} currentScore={breakdown.overall} />
 
-        {/* ---- 6. Technical details (collapsed by default) ---- */}
+        {/* ---- 6. Perche questi risultati — always visible explanation ---- */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <Brain className="h-4 w-4 text-primary" />
+            Perche questi risultati
+          </p>
+
+          {/* What influences the score */}
+          <div className="space-y-2">
+            {([
+              {
+                key: 'circadian' as const,
+                label: 'Ritmo circadiano',
+                score: breakdown.circadian,
+                max: 25,
+                influence: 'Il tuo orologio biologico interno. Dipende dal cronotipo, dall\'ora del giorno, da quanto tempo sei sveglio e dai pasti recenti.',
+                icon: Sun,
+              },
+              {
+                key: 'sleep' as const,
+                label: 'Qualita del sonno',
+                score: breakdown.sleep,
+                max: 25,
+                influence: 'Quanto e come hai dormito. Considera qualita percepita, ore di sonno, debito cumulativo degli ultimi 7 giorni e pisolini.',
+                icon: Moon,
+              },
+              {
+                key: 'lifestyle' as const,
+                label: 'Stile di vita',
+                score: breakdown.lifestyle,
+                max: 25,
+                influence: 'Le tue abitudini di oggi: idratazione, alimentazione (qualita e macro), caffeina (farmacocinetica), attivita fisica e tempo schermo.',
+                icon: Activity,
+              },
+              {
+                key: 'allostatic' as const,
+                label: 'Carico allostatico',
+                score: breakdown.allostatic,
+                max: 25,
+                influence: 'Lo stress accumulato sul corpo. Ore di lavoro, stress percepito, umore, trend energetico settimanale, HRV e rischio burnout.',
+                icon: Heart,
+              },
+            ]).map(({ key, label, score, max, influence, icon: Icon }) => {
+              const color = SUB_COLORS[key];
+              const pct = Math.round((score / max) * 100);
+              const level = pct >= 75 ? 'Ottimo' : pct >= 50 ? 'Buono' : pct >= 25 ? 'Basso' : 'Critico';
+              return (
+                <div key={key} className="rounded-md bg-background/60 border border-border/50 p-2.5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color }} />
+                    <span className="text-[11px] font-semibold flex-1">{label}</span>
+                    <span className="text-sm font-bold" style={{ color }}>{score}</span>
+                    <span className="text-[8px] text-muted-foreground">/{max}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{
+                      color,
+                      backgroundColor: `${color}15`,
+                    }}>{level}</span>
+                  </div>
+                  {/* What the engine detected */}
+                  <p className="text-[11px] text-foreground/80 leading-snug">
+                    {breakdown.explanations[key]}
+                  </p>
+                  {/* What influences this component */}
+                  <p className="text-[10px] text-muted-foreground mt-1 leading-snug italic">
+                    {influence}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* How reasoning works */}
+          <div className="rounded-md bg-primary/5 border border-primary/10 p-2.5">
+            <p className="text-[11px] font-semibold text-foreground mb-1">Come funziona il calcolo</p>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Il punteggio totale (0-100) e la somma di 4 componenti (0-25 ciascuna) basate sul
+              Modello Borbely (Two-Process Model), farmacocinetica della caffeina
+              e il modello di carico allostatico di McEwen.
+              Quando piu fattori sono critici insieme, si applica una penalita di interazione
+              perche la fatica ha un effetto moltiplicativo, non solo additivo.
+              La curva predittiva proietta la tua energia nelle prossime 12 ore usando
+              il ritmo circadiano del tuo cronotipo ({chrono.name}) e i dati raccolti oggi.
+            </p>
+          </div>
+        </div>
+
+        {/* ---- 7. Technical details (collapsed by default) ---- */}
         <button
           onClick={() => setShowDetails(!showDetails)}
           className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
@@ -516,7 +606,7 @@ export default function ScientificEnergyCard({ userId }: Props) {
           ) : (
             <ChevronDown className="h-3.5 w-3.5" />
           )}
-          Dettagli tecnici
+          Dettagli tecnici avanzati
         </button>
 
         {showDetails && (
@@ -572,45 +662,6 @@ export default function ScientificEnergyCard({ userId }: Props) {
                 color={breakdown.factors.hrv_indicator > 0.5 ? '#22c55e' : '#ef4444'}
               />
             )}
-
-            <hr className="border-border" />
-
-            {/* Component explanations - compact cards */}
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Perche questi punteggi
-            </p>
-            <div className="grid grid-cols-1 gap-2">
-              {([
-                { key: 'circadian', label: 'Ritmo', score: breakdown.circadian, max: 25 },
-                { key: 'sleep', label: 'Sonno', score: breakdown.sleep, max: 25 },
-                { key: 'lifestyle', label: 'Vita', score: breakdown.lifestyle, max: 25 },
-                { key: 'allostatic', label: 'Carico', score: breakdown.allostatic, max: 25 },
-              ] as const).map(({ key, label, score, max }) => {
-                const color = SUB_COLORS[key];
-                const pct = Math.round((score / max) * 100);
-                const level = pct >= 75 ? 'Ottimo' : pct >= 50 ? 'Buono' : pct >= 25 ? 'Basso' : 'Critico';
-                return (
-                  <div key={key} className="flex items-start gap-2.5 rounded-md bg-background/60 border border-border/50 p-2">
-                    <div className="flex flex-col items-center shrink-0 w-10">
-                      <span className="text-sm font-bold" style={{ color }}>{score}</span>
-                      <span className="text-[8px] text-muted-foreground">/{max}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-semibold">{label}</span>
-                        <span className="text-[9px] px-1 py-0.5 rounded" style={{
-                          color,
-                          backgroundColor: `${color}15`,
-                        }}>{level}</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                        {breakdown.explanations[key]}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
       </CardContent>
