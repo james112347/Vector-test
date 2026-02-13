@@ -478,6 +478,14 @@ function FactorsPanel({
 // AIAnalysisPanel: Shows AI-powered analysis
 // ---------------------------------------------------------------------------
 
+const URGENCY_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  none: { label: 'Stabile', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+  low: { label: 'Sotto controllo', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+  medium: { label: 'Da monitorare', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+  high: { label: 'Richiede azione', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  critical: { label: 'Intervento urgente', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
+};
+
 function AIAnalysisPanel({ orientation, onRetry }: { orientation: OrientationResult | null; onRetry?: () => void }) {
   const ai = orientation?.aiInsight;
 
@@ -507,45 +515,87 @@ function AIAnalysisPanel({ orientation, onRetry }: { orientation: OrientationRes
     );
   }
 
+  const urgency = URGENCY_CONFIG[ai.urgencyLevel] ?? URGENCY_CONFIG.none;
+
   return (
-    <div className="space-y-2.5">
-      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+    <div className="space-y-3">
+      {/* ---- Header: titolo + urgenza ---- */}
+      <div className="flex items-center gap-2">
         <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-        Analisi IA
-      </p>
-
-      {/* State analysis */}
-      <div className="rounded-md bg-muted/40 p-2.5">
-        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Stato attuale</p>
-        <p className="text-[11px] text-foreground leading-relaxed">{ai.stateAnalysis}</p>
+        <span className="text-[11px] font-semibold text-foreground">Analisi IA</span>
+        <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${urgency.bg} ${urgency.color} border ${urgency.border}`}>
+          {ai.urgencyLevel !== 'none' && <AlertTriangle className="h-3 w-3" />}
+          {urgency.label}
+        </span>
       </div>
 
-      {/* Short term forecast */}
-      <div className="rounded-md bg-muted/40 p-2.5">
-        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Previsione prossime ore</p>
-        <p className="text-[11px] text-foreground leading-relaxed">{ai.shortTermForecast}</p>
-      </div>
-
-      {/* Recommendation rationale */}
-      {ai.recommendationRationale && (
-        <div className="rounded-md bg-muted/40 p-2.5">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Motivazione raccomandazioni</p>
-          <p className="text-[11px] text-foreground leading-relaxed">{ai.recommendationRationale}</p>
+      {/* ---- Consiglio principale — in evidenza ---- */}
+      {ai.primaryAdvice && (
+        <div className="rounded-lg bg-primary/8 border-2 border-primary/20 p-3">
+          <div className="flex items-start gap-2">
+            <Lightbulb className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-bold text-primary uppercase tracking-wide mb-0.5">Cosa fare ora</p>
+              <p className="text-xs text-foreground leading-relaxed font-medium">{ai.primaryAdvice}</p>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Urgency badge */}
-      {ai.urgencyLevel && ai.urgencyLevel !== 'none' && (
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            ai.urgencyLevel === 'critical' ? 'bg-red-500/15 text-red-500 border border-red-500/30' :
-            ai.urgencyLevel === 'high' ? 'bg-orange-500/15 text-orange-500 border border-orange-500/30' :
-            ai.urgencyLevel === 'medium' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30' :
-            'bg-blue-500/15 text-blue-500 border border-blue-500/30'
-          }`}>
-            <AlertTriangle className="h-3 w-3" />
-            Urgenza: {ai.urgencyLevel}
-          </span>
+      {/* ---- Griglia informazioni strutturate ---- */}
+      <div className="grid grid-cols-1 gap-2">
+        {/* Stato attuale */}
+        <div className="flex items-start gap-2.5 rounded-lg bg-muted/40 p-2.5">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+            <Activity className="h-3.5 w-3.5 text-blue-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-0.5">Stato</p>
+            <p className="text-[11px] text-foreground leading-relaxed">{ai.stateAnalysis}</p>
+          </div>
+        </div>
+
+        {/* Previsione */}
+        <div className="flex items-start gap-2.5 rounded-lg bg-muted/40 p-2.5">
+          <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+            <TrendingUp className="h-3.5 w-3.5 text-violet-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wide mb-0.5">Previsione</p>
+            <p className="text-[11px] text-foreground leading-relaxed">{ai.shortTermForecast}</p>
+          </div>
+        </div>
+
+        {/* Motivazione */}
+        {ai.recommendationRationale && (
+          <div className="flex items-start gap-2.5 rounded-lg bg-muted/40 p-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+              <Brain className="h-3.5 w-3.5 text-amber-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide mb-0.5">Perche</p>
+              <p className="text-[11px] text-foreground leading-relaxed">{ai.recommendationRationale}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---- Promemoria programmati ---- */}
+      {ai.autoResponses && ai.autoResponses.length > 0 && (
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-2.5 space-y-1.5">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            Promemoria
+          </p>
+          {ai.autoResponses.map((auto, i) => (
+            <div key={i} className="flex items-center gap-2 py-0.5">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                auto.type === 'alert' ? 'bg-red-500' : 'bg-blue-500'
+              }`} />
+              <span className="text-[10px] text-muted-foreground font-medium">{auto.trigger}</span>
+              <span className="text-[10px] text-foreground">{auto.title}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -558,68 +608,71 @@ function AIAnalysisPanel({ orientation, onRetry }: { orientation: OrientationRes
 
 function AdvicePanel({ orientation }: { orientation: OrientationResult | null }) {
   const recs = orientation?.recommendations ?? [];
-  const ai = orientation?.aiInsight;
+
+  const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+    urgent: { label: 'Urgente', color: '#ef4444', icon: '!' },
+    recommended: { label: 'Consigliato', color: '#22c55e', icon: '#' },
+    suggestion: { label: 'Suggerimento', color: '#64748b', icon: '-' },
+  };
 
   return (
-    <div className="space-y-2.5">
-      <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
         <Lightbulb className="h-3.5 w-3.5 text-green-500" />
-        Consigli personalizzati
-      </p>
+        <span className="text-[11px] font-semibold text-foreground">Consigli personalizzati</span>
+        {recs.length > 0 && (
+          <span className="ml-auto text-[10px] text-muted-foreground">{recs.length} suggeriment{recs.length === 1 ? 'o' : 'i'}</span>
+        )}
+      </div>
 
-      {/* AI primary advice - highlighted */}
-      {ai?.primaryAdvice && (
-        <div className="rounded-md bg-green-500/10 border border-green-500/20 p-2.5">
-          <div className="flex items-start gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wide mb-0.5">Consiglio IA principale</p>
-              <p className="text-[11px] text-foreground leading-relaxed">{ai.primaryAdvice}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Activity recommendations */}
+      {/* Activity recommendations — structured cards */}
       {recs.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Attivita suggerite</p>
+        <div className="space-y-2">
           {recs.slice(0, 3).map((rec, i) => {
-            const priorityColor =
-              rec.priority === 'urgent' ? '#ef4444' :
-              rec.priority === 'recommended' ? '#22c55e' : '#64748b';
+            const priority = PRIORITY_CONFIG[rec.priority] ?? PRIORITY_CONFIG.suggestion;
             return (
-              <div key={i} className="flex items-start gap-2 rounded-md bg-muted/40 p-2.5">
-                <div
-                  className="h-6 w-6 rounded-md flex items-center justify-center shrink-0 text-[10px] font-bold"
-                  style={{
-                    backgroundColor: `${priorityColor}15`,
-                    color: priorityColor,
-                  }}
-                >
-                  {rec.matchScore}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-semibold">{rec.activity.name}</span>
-                    <span
-                      className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                      style={{
-                        color: priorityColor,
-                        backgroundColor: `${priorityColor}15`,
-                      }}
+              <div key={i} className="rounded-lg border border-border/60 bg-muted/30 overflow-hidden">
+                {/* Colored top bar */}
+                <div className="h-1" style={{ backgroundColor: priority.color }} />
+                <div className="p-2.5 space-y-1.5">
+                  {/* Title row */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold"
+                      style={{ backgroundColor: `${priority.color}12`, color: priority.color }}
                     >
-                      {rec.priority === 'urgent' ? 'Urgente' : rec.priority === 'recommended' ? 'Consigliato' : 'Suggerito'}
-                    </span>
+                      {rec.matchScore}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground leading-tight">{rec.activity.name}</p>
+                      <span
+                        className="text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ color: priority.color }}
+                      >
+                        {priority.label}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{rec.reason}</p>
-                  <div className="flex gap-2 mt-1">
-                    <span className="text-[9px] text-muted-foreground">
-                      {rec.durationMin}min
+
+                  {/* Reason */}
+                  <p className="text-[11px] text-muted-foreground leading-snug">{rec.reason}</p>
+
+                  {/* Meta row */}
+                  <div className="flex items-center gap-3 pt-0.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+                      <Clock className="h-3 w-3" />
+                      {rec.durationMin} min
                     </span>
-                    <span className="text-[9px] text-muted-foreground">
-                      Intensita: {Math.round(rec.intensity * 100)}%
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      Intensita {Math.round(rec.intensity * 100)}%
                     </span>
+                    <div className="flex-1 bg-muted rounded-full h-1 ml-1">
+                      <div
+                        className="h-1 rounded-full transition-all"
+                        style={{ width: `${rec.intensity * 100}%`, backgroundColor: priority.color }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -627,28 +680,11 @@ function AdvicePanel({ orientation }: { orientation: OrientationResult | null })
           })}
         </div>
       ) : (
-        <p className="text-[11px] text-muted-foreground">
-          Registra l'energia di oggi per ricevere consigli personalizzati.
-        </p>
-      )}
-
-      {/* AI auto-responses / scheduled tips */}
-      {ai?.autoResponses && ai.autoResponses.length > 0 && (
-        <>
-          <hr className="border-border/50" />
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Promemoria programmati</p>
-          <div className="space-y-1">
-            {ai.autoResponses.map((auto, i) => (
-              <div key={i} className="flex items-start gap-2 rounded-md bg-muted/30 p-2">
-                <Clock className="h-3 w-3 shrink-0 mt-0.5 text-muted-foreground" />
-                <div>
-                  <p className="text-[10px] font-medium text-foreground">{auto.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{auto.trigger} — {auto.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="rounded-lg bg-muted/40 p-3 text-center">
+          <p className="text-[11px] text-muted-foreground">
+            Registra l'energia di oggi per ricevere consigli personalizzati.
+          </p>
+        </div>
       )}
     </div>
   );

@@ -3,220 +3,16 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
-import { playSuggestionSound, playAlertSound, CATEGORY_LABELS, COGNITIVE_LOAD_LABELS } from '../lib/energy-orientation';
-import type { Recommendation, AIOrientationInsight } from '../lib/energy-orientation';
+import { playSuggestionSound, playAlertSound } from '../lib/energy-orientation';
 import ScientificEnergyCard from '../components/ScientificEnergyCard';
 import {
   RefreshCw,
-  Check,
   X,
-  TrendingUp,
-  Minus,
   Volume2,
   BellRing,
   Zap,
   Info,
-  Sparkles,
-  Clock,
-  MessageCircle,
 } from 'lucide-react';
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function RecommendationCard({
-  rec,
-  onFollow,
-  onDismiss,
-}: {
-  rec: Recommendation;
-  onFollow: () => void;
-  onDismiss: () => void;
-}) {
-  const priorityStyles = {
-    urgent: 'border-red-500/30 bg-red-500/5',
-    recommended: 'border-primary/30 bg-primary/5',
-    suggestion: 'border-border',
-  };
-  const priorityLabels = {
-    urgent: 'Urgente',
-    recommended: 'Consigliato',
-    suggestion: 'Suggerimento',
-  };
-  const priorityColors = {
-    urgent: 'text-red-600 dark:text-red-400 bg-red-500/10',
-    recommended: 'text-primary bg-primary/10',
-    suggestion: 'text-muted-foreground bg-muted',
-  };
-
-  const isActioned = rec.followedAt || rec.dismissedAt;
-
-  return (
-    <div className={`rounded-xl border p-3 transition-all ${priorityStyles[rec.priority]} ${
-      isActioned ? 'opacity-60' : ''
-    }`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${priorityColors[rec.priority]}`}>
-              {priorityLabels[rec.priority]}
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              {CATEGORY_LABELS[rec.activity.category]}
-            </span>
-          </div>
-          <p className="text-sm font-medium">{rec.activity.name}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{rec.reason}</p>
-          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-            <span>{rec.durationMin} min</span>
-            <span className="flex items-center gap-0.5">
-              <Minus className="h-3 w-3" />
-              {COGNITIVE_LOAD_LABELS[rec.activity.cognitiveLoad]}
-            </span>
-            <span>Match {rec.matchScore}%</span>
-          </div>
-          {/* Barra intensita */}
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Intensita</span>
-            <div className="flex-1 bg-muted rounded-full h-1.5">
-              <div
-                className="h-1.5 rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${rec.intensity * 100}%` }}
-              />
-            </div>
-            <span className="text-[10px] font-mono">{Math.round(rec.intensity * 100)}%</span>
-          </div>
-        </div>
-      </div>
-      {!isActioned && (
-        <div className="flex gap-2 mt-3">
-          <Button
-            size="sm"
-            variant="default"
-            className="flex-1 h-8 text-xs"
-            onClick={onFollow}
-          >
-            <Check className="h-3.5 w-3.5 mr-1" />
-            Lo faccio
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs px-3"
-            onClick={onDismiss}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      )}
-      {rec.followedAt && (
-        <p className="text-xs text-green-600 dark:text-green-400 mt-2 flex items-center gap-1">
-          <Check className="h-3 w-3" /> Completato
-        </p>
-      )}
-      {rec.dismissedAt && (
-        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-          <X className="h-3 w-3" /> Saltato
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AI Insight Card
-// ---------------------------------------------------------------------------
-
-function AIInsightCard({ insight }: { insight: AIOrientationInsight }) {
-  const urgencyColors: Record<string, string> = {
-    none: 'border-border',
-    low: 'border-blue-500/20 bg-blue-500/5',
-    medium: 'border-amber-500/20 bg-amber-500/5',
-    high: 'border-orange-500/20 bg-orange-500/5',
-    critical: 'border-red-500/20 bg-red-500/5',
-  };
-  const urgencyLabels: Record<string, string> = {
-    none: 'Stabile',
-    low: 'Sotto controllo',
-    medium: 'Da monitorare',
-    high: 'Richiede azione',
-    critical: 'Intervento urgente',
-  };
-
-  return (
-    <Card className={urgencyColors[insight.urgencyLevel] || ''}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          Analisi IA
-          <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-auto">
-            {urgencyLabels[insight.urgencyLevel] || 'Attivo'}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* State Analysis */}
-        <div>
-          <p className="text-sm leading-relaxed">{insight.stateAnalysis}</p>
-        </div>
-
-        {/* Primary Advice */}
-        <div className="rounded-lg bg-primary/5 border border-primary/10 p-2.5">
-          <p className="text-xs font-semibold text-primary mb-1">Consiglio principale</p>
-          <p className="text-sm">{insight.primaryAdvice}</p>
-        </div>
-
-        {/* Recommendation Rationale */}
-        {insight.recommendationRationale && (
-          <div className="flex items-start gap-2">
-            <MessageCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-            <p className="text-xs text-muted-foreground">{insight.recommendationRationale}</p>
-          </div>
-        )}
-
-        {/* Short-term Forecast */}
-        {insight.shortTermForecast && (
-          <div className="flex items-start gap-2">
-            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Previsione</p>
-              <p className="text-xs text-muted-foreground">{insight.shortTermForecast}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Next notification timing */}
-        {insight.nextNotificationTiming && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t border-border">
-            <Clock className="h-3.5 w-3.5" />
-            <span>Prossima notifica: {insight.nextNotificationTiming}</span>
-          </div>
-        )}
-
-        {/* Auto-responses scheduled */}
-        {insight.autoResponses.length > 0 && (
-          <div className="pt-1 border-t border-border">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              Notifiche programmate
-            </p>
-            <div className="space-y-1">
-              {insight.autoResponses.map((auto, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    auto.type === 'alert' ? 'bg-red-500' : 'bg-blue-500'
-                  }`} />
-                  <span className="text-muted-foreground">{auto.trigger}:</span>
-                  <span className="truncate">{auto.title}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -226,12 +22,9 @@ export default function Orientation() {
   const { user } = useAuthState();
   const {
     result,
-    recommendations,
     loading,
     error,
     refresh,
-    markFollowed,
-    markDismissed,
   } = useEnergyOrientation(user?.id);
 
   const [testingSound, setTestingSound] = useState<string | null>(null);
@@ -299,13 +92,8 @@ export default function Orientation() {
         </div>
       )}
 
-      {/* Energy Score Card */}
+      {/* Energy Score Card — contiene Fattori, Analisi IA e Consigli nella toolbar */}
       {user?.id && <ScientificEnergyCard userId={user.id} />}
-
-      {/* AI Insight */}
-      {result?.aiInsight && (
-        <AIInsightCard insight={result.aiInsight} />
-      )}
 
       {/* Notifications from orientation */}
       {result && result.notifications.length > 0 && (
@@ -329,23 +117,6 @@ export default function Orientation() {
                 <p className="text-xs text-muted-foreground mt-0.5">{notif.body}</p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Recommendations */}
-      {recommendations.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Raccomandazioni
-          </h2>
-          {recommendations.map(rec => (
-            <RecommendationCard
-              key={rec.id}
-              rec={rec}
-              onFollow={() => markFollowed(rec)}
-              onDismiss={() => markDismissed(rec)}
-            />
           ))}
         </div>
       )}
