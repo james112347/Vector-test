@@ -826,10 +826,35 @@ function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
   // === Compute Score (0-25) ===
   let score = 25;
 
-  // Work hours burden (cognitive vs physical from work type)
-  const isPhysicalWork = profile?.workType?.match(/fisic|manual|operai|muratore|cantiere|magazzin/i);
-  if (workHours > 10) score -= isPhysicalWork ? 7 : 6;
-  else if (workHours > 8) score -= isPhysicalWork ? 4 : 3;
+  // Work effort type: structured field > regex fallback on workType text
+  const effortType = profile?.workEffortType
+    ?? (profile?.workType?.match(/fisic|manual|operai|muratore|cantiere|magazzin/i) ? 'physical' as const : undefined);
+
+  // Work hours burden — differentiated by effort type:
+  //   physical: corpo sotto stress, piu impatto fisico, recupero muscolare lento
+  //   mental: sovraccarico cognitivo, attenzione cala, rischio decision fatigue
+  //   creative: simile a mental + drain emotivo (perfezionismo, frustrazione)
+  //   social: alto drain emotivo (empatia, conflitti), moderato mentale
+  //   mixed: impatto bilanciato fisico + mentale
+  if (workHours > 10) {
+    switch (effortType) {
+      case 'physical': score -= 7; break;  // massimo impatto fisico
+      case 'mental':   score -= 6; break;  // alto impatto cognitivo
+      case 'creative': score -= 6; break;  // mental + emotional
+      case 'social':   score -= 5; break;  // emotional drain elevato
+      case 'mixed':    score -= 6; break;  // bilanciato
+      default:         score -= 6; break;
+    }
+  } else if (workHours > 8) {
+    switch (effortType) {
+      case 'physical': score -= 4; break;
+      case 'mental':   score -= 3; break;
+      case 'creative': score -= 3; break;
+      case 'social':   score -= 3; break;
+      case 'mixed':    score -= 3; break;
+      default:         score -= 3; break;
+    }
+  }
 
   // Stress (today's level + cumulative trend)
   const todayStress = data.todayCheckins.filter(c => c.type === 'stress');
@@ -841,12 +866,13 @@ function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
   // Cumulative stress trend penalty
   if (stressTrend > 0.3) score -= 2;
 
-  // Mood/emotional drain
+  // Mood/emotional drain — amplificato per lavoro sociale/creativo
   const todayMood = data.todayCheckins.filter(c => c.type === 'mood');
   if (todayMood.length > 0) {
     const moodVal = todayMood[todayMood.length - 1].value;
-    if (moodVal <= 2) score -= 3;
-    else if (moodVal <= 3) score -= 1;
+    const emotionalRole = effortType === 'social' || effortType === 'creative';
+    if (moodVal <= 2) score -= emotionalRole ? 4 : 3;  // drain emotivo piu impattante
+    else if (moodVal <= 3) score -= emotionalRole ? 2 : 1;
   }
   if (moodTrendDown) score -= 1;
 
@@ -879,11 +905,12 @@ function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
     score -= 1;
   }
 
-  // Focus drain (low focus = cognitive overload indicator)
+  // Focus drain — amplificato per lavoro mentale/creativo (cognitive overload indicator)
   const todayFocus = data.todayCheckins.filter(c => c.type === 'focus');
   if (todayFocus.length > 0) {
     const focusVal = todayFocus[todayFocus.length - 1].value;
-    if (focusVal <= 2) score -= 2; // cognitive exhaustion
+    const cognitiveRole = effortType === 'mental' || effortType === 'creative';
+    if (focusVal <= 2) score -= cognitiveRole ? 3 : 2; // cognitive exhaustion
   }
 
   // Current activity context: studio/lavoro prolungato = carico cognitivo
@@ -892,7 +919,11 @@ function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
     // Conteggio sessioni consecutive studio/lavoro senza pausa
     const recent = curActAlloCheckins.slice(-4);
     const consecutiveWork = recent.filter(c => c.value === 1 || c.value === 2).length;
-    if (consecutiveWork >= 3) score -= 2;  // lavoro/studio senza pause
+    if (consecutiveWork >= 3) {
+      // Lavoro continuativo pesa di piu se mentale/creativo (decision fatigue)
+      const cognitiveRole = effortType === 'mental' || effortType === 'creative';
+      score -= cognitiveRole ? 3 : 2;
+    }
   }
 
   // Recovery factors
@@ -905,9 +936,18 @@ function analyzeAllostaticLoad(data: AllData): AllostaticAnalysis {
 
   score = clamp(Math.round(score), 0, 25);
 
+  // Effort type labels for explanations
+  const EFFORT_LABELS: Record<string, string> = {
+    physical: 'fisico', mental: 'mentale', mixed: 'misto',
+    creative: 'creativo', social: 'relazionale',
+  };
+
   // Explanation
   const parts: string[] = [];
-  if (workHours > 8) parts.push(`${workHours}h di lavoro`);
+  if (workHours > 8) {
+    const effortLabel = effortType ? ` (sforzo ${EFFORT_LABELS[effortType] ?? effortType})` : '';
+    parts.push(`${workHours}h di lavoro${effortLabel}`);
+  }
   if (burnoutRisk !== 'low') parts.push(`rischio burnout: ${burnoutRisk}`);
   if (hrvIndicator != null && hrvIndicator < 0.4) parts.push('HRV bassa (stress autonomico)');
   if (hrvIndicator != null && hrvIndicator > 0.7) parts.push('HRV buona (buon recupero)');
@@ -1152,6 +1192,12 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
     screen_minutes: lifestyleResult.screenMinutes,
     // Allostatic
     work_hours: allostaticResult.workHours,
+    // work_effort_type: 1=mental, 2=physical, 3=mixed, 4=creative, 5=social, 0=unknown
+    work_effort_type: data.profile?.workEffortType === 'mental' ? 1
+      : data.profile?.workEffortType === 'physical' ? 2
+      : data.profile?.workEffortType === 'mixed' ? 3
+      : data.profile?.workEffortType === 'creative' ? 4
+      : data.profile?.workEffortType === 'social' ? 5 : 0,
     consecutive_low_days: allostaticResult.consecutiveLowDays,
     stress_trend: Math.round(allostaticResult.stressTrend * 100) / 100,
     hrv_indicator: allostaticResult.hrvIndicator ?? -1,
