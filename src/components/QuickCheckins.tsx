@@ -8,7 +8,7 @@ import {
   BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2,
   Users, Car, Clock, Square, Pause,
 } from 'lucide-react';
-import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins, deleteCheckin } from '../lib/checkins';
+import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins, deleteCheckin, updateCheckin } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 
 // ---------------------------------------------------------------------------
@@ -606,6 +606,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [editingType, setEditingType] = useState<CheckinType | null>(null);
   const [savingActivity, setSavingActivity] = useState(false);
+  const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -730,6 +731,15 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     if (entry.id == null) return;
     await deleteCheckin(entry.id, userId);
     await loadCheckins();
+  };
+
+  /** Edit a specific activity entry — change its activity type */
+  const handleEditActivityValue = async (entryId: number, newValue: number) => {
+    setSavingActivity(true);
+    await updateCheckin(entryId, newValue, userId);
+    await loadCheckins();
+    setEditingActivityId(null);
+    setTimeout(() => setSavingActivity(false), 300);
   };
 
   // Save a rated answer and advance
@@ -1059,7 +1069,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
 
           {/* Activity timeline — today's logged activities with edit */}
           {todayActivities.filter(e => e.value > 0).length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                 La tua giornata
               </p>
@@ -1097,11 +1107,23 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                       <Icon className="h-3 w-3" />
                       <span>{entry.time}</span>
                       {dur && <span className={isLast ? 'text-white/70' : 'opacity-60'}>({dur})</span>}
+                      {/* Edit button on hover/tap */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingActivityId(entry.id ?? null); }}
+                        className={`
+                          ml-0.5 w-4 h-4 rounded-full flex items-center justify-center
+                          opacity-0 group-hover:opacity-100 transition-opacity
+                          ${isLast ? 'bg-white/20 hover:bg-white/40' : 'bg-foreground/10 hover:bg-foreground/20'}
+                        `}
+                        aria-label="Modifica"
+                      >
+                        <Pencil className="h-2 w-2" />
+                      </button>
                       {/* Delete button on hover/tap */}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDeleteActivity(entry); }}
                         className={`
-                          ml-0.5 w-4 h-4 rounded-full flex items-center justify-center
+                          w-4 h-4 rounded-full flex items-center justify-center
                           opacity-0 group-hover:opacity-100 transition-opacity
                           ${isLast ? 'bg-white/20 hover:bg-white/40' : 'bg-foreground/10 hover:bg-foreground/20'}
                         `}
@@ -1113,6 +1135,69 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                   );
                 })}
               </div>
+
+              {/* Inline edit selector — shown when editing an activity entry */}
+              {editingActivityId != null && (() => {
+                const editEntry = todayActivities.find(e => e.id === editingActivityId);
+                if (!editEntry) return null;
+                const currentAct = getActivityOption(editEntry.value);
+                return (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                        Modifica attivita delle {editEntry.time}
+                      </span>
+                      {currentAct && (
+                        <span className={`ml-auto text-[10px] font-medium ${currentAct.color}`}>
+                          {currentAct.label}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+                      {ACTIVITY_OPTIONS.map(act => {
+                        const ActIcon = act.icon;
+                        const isCurrent = editEntry.value === act.value;
+                        return (
+                          <button
+                            key={act.value}
+                            onClick={() => {
+                              if (!isCurrent && editEntry.id != null) {
+                                handleEditActivityValue(editEntry.id, act.value);
+                              }
+                            }}
+                            disabled={savingActivity || isCurrent}
+                            className={`
+                              flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl shrink-0
+                              transition-all duration-150 active:scale-95
+                              border
+                              ${isCurrent
+                                ? `${act.bgSelected} text-white shadow-sm border-transparent`
+                                : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50'
+                              }
+                            `}
+                          >
+                            <ActIcon className={`h-4 w-4 ${isCurrent ? 'text-white' : act.color}`} />
+                            <span className={`
+                              text-[9px] font-semibold leading-tight whitespace-nowrap
+                              ${isCurrent ? 'text-white/90' : 'text-muted-foreground'}
+                            `}>
+                              {act.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setEditingActivityId(null)}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                      Chiudi
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

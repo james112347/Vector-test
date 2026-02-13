@@ -75,6 +75,14 @@ const EXERCISE_TIME_OPTIONS = [
   { value: 'none' as const, label: 'Non mi alleno' },
 ];
 
+const EFFORT_TYPE_OPTIONS = [
+  { value: 'mental' as const, label: 'Mentale', desc: 'Lavoro d\'ufficio, studio, programmazione' },
+  { value: 'physical' as const, label: 'Fisico', desc: 'Lavoro manuale, cantiere, sport' },
+  { value: 'mixed' as const, label: 'Misto', desc: 'Combinazione di fisico e mentale' },
+  { value: 'creative' as const, label: 'Creativo', desc: 'Design, arte, scrittura, musica' },
+  { value: 'social' as const, label: 'Relazionale', desc: 'Vendita, insegnamento, assistenza' },
+];
+
 const GOAL_OPTIONS = [
   { value: 'more_energy', label: 'Piu energia', desc: 'Meno stanchezza durante il giorno' },
   { value: 'better_sleep', label: 'Dormire meglio', desc: 'Qualita e durata del sonno' },
@@ -177,6 +185,7 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
   // Step 2: Occupazione
   const [occupation, setOccupation] = useState<UserProfile['occupation']>(initialProfile?.occupation ?? 'worker');
   const [workType, setWorkType] = useState(initialProfile?.workType ?? '');
+  const [workEffortType, setWorkEffortType] = useState<NonNullable<UserProfile['workEffortType']>>(initialProfile?.workEffortType ?? 'mental');
   const [dailyWorkHours, setDailyWorkHours] = useState(initialProfile?.dailyWorkHours?.toString() ?? '8');
   const [workSchedule, setWorkSchedule] = useState<UserProfile['workSchedule']>(initialProfile?.workSchedule ?? 'regular');
 
@@ -220,6 +229,7 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
         weightKg: parseFloat(weightKg),
         occupation,
         workType: workType.trim() || undefined,
+        workEffortType: (occupation !== 'unemployed' && occupation !== 'retired') ? workEffortType : undefined,
         dailyWorkHours: parseFloat(dailyWorkHours) || 0,
         workSchedule,
         activityLevel,
@@ -356,6 +366,23 @@ export default function Onboarding({ onComplete, initialProfile, editMode }: Onb
                       onChange={(e) => setWorkType(e.target.value)}
                       className="h-11 text-base"
                     />
+                  </div>
+                )}
+
+                {(occupation !== 'unemployed' && occupation !== 'retired') && (
+                  <div className="space-y-2">
+                    <Label>Tipo di sforzo prevalente</Label>
+                    <div className="space-y-1.5">
+                      {EFFORT_TYPE_OPTIONS.map((opt) => (
+                        <OptionButton
+                          key={opt.value}
+                          selected={workEffortType === opt.value}
+                          onClick={() => setWorkEffortType(opt.value)}
+                          label={opt.label}
+                          desc={opt.desc}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
 

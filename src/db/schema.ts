@@ -54,6 +54,7 @@ export interface UserProfile {
   // Occupazione
   occupation: 'student' | 'worker' | 'student_worker' | 'unemployed' | 'retired';
   workType?: string; // tipo di lavoro (testo libero)
+  workEffortType?: 'mental' | 'physical' | 'mixed' | 'creative' | 'social'; // tipo di sforzo prevalente
   dailyWorkHours: number; // ore medie al giorno
   weeklyWorkHours?: number; // @deprecated - usa dailyWorkHours
   workSchedule: 'regular' | 'shifts' | 'flexible' | 'irregular';

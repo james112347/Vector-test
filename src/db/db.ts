@@ -187,6 +187,8 @@ export class VectorDB extends Dexie {
       goals: '++id, userId, status, category, [userId+status], [userId+category]',
       goalLogs: '++id, userId, goalId, date, [userId+date], [goalId+date]',
     });
+    // v13: aggiunto workEffortType al profilo utente (campo opzionale, nessun cambio indici)
+    this.version(13).stores({});
   }
 }
 

@@ -66,6 +66,24 @@ export async function getRecentCheckins(userId: number, days = 7): Promise<Quick
 }
 
 /**
+ * Update the value of an existing check-in entry.
+ * Used for correcting activity type (e.g. wrong activity selected).
+ */
+export async function updateCheckin(
+  id: number,
+  newValue: number,
+  userId?: number,
+): Promise<void> {
+  await db.quickCheckins.update(id, { value: newValue });
+
+  if (userId) {
+    db.users.get(userId).then(u => {
+      if (u?.email) pushDataToSupabase(u.email, userId);
+    });
+  }
+}
+
+/**
  * Delete a check-in entry.
  */
 export async function deleteCheckin(id: number, userId?: number): Promise<void> {
