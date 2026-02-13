@@ -154,6 +154,9 @@ export interface DailyCheckinSummary {
   screenBreak: number;             // conta pause schermo
   /** Orari specifici caffeina (HH:MM) per analisi pattern */
   caffeineTimes: string[];
+  /** Attivita loggate durante la giornata — array di {time, activity}
+   *  activity: 1=Studio, 2=Lavoro, 3=Pausa, 4=Sport, 5=Tempo libero, 6=Sociale, 7=Spostamenti */
+  activities: Array<{ time: string; activity: number }>;
 }
 
 export async function getCheckinSummaries(userId: number, days = 7): Promise<DailyCheckinSummary[]> {
@@ -180,6 +183,11 @@ export async function getCheckinSummaries(userId: number, days = 7): Promise<Dai
       .filter(i => i.type === 'caffeine')
       .map(i => i.time);
 
+    // Attivita loggate con orario
+    const activities = items
+      .filter(i => i.type === 'current_activity')
+      .map(i => ({ time: i.time, activity: i.value }));
+
     summaries.push({
       date,
       sleepQuality: last('sleep_quality'),
@@ -194,6 +202,7 @@ export async function getCheckinSummaries(userId: number, days = 7): Promise<Dai
       supplement: sum('supplement'),
       screenBreak: sum('screen_break'),
       caffeineTimes,
+      activities,
     });
   }
 

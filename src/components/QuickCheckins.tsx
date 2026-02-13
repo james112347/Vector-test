@@ -5,6 +5,8 @@ import {
   Check, ChevronRight, Activity, CloudSun,
   Sunset, CloudMoon, UtensilsCrossed, BedDouble,
   Pill, MonitorOff, Plus, Minus, Pencil,
+  BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2,
+  Users, Car, Clock,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
@@ -102,6 +104,92 @@ const ACTIVITY_RATINGS: RatingOption[] = [
   { value: 4, label: 'Buona',    color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-300 dark:border-emerald-700', textSelected: 'text-white' },
   { value: 5, label: 'Intensa',  color: 'text-green-600',   bg: 'bg-green-600',   border: 'border-green-300 dark:border-green-700',   textSelected: 'text-white' },
 ];
+
+// ---------------------------------------------------------------------------
+// Current Activity options — "Cosa stai facendo?"
+// Maps to CheckinType 'current_activity' values 1-7 (see schema.ts)
+// ---------------------------------------------------------------------------
+
+interface ActivityOption {
+  value: number;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+  color: string;
+  bg: string;
+  bgSelected: string;
+}
+
+const ACTIVITY_OPTIONS: ActivityOption[] = [
+  {
+    value: 1,
+    label: 'Studio',
+    description: 'Studio, lettura, concentrazione',
+    icon: BookOpen,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-500/10',
+    bgSelected: 'bg-blue-500',
+  },
+  {
+    value: 2,
+    label: 'Lavoro',
+    description: 'Lavoro, riunioni, produttivita',
+    icon: Briefcase,
+    color: 'text-slate-600 dark:text-slate-400',
+    bg: 'bg-slate-500/10',
+    bgSelected: 'bg-slate-500',
+  },
+  {
+    value: 3,
+    label: 'Pausa',
+    description: 'Pausa, riposo, relax breve',
+    icon: Sofa,
+    color: 'text-teal-600 dark:text-teal-400',
+    bg: 'bg-teal-500/10',
+    bgSelected: 'bg-teal-500',
+  },
+  {
+    value: 4,
+    label: 'Sport',
+    description: 'Allenamento, camminata, esercizio',
+    icon: Dumbbell,
+    color: 'text-orange-600 dark:text-orange-400',
+    bg: 'bg-orange-500/10',
+    bgSelected: 'bg-orange-500',
+  },
+  {
+    value: 5,
+    label: 'Tempo libero',
+    description: 'Hobby, TV, social, svago',
+    icon: Gamepad2,
+    color: 'text-purple-600 dark:text-purple-400',
+    bg: 'bg-purple-500/10',
+    bgSelected: 'bg-purple-500',
+  },
+  {
+    value: 6,
+    label: 'Sociale',
+    description: 'Famiglia, amici, socialita',
+    icon: Users,
+    color: 'text-pink-600 dark:text-pink-400',
+    bg: 'bg-pink-500/10',
+    bgSelected: 'bg-pink-500',
+  },
+  {
+    value: 7,
+    label: 'Spostamenti',
+    description: 'Tragitto, commissioni, viaggi',
+    icon: Car,
+    color: 'text-amber-600 dark:text-amber-400',
+    bg: 'bg-amber-500/10',
+    bgSelected: 'bg-amber-500',
+  },
+];
+
+/** Get activity option by value */
+function getActivityOption(value: number): ActivityOption | undefined {
+  return ACTIVITY_OPTIONS.find(a => a.value === value);
+}
 
 // ---------------------------------------------------------------------------
 // Phase configurations
@@ -335,12 +423,13 @@ function saveEnabledExtras(types: CheckinType[]) {
 // ---------------------------------------------------------------------------
 
 const ALL_TRACKED_TYPES: Array<{ type: CheckinType; label: string }> = [
+  { type: 'current_activity', label: 'Attivita' },
   { type: 'sleep_quality', label: 'Sonno' },
   { type: 'mood',          label: 'Umore' },
   { type: 'stress',        label: 'Stress' },
   { type: 'focus',         label: 'Focus' },
   { type: 'meal_time',     label: 'Pasto' },
-  { type: 'activity_done', label: 'Attivita' },
+  { type: 'activity_done', label: 'Movimento' },
   { type: 'water',         label: 'Acqua' },
   { type: 'caffeine',      label: 'Caffe' },
   { type: 'nap',           label: 'Pisolino' },
@@ -516,6 +605,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [enabledExtras, setEnabledExtras] = useState<CheckinType[]>(loadEnabledExtras);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [editingType, setEditingType] = useState<CheckinType | null>(null);
+  const [savingActivity, setSavingActivity] = useState(false);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -570,6 +660,31 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     return checkins
       .filter(c => c.type === type)
       .reduce((s, c) => s + c.value, 0);
+  };
+
+  // ---------------------------------------------------------------------------
+  // "Cosa stai facendo?" — activity tracking (multiple times per day)
+  // ---------------------------------------------------------------------------
+
+  /** Today's activity entries, sorted by time */
+  const todayActivities = useMemo(() => {
+    return checkins
+      .filter(c => c.type === 'current_activity')
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }, [checkins]);
+
+  /** Most recent activity value */
+  const lastActivity = todayActivities.length > 0
+    ? todayActivities[todayActivities.length - 1].value
+    : null;
+
+  /** Save a new current activity entry */
+  const handleActivitySelect = async (value: number) => {
+    if (savingActivity) return;
+    setSavingActivity(true);
+    await addCheckin(userId, 'current_activity', value);
+    await loadCheckins();
+    setTimeout(() => setSavingActivity(false), 300);
   };
 
   // Save a rated answer and advance
@@ -819,6 +934,90 @@ export default function QuickCheckins({ userId }: { userId: number }) {
             )}
           </div>
         )}
+
+        {/* ---- "Cosa stai facendo?" — Activity tracking ---- */}
+        <div className="border-t border-border px-4 py-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">
+              Cosa stai facendo?
+            </span>
+            {lastActivity != null && (
+              <span className="text-[10px] text-muted-foreground ml-auto">
+                Ora: {getActivityOption(lastActivity)?.label}
+              </span>
+            )}
+          </div>
+
+          {/* Activity selection grid */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {ACTIVITY_OPTIONS.map(act => {
+              const Icon = act.icon;
+              const isLast = lastActivity === act.value;
+              return (
+                <button
+                  key={act.value}
+                  onClick={() => handleActivitySelect(act.value)}
+                  disabled={savingActivity}
+                  className={`
+                    flex flex-col items-center gap-1 py-2 px-1 rounded-xl
+                    transition-all duration-150 active:scale-95 min-w-0
+                    border
+                    ${isLast
+                      ? `${act.bgSelected} text-white shadow-sm border-transparent`
+                      : `bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50 hover:border-border`
+                    }
+                  `}
+                >
+                  <div className={`
+                    w-8 h-8 rounded-full flex items-center justify-center
+                    ${isLast
+                      ? 'bg-white/25'
+                      : act.bg
+                    }
+                  `}>
+                    <Icon className={`h-4 w-4 ${isLast ? 'text-white' : act.color}`} />
+                  </div>
+                  <span className={`
+                    text-[9px] font-semibold leading-tight text-center
+                    ${isLast ? 'text-white/90' : 'text-muted-foreground'}
+                  `}>
+                    {act.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Activity timeline — today's logged activities */}
+          {todayActivities.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                La tua giornata
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {todayActivities.map((entry, i) => {
+                  const act = getActivityOption(entry.value);
+                  if (!act) return null;
+                  const Icon = act.icon;
+                  return (
+                    <div
+                      key={entry.id ?? i}
+                      className={`
+                        inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px]
+                        ${act.bg} ${act.color} font-medium
+                      `}
+                    >
+                      <Icon className="h-3 w-3" />
+                      <span>{entry.time}</span>
+                      <span className="opacity-70">{act.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ---- Quick counters with measurement units ---- */}
         <div className="border-t border-border">
