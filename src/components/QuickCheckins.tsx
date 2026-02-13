@@ -3,7 +3,8 @@ import { Card, CardContent } from './ui/card';
 import {
   Moon, Sun, Brain, Heart, Zap, Coffee, Droplets,
   Check, ChevronRight, Activity, CloudSun,
-  Sunset, CloudMoon, UtensilsCrossed,
+  Sunset, CloudMoon, UtensilsCrossed, BedDouble,
+  Pill, MonitorOff, Plus,
 } from 'lucide-react';
 import { addCheckin, getTodayCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
@@ -257,7 +258,8 @@ interface CounterConfig {
   unitSuffix: string;
 }
 
-const COUNTERS: CounterConfig[] = [
+/** Default counters always visible */
+const DEFAULT_COUNTERS: CounterConfig[] = [
   {
     type: 'caffeine',
     icon: Coffee,
@@ -281,6 +283,53 @@ const COUNTERS: CounterConfig[] = [
   },
 ];
 
+/** Extra counters the user can enable — all already functional in energy engine */
+const EXTRA_COUNTERS: CounterConfig[] = [
+  {
+    type: 'nap',
+    icon: BedDouble,
+    label: 'Pisolino',
+    unit: '20-30 min',
+    color: 'text-indigo-500',
+    activeColor: 'bg-indigo-100 dark:bg-indigo-900/30',
+    unitPerTap: 1,
+    unitSuffix: '',
+  },
+  {
+    type: 'supplement',
+    icon: Pill,
+    label: 'Integratore',
+    unit: '1 dose',
+    color: 'text-emerald-600 dark:text-emerald-500',
+    activeColor: 'bg-emerald-100 dark:bg-emerald-900/30',
+    unitPerTap: 1,
+    unitSuffix: '',
+  },
+  {
+    type: 'screen_break',
+    icon: MonitorOff,
+    label: 'Pausa schermo',
+    unit: '1 pausa',
+    color: 'text-violet-600 dark:text-violet-500',
+    activeColor: 'bg-violet-100 dark:bg-violet-900/30',
+    unitPerTap: 1,
+    unitSuffix: '',
+  },
+];
+
+const STORAGE_KEY = 'vector_extra_counters';
+
+function loadEnabledExtras(): CheckinType[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveEnabledExtras(types: CheckinType[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(types));
+}
+
 // ---------------------------------------------------------------------------
 // All trackable types for completion display
 // ---------------------------------------------------------------------------
@@ -294,6 +343,9 @@ const ALL_TRACKED_TYPES: Array<{ type: CheckinType; label: string }> = [
   { type: 'activity_done', label: 'Attivita' },
   { type: 'water',         label: 'Acqua' },
   { type: 'caffeine',      label: 'Caffe' },
+  { type: 'nap',           label: 'Pisolino' },
+  { type: 'supplement',    label: 'Integratore' },
+  { type: 'screen_break',  label: 'Pausa' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -386,6 +438,8 @@ function CounterButton({
     measurementText = formatWaterVolume(value);
   } else if (counter.type === 'caffeine' && hasValue) {
     measurementText = formatCaffeine(value);
+  } else if (hasValue && counter.unitSuffix) {
+    measurementText = `${value * counter.unitPerTap}${counter.unitSuffix}`;
   }
 
   return (
@@ -438,6 +492,8 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [selectedValue, setSelectedValue] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [allDone, setAllDone] = useState(false);
+  const [enabledExtras, setEnabledExtras] = useState<CheckinType[]>(loadEnabledExtras);
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -516,6 +572,21 @@ export default function QuickCheckins({ userId }: { userId: number }) {
         setAllDone(true);
       }
     }, 300);
+  };
+
+  // Build active counters list: defaults + user-enabled extras
+  const activeCounters = useMemo(() => {
+    const extras = EXTRA_COUNTERS.filter(c => enabledExtras.includes(c.type));
+    return [...DEFAULT_COUNTERS, ...extras];
+  }, [enabledExtras]);
+
+  // Toggle an extra counter on/off
+  const toggleExtra = (type: CheckinType) => {
+    setEnabledExtras(prev => {
+      const next = prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type];
+      saveEnabledExtras(next);
+      return next;
+    });
   };
 
   // Counter increment
@@ -622,18 +693,88 @@ export default function QuickCheckins({ userId }: { userId: number }) {
         )}
 
         {/* ---- Quick counters with measurement units ---- */}
-        <div className="flex items-start justify-around px-3 py-2.5 border-t border-border">
-          {COUNTERS.map(counter => {
-            const val = getCounterValue(counter.type);
-            return (
-              <CounterButton
-                key={counter.type}
-                counter={counter}
-                value={val}
-                onTap={() => handleCounter(counter.type)}
-              />
-            );
-          })}
+        <div className="border-t border-border">
+          <div className="flex items-start justify-around px-2 py-2.5 flex-wrap gap-y-1">
+            {activeCounters.map(counter => {
+              const val = getCounterValue(counter.type);
+              return (
+                <CounterButton
+                  key={counter.type}
+                  counter={counter}
+                  value={val}
+                  onTap={() => handleCounter(counter.type)}
+                />
+              );
+            })}
+
+            {/* Add / manage counters button */}
+            <button
+              onClick={() => setShowAddMenu(!showAddMenu)}
+              className={`
+                flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg
+                transition-all active:scale-95 min-w-0
+                ${showAddMenu ? 'bg-muted/60' : 'hover:bg-muted/50'}
+              `}
+            >
+              <div className="flex items-center gap-1.5">
+                <Plus className={`h-3.5 w-3.5 text-muted-foreground ${showAddMenu ? 'rotate-45' : ''} transition-transform`} />
+              </div>
+              <span className="text-[9px] text-muted-foreground font-medium leading-tight">
+                {showAddMenu ? 'Chiudi' : 'Altro'}
+              </span>
+            </button>
+          </div>
+
+          {/* Add/remove extra counters menu */}
+          {showAddMenu && (
+            <div className="px-3 pb-3 space-y-2">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider px-1">
+                Gestisci contatori
+              </p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {EXTRA_COUNTERS.map(counter => {
+                  const Icon = counter.icon;
+                  const isEnabled = enabledExtras.includes(counter.type);
+                  return (
+                    <button
+                      key={counter.type}
+                      onClick={() => toggleExtra(counter.type)}
+                      className={`
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all
+                        ${isEnabled
+                          ? 'border-primary/30 bg-primary/5'
+                          : 'border-border bg-muted/20 hover:bg-muted/40'
+                        }
+                      `}
+                    >
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0
+                        ${isEnabled ? counter.activeColor : 'bg-muted/50'}`}
+                      >
+                        <Icon className={`h-3.5 w-3.5 ${isEnabled ? counter.color : 'text-muted-foreground'}`} />
+                      </div>
+                      <div className="flex-1 text-left min-w-0">
+                        <p className={`text-xs font-medium ${isEnabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {counter.label}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{counter.unit}</p>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors
+                        ${isEnabled
+                          ? 'border-primary bg-primary'
+                          : 'border-muted-foreground/30'
+                        }`}
+                      >
+                        {isEnabled && <Check className="h-3 w-3 text-primary-foreground" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 px-1">
+                Questi contatori influenzano il tuo Energy Score
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ---- Completion tracker -- filled/empty circles with text ---- */}
