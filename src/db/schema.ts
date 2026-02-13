@@ -92,6 +92,7 @@ export type CheckinType = 'sleep_quality' | 'water' | 'caffeine' | 'meal_time' |
 
 /**
  * Mappa valori current_activity:
+ * 0 = Fine/idle (attivita terminata)
  * 1 = Studio/concentrazione
  * 2 = Lavoro
  * 3 = Pausa/riposo

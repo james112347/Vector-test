@@ -152,4 +152,13 @@
   .overflow-y-auto {
     -webkit-overflow-scrolling: touch;
   }
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }

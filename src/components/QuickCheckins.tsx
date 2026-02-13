@@ -4,11 +4,11 @@ import {
   Moon, Sun, Brain, Heart, Zap, Coffee, Droplets,
   Check, ChevronRight, Activity, CloudSun,
   Sunset, CloudMoon, UtensilsCrossed, BedDouble,
-  Pill, MonitorOff, Plus, Minus, Pencil,
+  Pill, MonitorOff, Plus, Minus, Pencil, X,
   BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2,
-  Users, Car, Clock,
+  Users, Car, Clock, Square, Play, Pause,
 } from 'lucide-react';
-import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins } from '../lib/checkins';
+import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins, deleteCheckin } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 
 // ---------------------------------------------------------------------------
@@ -534,7 +534,7 @@ function CounterButton({
   }
 
   return (
-    <div className="flex flex-col items-center gap-0.5 min-w-0">
+    <div className="flex flex-col items-center gap-0.5 min-w-0 shrink-0">
       {/* Icon + count row */}
       <div className="flex items-center gap-1.5">
         <Icon className={`h-3.5 w-3.5 ${counter.color}`} />
@@ -663,28 +663,73 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   };
 
   // ---------------------------------------------------------------------------
-  // "Cosa stai facendo?" — activity tracking (multiple times per day)
+  // "Cosa stai facendo?" — activity tracking with start/stop/pause
   // ---------------------------------------------------------------------------
 
-  /** Today's activity entries, sorted by time */
+  /** Today's activity entries, sorted by time (value 0 = "fine"/idle) */
   const todayActivities = useMemo(() => {
     return checkins
       .filter(c => c.type === 'current_activity')
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [checkins]);
 
-  /** Most recent activity value */
-  const lastActivity = todayActivities.length > 0
-    ? todayActivities[todayActivities.length - 1].value
+  /** Most recent activity entry */
+  const lastActivityEntry = todayActivities.length > 0
+    ? todayActivities[todayActivities.length - 1]
     : null;
 
-  /** Save a new current activity entry */
+  /** Currently active activity value (null = idle, 0 = explicitly stopped) */
+  const lastActivity = lastActivityEntry?.value ?? null;
+  const isActivityRunning = lastActivity != null && lastActivity > 0;
+
+  /** Elapsed time since last activity started */
+  const [elapsed, setElapsed] = useState('');
+  useEffect(() => {
+    if (!isActivityRunning || !lastActivityEntry) {
+      setElapsed('');
+      return;
+    }
+    const update = () => {
+      const [h, m] = lastActivityEntry.time.split(':').map(Number);
+      const started = new Date();
+      started.setHours(h, m, 0, 0);
+      const diff = Math.max(0, Math.floor((Date.now() - started.getTime()) / 60000));
+      if (diff < 60) {
+        setElapsed(`${diff}min`);
+      } else {
+        setElapsed(`${Math.floor(diff / 60)}h${diff % 60 > 0 ? `${diff % 60}m` : ''}`);
+      }
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [isActivityRunning, lastActivityEntry]);
+
+  /** Start a new activity or switch to a different one */
   const handleActivitySelect = async (value: number) => {
     if (savingActivity) return;
+    // If tapping the same running activity, do nothing (use stop button)
+    if (isActivityRunning && lastActivity === value) return;
     setSavingActivity(true);
     await addCheckin(userId, 'current_activity', value);
     await loadCheckins();
     setTimeout(() => setSavingActivity(false), 300);
+  };
+
+  /** Stop the current activity (log value 0 = idle) */
+  const handleActivityStop = async () => {
+    if (savingActivity || !isActivityRunning) return;
+    setSavingActivity(true);
+    await addCheckin(userId, 'current_activity', 0);
+    await loadCheckins();
+    setTimeout(() => setSavingActivity(false), 300);
+  };
+
+  /** Delete a specific activity entry from the timeline */
+  const handleDeleteActivity = async (entry: QuickCheckin) => {
+    if (entry.id == null) return;
+    await deleteCheckin(entry.id, userId);
+    await loadCheckins();
   };
 
   // Save a rated answer and advance
@@ -935,52 +980,49 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           </div>
         )}
 
-        {/* ---- "Cosa stai facendo?" — Activity tracking ---- */}
-        <div className="border-t border-border px-4 py-3 space-y-3">
+        {/* ---- "Cosa stai facendo?" — Activity tracking with start/stop ---- */}
+        <div className="border-t border-border px-4 py-3 space-y-2.5">
+          {/* Header */}
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">
               Cosa stai facendo?
             </span>
-            {lastActivity != null && (
-              <span className="text-[10px] text-muted-foreground ml-auto">
-                Ora: {getActivityOption(lastActivity)?.label}
-              </span>
-            )}
+            {isActivityRunning && lastActivity != null && (() => {
+              const act = getActivityOption(lastActivity);
+              return act ? (
+                <span className={`ml-auto inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${act.bg} ${act.color}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                  {act.label} {elapsed && `· ${elapsed}`}
+                </span>
+              ) : null;
+            })()}
           </div>
 
-          {/* Activity selection grid */}
-          <div className="grid grid-cols-4 gap-1.5">
+          {/* Horizontal scroll activity strip */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
             {ACTIVITY_OPTIONS.map(act => {
               const Icon = act.icon;
-              const isLast = lastActivity === act.value;
+              const isActive = isActivityRunning && lastActivity === act.value;
               return (
                 <button
                   key={act.value}
                   onClick={() => handleActivitySelect(act.value)}
                   disabled={savingActivity}
                   className={`
-                    flex flex-col items-center gap-1 py-2 px-1 rounded-xl
-                    transition-all duration-150 active:scale-95 min-w-0
+                    flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl shrink-0
+                    transition-all duration-150 active:scale-95
                     border
-                    ${isLast
+                    ${isActive
                       ? `${act.bgSelected} text-white shadow-sm border-transparent`
-                      : `bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50 hover:border-border`
+                      : `bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/50`
                     }
                   `}
                 >
-                  <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center
-                    ${isLast
-                      ? 'bg-white/25'
-                      : act.bg
-                    }
-                  `}>
-                    <Icon className={`h-4 w-4 ${isLast ? 'text-white' : act.color}`} />
-                  </div>
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-white' : act.color}`} />
                   <span className={`
-                    text-[9px] font-semibold leading-tight text-center
-                    ${isLast ? 'text-white/90' : 'text-muted-foreground'}
+                    text-[9px] font-semibold leading-tight whitespace-nowrap
+                    ${isActive ? 'text-white/90' : 'text-muted-foreground'}
                   `}>
                     {act.label}
                   </span>
@@ -989,28 +1031,84 @@ export default function QuickCheckins({ userId }: { userId: number }) {
             })}
           </div>
 
-          {/* Activity timeline — today's logged activities */}
-          {todayActivities.length > 0 && (
-            <div className="space-y-1.5">
+          {/* Active activity controls: stop button */}
+          {isActivityRunning && lastActivity != null && (() => {
+            const act = getActivityOption(lastActivity);
+            if (!act) return null;
+            return (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleActivityStop}
+                  disabled={savingActivity}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors active:scale-[0.98]"
+                >
+                  <Square className="h-3 w-3" />
+                  Fine {act.label}
+                </button>
+                <button
+                  onClick={() => handleActivitySelect(3)}
+                  disabled={savingActivity || lastActivity === 3}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/30 py-1.5 px-3 text-xs font-medium text-muted-foreground hover:bg-muted/60 transition-colors active:scale-[0.98]"
+                >
+                  <Pause className="h-3 w-3" />
+                  Pausa
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Activity timeline — today's logged activities with edit */}
+          {todayActivities.filter(e => e.value > 0).length > 0 && (
+            <div className="space-y-1">
               <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                 La tua giornata
               </p>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-none">
                 {todayActivities.map((entry, i) => {
                   const act = getActivityOption(entry.value);
                   if (!act) return null;
                   const Icon = act.icon;
+                  const isLast = i === todayActivities.length - 1 && entry.value > 0;
+                  // Show duration: from this entry to the next (or now)
+                  const nextEntry = todayActivities[i + 1];
+                  let dur = '';
+                  if (entry.value > 0) {
+                    const [sh, sm] = entry.time.split(':').map(Number);
+                    const startMin = sh * 60 + sm;
+                    let endMin: number;
+                    if (nextEntry) {
+                      const [nh, nm] = nextEntry.time.split(':').map(Number);
+                      endMin = nh * 60 + nm;
+                    } else {
+                      const now = new Date();
+                      endMin = now.getHours() * 60 + now.getMinutes();
+                    }
+                    const diff = Math.max(0, endMin - startMin);
+                    dur = diff < 60 ? `${diff}m` : `${Math.floor(diff / 60)}h${diff % 60 > 0 ? `${diff % 60}m` : ''}`;
+                  }
                   return (
                     <div
                       key={entry.id ?? i}
                       className={`
-                        inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px]
-                        ${act.bg} ${act.color} font-medium
+                        group relative inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] shrink-0
+                        ${isLast ? `${act.bgSelected} text-white` : `${act.bg} ${act.color}`} font-medium
                       `}
                     >
                       <Icon className="h-3 w-3" />
                       <span>{entry.time}</span>
-                      <span className="opacity-70">{act.label}</span>
+                      {dur && <span className={isLast ? 'text-white/70' : 'opacity-60'}>({dur})</span>}
+                      {/* Delete button on hover/tap */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteActivity(entry); }}
+                        className={`
+                          ml-0.5 w-4 h-4 rounded-full flex items-center justify-center
+                          opacity-0 group-hover:opacity-100 transition-opacity
+                          ${isLast ? 'bg-white/20 hover:bg-white/40' : 'bg-foreground/10 hover:bg-foreground/20'}
+                        `}
+                        aria-label="Elimina"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
                     </div>
                   );
                 })}
@@ -1019,9 +1117,9 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           )}
         </div>
 
-        {/* ---- Quick counters with measurement units ---- */}
+        {/* ---- Quick counters with measurement units — horizontal scroll ---- */}
         <div className="border-t border-border">
-          <div className="flex items-start justify-around px-2 py-2.5 flex-wrap gap-y-1">
+          <div className="flex items-start gap-3 px-3 py-2.5 overflow-x-auto scrollbar-none">
             {activeCounters.map(counter => {
               const val = getCounterValue(counter.type);
               return (
@@ -1039,7 +1137,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
             <button
               onClick={() => setShowAddMenu(!showAddMenu)}
               className={`
-                flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg
+                flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg shrink-0
                 transition-all active:scale-95 min-w-0
                 ${showAddMenu ? 'bg-muted/60' : 'hover:bg-muted/50'}
               `}
