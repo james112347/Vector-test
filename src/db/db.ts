@@ -14,7 +14,6 @@ import type {
   UserActivity,
   OrientationPreferences,
   ScreenTimeLog,
-  FoodLog,
   ScientificEnergyScore,
   Goal,
   GoalLog,
@@ -35,7 +34,6 @@ export class VectorDB extends Dexie {
   userActivities!: Table<UserActivity>;
   orientationPreferences!: Table<OrientationPreferences>;
   screenTimeLogs!: Table<ScreenTimeLog>;
-  foodLogs!: Table<FoodLog>;
   scientificEnergyScores!: Table<ScientificEnergyScore>;
   goals!: Table<Goal>;
   goalLogs!: Table<GoalLog>;

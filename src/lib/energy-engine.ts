@@ -32,7 +32,6 @@ import type {
   UserProfile,
   EnergyLog,
   QuickCheckin,
-  FoodLog,
   SahhaBiomarkerLog,
   SahhaScoreLog,
   ScreenTimeLog,
@@ -199,8 +198,6 @@ interface AllData {
   profile: UserProfile | null;
   todayCheckins: QuickCheckin[];
   recentCheckins: QuickCheckin[];         // 7 days
-  todayFoodLogs: FoodLog[];
-  recentFoodLogs: FoodLog[];              // 7 days
   recentEnergyLogs: EnergyLog[];          // 7 days
   todayEnergyLog: EnergyLog | null;
   screenTime: ScreenTimeLog | null;
@@ -216,8 +213,6 @@ async function gatherAllData(userId: number): Promise<AllData> {
     profile,
     todayCheckins,
     recentCheckins,
-    todayFoodLogs,
-    recentFoodLogs,
     recentEnergyLogs,
     todayEnergyLog,
     screenTime,
@@ -227,8 +222,6 @@ async function gatherAllData(userId: number): Promise<AllData> {
     db.userProfiles.where('userId').equals(userId).first().then(p => p ?? null),
     db.quickCheckins.where('[userId+date]').equals([userId, today]).toArray(),
     db.quickCheckins.where('userId').equals(userId).and(c => c.date >= weekAgo).toArray(),
-    db.foodLogs.where('[userId+date]').equals([userId, today]).toArray().catch(() => [] as FoodLog[]),
-    db.foodLogs.where('userId').equals(userId).and(f => f.date >= weekAgo).toArray().catch(() => [] as FoodLog[]),
     db.energyLogs.where('userId').equals(userId).and(l => l.date >= weekAgo).toArray(),
     db.energyLogs.where('[userId+date]').equals([userId, today]).first().then(l => l ?? null),
     db.screenTimeLogs.where('[userId+date]').equals([userId, today]).first().then(s => s ?? null).catch(() => null),
@@ -240,7 +233,7 @@ async function gatherAllData(userId: number): Promise<AllData> {
   recentEnergyLogs.sort((a, b) => a.date.localeCompare(b.date));
 
   return {
-    profile, todayCheckins, recentCheckins, todayFoodLogs, recentFoodLogs,
+    profile, todayCheckins, recentCheckins,
     recentEnergyLogs, todayEnergyLog, screenTime, sahhaBiomarkers, sahhaScores,
   };
 }
@@ -281,16 +274,6 @@ function detectRoutine(data: AllData, chronotype: Chronotype): DetectedRoutine {
   const profileMealDefaults: number[] = [];
   if (profile?.lunchTime) profileMealDefaults.push(timeToDecimal(profile.lunchTime));
   if (profile?.dinnerTime) profileMealDefaults.push(timeToDecimal(profile.dinnerTime));
-
-  // Actual food logs override profile defaults
-  for (const food of data.todayFoodLogs) {
-    const t = timeToDecimal(food.time);
-    mealTimes.push(t);
-    const total = food.totalCarbs + food.totalFat + food.totalProtein;
-    const carbRatio = total > 0 ? food.totalCarbs / total : 0.5;
-    const gi = clamp(carbRatio * 1.2, 0, 1);
-    mealGIs.push(gi);
-  }
 
   // Meal checkins
   const mealCheckins = data.todayCheckins.filter(c => c.type === 'meal_time');
@@ -589,8 +572,6 @@ interface LifestyleAnalysis {
   caffeineRemaining: number;     // mg remaining active
   mealQuality: number | null;
   mealsLogged: number;
-  totalCalories: number;
-  macroBalance: number;          // 0-1 (1 = well balanced)
   activityLevel: number | null;
   stressLevel: number | null;
   moodLevel: number | null;
@@ -624,48 +605,15 @@ function computeCaffeineRemaining(checkins: QuickCheckin[], currentHour: number)
   return totalRemainingMg;
 }
 
-function analyzeNutrition(foodLogs: FoodLog[], mealCheckins: QuickCheckin[]): {
-  totalCalories: number;
-  macroBalance: number;
+function analyzeNutrition(mealCheckins: QuickCheckin[]): {
   avgMealQuality: number | null;
 } {
-  // From food scanner
-  let totalCalories = 0;
-  let totalCarbs = 0;
-  let totalFat = 0;
-  let totalProtein = 0;
-
-  for (const f of foodLogs) {
-    totalCalories += f.totalCalories;
-    totalCarbs += f.totalCarbs;
-    totalFat += f.totalFat;
-    totalProtein += f.totalProtein;
-  }
-
-  // Macro balance: ideal ≈ 50% carbs, 25% fat, 25% protein (calories)
-  // Carb: 4 cal/g, Fat: 9 cal/g, Protein: 4 cal/g
-  const totalMacroG = totalCarbs + totalFat + totalProtein;
-  let macroBalance = 0.5; // default moderate
-
-  if (totalMacroG > 0) {
-    const carbPct = totalCarbs / totalMacroG;
-    const fatPct = totalFat / totalMacroG;
-    const proteinPct = totalProtein / totalMacroG;
-
-    // Score based on deviation from ideal (0.45, 0.25, 0.30)
-    const carbDev = Math.abs(carbPct - 0.45);
-    const fatDev = Math.abs(fatPct - 0.25);
-    const protDev = Math.abs(proteinPct - 0.30);
-    macroBalance = clamp(1 - (carbDev + fatDev + protDev), 0, 1);
-  }
-
-  // From checkins
   const mealValues = mealCheckins.map(c => c.value);
   const avgMealQuality = mealValues.length > 0
     ? mealValues.reduce((s, v) => s + v, 0) / mealValues.length
     : null;
 
-  return { totalCalories, macroBalance, avgMealQuality };
+  return { avgMealQuality };
 }
 
 function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis {
@@ -683,8 +631,8 @@ function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis
 
   // === Nutrition ===
   const mealCheckins = data.todayCheckins.filter(c => c.type === 'meal_time');
-  const { totalCalories, macroBalance, avgMealQuality } = analyzeNutrition(data.todayFoodLogs, mealCheckins);
-  const mealsLogged = data.todayFoodLogs.length + mealCheckins.length;
+  const { avgMealQuality } = analyzeNutrition(mealCheckins);
+  const mealsLogged = mealCheckins.length;
 
   // === Activity ===
   const actCheckins = data.todayCheckins.filter(c => c.type === 'activity_done');
@@ -712,14 +660,6 @@ function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis
   else if (waterRatio < 0.6) score -= 3;  // moderate
   else if (waterRatio < 0.8) score -= 1;  // mild
 
-  // Nutrition from food scanner data
-  if (data.todayFoodLogs.length > 0) {
-    // Macro balance quality
-    if (macroBalance < 0.3) score -= 3;    // very unbalanced
-    else if (macroBalance < 0.5) score -= 1;
-    // Very low calories (likely missed meals)
-    if (totalCalories > 0 && totalCalories < 800 && currentHour > 14) score -= 2;
-  }
   // Nutrition from checkin quality
   if (avgMealQuality != null) {
     if (avgMealQuality <= 2) score -= 3;
@@ -786,7 +726,6 @@ function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis
   const parts: string[] = [];
   if (waterRatio < 0.6) parts.push(`idratazione ${Math.round(waterRatio * 100)}% del target`);
   if (caffeineCount > 4) parts.push(`caffeina elevata (${caffeineCount} tazzine)`);
-  if (data.todayFoodLogs.length > 0 && macroBalance < 0.4) parts.push('macro sbilanciati');
   if (activityLevel != null && activityLevel >= 4) parts.push('buona attivita fisica');
   if (profile?.smokingFrequency === 'daily' || profile?.smokingFrequency === 'heavy') parts.push('impatto fumo');
   if (screenMinutes > 180) parts.push(`${Math.round(screenMinutes / 60)}h screen time`);
@@ -794,7 +733,7 @@ function analyzeLifestyle(data: AllData, currentHour: number): LifestyleAnalysis
 
   return {
     score, waterGlasses, targetWater, caffeineCount, caffeineRemaining,
-    mealQuality: avgMealQuality, mealsLogged, totalCalories, macroBalance,
+    mealQuality: avgMealQuality, mealsLogged,
     activityLevel, stressLevel, moodLevel, focusLevel, screenMinutes, explanation,
   };
 }
@@ -1180,8 +1119,6 @@ export async function computeScientificEnergy(userId: number): Promise<EnergyBre
     caffeine_remaining_mg: Math.round(lifestyleResult.caffeineRemaining),
     meal_quality: lifestyleResult.mealQuality ?? -1,
     meals_logged: lifestyleResult.mealsLogged,
-    total_calories: lifestyleResult.totalCalories,
-    macro_balance: Math.round(lifestyleResult.macroBalance * 100) / 100,
     activity_level: lifestyleResult.activityLevel ?? -1,
     stress_level: lifestyleResult.stressLevel ?? -1,
     mood_level: lifestyleResult.moodLevel ?? -1,

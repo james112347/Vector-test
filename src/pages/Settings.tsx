@@ -571,7 +571,6 @@ function HowItWorksSection() {
                 { label: 'Profilo e routine', desc: 'Eta, peso, cronotipo, orari sveglia/letto/pasti/lavoro' },
                 { label: 'Quick check-in', desc: 'Qualita sonno, umore, stress, focus, acqua, caffeina, pasti, attivita' },
                 { label: 'Energy log giornaliero', desc: 'Livelli fisico/mentale/emotivo (1-10), ore lavoro' },
-                { label: 'Food scanner', desc: 'Calorie, macronutrienti (proteine/carboidrati/grassi), indice glicemico' },
                 { label: 'Sahha Health', desc: 'Biomarker da wearable: frequenza cardiaca, HRV, passi, durata sonno' },
                 { label: 'Screen time', desc: 'Minuti di utilizzo app, sessioni, pause schermo' },
               ].map(item => (
@@ -615,7 +614,7 @@ function HowItWorksSection() {
                 color="#22c55e"
                 title="Stile di vita (0-25)"
                 model="Ganio 2011, Nehlig 2018, POMS"
-                desc="Idratazione (ml/kg peso corporeo), bilancio macronutrienti, farmacocinetica caffeina (emivita 5h, effetto su A2A adenosina), attivita fisica (boost acuto POMS), impatto fumo (vasocostrizione) e alcol, affaticamento da schermo."
+                desc="Idratazione (ml/kg peso corporeo), qualita pasti, farmacocinetica caffeina (emivita 5h, effetto su A2A adenosina), attivita fisica (boost acuto POMS), impatto fumo (vasocostrizione) e alcol, affaticamento da schermo."
               />
               <ComponentExplainer
                 color="#f59e0b"

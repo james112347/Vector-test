@@ -173,27 +173,6 @@ export interface ScreenTimeLog {
 }
 
 // ---------------------------------------------------------------------------
-// Food Scanner (analisi calorie da foto con IA)
-// ---------------------------------------------------------------------------
-
-export interface FoodLog {
-  id?: number;
-  userId: number;
-  date: string;           // YYYY-MM-DD
-  time: string;           // HH:MM
-  imageData?: string;     // base64 thumbnail (compresso)
-  foodItems: string;      // JSON array of detected foods
-  totalCalories: number;
-  totalProtein: number;   // grammi
-  totalCarbs: number;     // grammi
-  totalFat: number;       // grammi
-  mealType: 'colazione' | 'pranzo' | 'cena' | 'spuntino';
-  aiConfidence: 'alta' | 'media' | 'bassa';
-  notes?: string;
-  createdAt: Date;
-}
-
-// ---------------------------------------------------------------------------
 // Sistema di Orientamento Energetico
 // ---------------------------------------------------------------------------
 

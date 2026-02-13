@@ -17,7 +17,6 @@
 
 import { db } from '../db/db';
 import type {
-  FoodLog,
   ScientificEnergyScore,
   UserProfile,
   Goal,
@@ -242,12 +241,6 @@ interface DailySnapshot {
   stress: number | null;
   mood: number | null;
   screenBreaks: number;
-  // Food
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  mealsLogged: number;
   // Goal
   goalsAchieved: number;
   goalsTotal: number;
@@ -261,7 +254,6 @@ async function gatherSnapshots(userId: number, days: number): Promise<DailySnaps
   const [
     checkins,
     energyLogs,
-    foodLogs,
     scientificScores,
     goalLogs,
   ] = await Promise.all([
@@ -269,8 +261,6 @@ async function gatherSnapshots(userId: number, days: number): Promise<DailySnaps
       .and(c => c.date >= startDate && c.date <= today).toArray(),
     db.energyLogs.where('userId').equals(userId)
       .and(l => l.date >= startDate && l.date <= today).toArray(),
-    db.foodLogs.where('userId').equals(userId)
-      .and(f => f.date >= startDate && f.date <= today).toArray().catch(() => [] as FoodLog[]),
     db.scientificEnergyScores.where('userId').equals(userId)
       .and(s => s.date >= startDate && s.date <= today).toArray().catch(() => [] as ScientificEnergyScore[]),
     db.goalLogs.where('userId').equals(userId)
@@ -280,7 +270,6 @@ async function gatherSnapshots(userId: number, days: number): Promise<DailySnaps
   // Group by date
   const checkinsByDate = groupBy(checkins, c => c.date);
   const energyByDate = groupBy(energyLogs, l => l.date);
-  const foodByDate = groupBy(foodLogs, f => f.date);
   const scoresByDate = groupBy(scientificScores, s => s.date);
   const goalLogsByDate = groupBy(goalLogs, l => l.date);
 
@@ -295,7 +284,6 @@ async function gatherSnapshots(userId: number, days: number): Promise<DailySnaps
 
     const dayCheckins = checkinsByDate.get(dateStr) ?? [];
     const dayEnergy = energyByDate.get(dateStr) ?? [];
-    const dayFood = foodByDate.get(dateStr) ?? [];
     const dayScores = scoresByDate.get(dateStr) ?? [];
     const dayGoalLogs = goalLogsByDate.get(dateStr) ?? [];
 
@@ -320,12 +308,6 @@ async function gatherSnapshots(userId: number, days: number): Promise<DailySnaps
     // Energy log
     const elog = dayEnergy.length > 0 ? dayEnergy[0] : null;
 
-    // Food totals
-    const totalCalories = dayFood.reduce((s, f) => s + f.totalCalories, 0);
-    const totalProtein = dayFood.reduce((s, f) => s + f.totalProtein, 0);
-    const totalCarbs = dayFood.reduce((s, f) => s + f.totalCarbs, 0);
-    const totalFat = dayFood.reduce((s, f) => s + f.totalFat, 0);
-
     snapshots.push({
       date: dateStr,
       dayOfWeek: dow,
@@ -347,11 +329,6 @@ async function gatherSnapshots(userId: number, days: number): Promise<DailySnaps
       stress: lastCheckin('stress'),
       mood: lastCheckin('mood'),
       screenBreaks: sumCheckin('screen_break'),
-      calories: totalCalories,
-      protein: totalProtein,
-      carbs: totalCarbs,
-      fat: totalFat,
-      mealsLogged: dayFood.length,
       goalsAchieved: dayGoalLogs.filter(l => l.achieved).length,
       goalsTotal: dayGoalLogs.length,
     });
