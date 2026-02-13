@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { useAuthState } from '../contexts/AuthContext';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
 import { playSuggestionSound, playAlertSound, CATEGORY_LABELS, COGNITIVE_LOAD_LABELS } from '../lib/energy-orientation';
-import type { Recommendation, EnergyFactor, AIOrientationInsight } from '../lib/energy-orientation';
+import type { Recommendation, AIOrientationInsight } from '../lib/energy-orientation';
 import ScientificEnergyCard from '../components/ScientificEnergyCard';
 import {
   RefreshCw,
@@ -24,25 +24,6 @@ import {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function FactorsList({ factors }: { factors: EnergyFactor[] }) {
-  if (factors.length === 0) return null;
-  return (
-    <div className="space-y-1.5 mt-3">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-        Fattori
-      </p>
-      {factors.map((f, i) => (
-        <div key={i} className="flex items-start gap-2">
-          <span className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
-            f.impact > 0.2 ? 'bg-green-500' : f.impact < -0.2 ? 'bg-red-500' : 'bg-yellow-500'
-          }`} />
-          <p className="text-xs text-muted-foreground">{f.description}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function RecommendationCard({
   rec,
@@ -245,7 +226,6 @@ export default function Orientation() {
   const { user } = useAuthState();
   const {
     result,
-    energyState,
     recommendations,
     loading,
     error,
