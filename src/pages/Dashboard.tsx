@@ -9,7 +9,6 @@ import { getUnreadFeedbackCount } from '../lib/feedback';
 import { getAllUsers } from '../lib/auth';
 import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
-import ScientificEnergyCard from '../components/ScientificEnergyCard';
 import { getActiveGoals } from '../lib/goals';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
 import { CATEGORY_LABELS } from '../lib/energy-orientation';
@@ -225,10 +224,7 @@ export default function Dashboard() {
       {/* 3. Quick Check-ins — data collection (in alto per priorita) */}
       {user?.id && <QuickCheckins userId={user.id} />}
 
-      {/* 4. Scientific Energy Card — energy score */}
-      {user?.id && <ScientificEnergyCard userId={user.id} />}
-
-      {/* 5. Cosa fare adesso — top recommendation from orientation system */}
+      {/* 4. Cosa fare adesso — top recommendation from orientation system */}
       {topRec && (
         <button
           onClick={() => navigate('/orientation')}
@@ -244,7 +240,7 @@ export default function Dashboard() {
             <span>{topRec.durationMin} min</span>
             <span>{CATEGORY_LABELS[topRec.activity.category]}</span>
             <span>Intensita {Math.round(topRec.intensity * 100)}%</span>
-            <span className="ml-auto text-primary font-medium">Vedi guida</span>
+            <span className="ml-auto text-primary font-medium">Vedi Energy</span>
           </div>
         </button>
       )}

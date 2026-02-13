@@ -593,9 +593,6 @@ export default function ScientificEnergyCard({ userId }: Props) {
           </p>
         )}
 
-        {/* ---- 3b. Fattori: quick-read lifestyle factors ---- */}
-        <FactorsSection factors={breakdown.factors} />
-
         {/* ---- 4. Bottleneck + actionable advice (merged) ---- */}
         {hasBottleneck ? (
           <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">

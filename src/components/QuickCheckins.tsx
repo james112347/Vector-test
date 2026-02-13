@@ -4,9 +4,9 @@ import {
   Moon, Sun, Brain, Heart, Zap, Coffee, Droplets,
   Check, ChevronRight, Activity, CloudSun,
   Sunset, CloudMoon, UtensilsCrossed, BedDouble,
-  Pill, MonitorOff, Plus,
+  Pill, MonitorOff, Plus, Minus, Pencil,
 } from 'lucide-react';
-import { addCheckin, getTodayCheckins } from '../lib/checkins';
+import { addCheckin, getTodayCheckins, deleteLastCheckinOfType, deletePhaseCheckins } from '../lib/checkins';
 import type { CheckinType, QuickCheckin } from '../db/schema';
 
 // ---------------------------------------------------------------------------
@@ -424,10 +424,12 @@ function CounterButton({
   counter,
   value,
   onTap,
+  onDecrement,
 }: {
   counter: CounterConfig;
   value: number;
   onTap: () => void;
+  onDecrement: () => void;
 }) {
   const Icon = counter.icon;
   const hasValue = value > 0;
@@ -443,14 +445,7 @@ function CounterButton({
   }
 
   return (
-    <button
-      onClick={onTap}
-      className={`
-        flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg
-        transition-all active:scale-95 min-w-0
-        ${hasValue ? counter.activeColor : 'hover:bg-muted/50'}
-      `}
-    >
+    <div className="flex flex-col items-center gap-0.5 min-w-0">
       {/* Icon + count row */}
       <div className="flex items-center gap-1.5">
         <Icon className={`h-3.5 w-3.5 ${counter.color}`} />
@@ -478,7 +473,33 @@ function CounterButton({
           {counter.unit}
         </span>
       )}
-    </button>
+
+      {/* +/- buttons */}
+      <div className="flex items-center gap-1 mt-0.5">
+        {hasValue && (
+          <button
+            onClick={onDecrement}
+            className="w-6 h-6 rounded-full border border-border bg-muted/50 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors active:scale-90"
+            aria-label={`Rimuovi 1 ${counter.label}`}
+          >
+            <Minus className="h-3 w-3 text-muted-foreground" />
+          </button>
+        )}
+        <button
+          onClick={onTap}
+          className={`
+            w-6 h-6 rounded-full border flex items-center justify-center transition-colors active:scale-90
+            ${hasValue
+              ? `${counter.activeColor} border-transparent`
+              : 'border-border bg-muted/50 hover:bg-muted'
+            }
+          `}
+          aria-label={`Aggiungi 1 ${counter.label}`}
+        >
+          <Plus className={`h-3 w-3 ${hasValue ? counter.color : 'text-muted-foreground'}`} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -494,6 +515,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [allDone, setAllDone] = useState(false);
   const [enabledExtras, setEnabledExtras] = useState<CheckinType[]>(loadEnabledExtras);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [editingType, setEditingType] = useState<CheckinType | null>(null);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
@@ -600,6 +622,46 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     setAllDone(false);
     setCurrentIdx(0);
     setSelectedValue(null);
+    setEditingType(null);
+  };
+
+  // Phase start hour for filtering phase-specific checkins
+  const phaseStartHour = phase === 'morning' ? 5 : phase === 'midday' ? 11 : phase === 'afternoon' ? 14 : 18;
+
+  // Answered questions in the current phase (for showing corrections)
+  const answeredPhaseQuestions = useMemo(() => {
+    return config.questions
+      .map(q => {
+        const matching = checkins.filter(c => {
+          if (c.type !== q.type) return false;
+          const [h] = c.time.split(':').map(Number);
+          return h >= phaseStartHour;
+        });
+        if (matching.length === 0) return null;
+        const last = matching[matching.length - 1];
+        return { question: q, value: last.value };
+      })
+      .filter(Boolean) as { question: CheckinQuestion; value: number }[];
+  }, [config.questions, checkins, phaseStartHour]);
+
+  // Counter decrement: remove last entry of that type today
+  const handleDecrement = async (type: CheckinType) => {
+    await deleteLastCheckinOfType(userId, type);
+    await loadCheckins();
+  };
+
+  // Edit a rated answer: delete old, save new
+  const handleEditRate = async (type: CheckinType, newValue: number) => {
+    setSaving(true);
+    setSelectedValue(newValue);
+    await deletePhaseCheckins(userId, type, phaseStartHour);
+    await addCheckin(userId, type, newValue);
+    await loadCheckins();
+    setTimeout(() => {
+      setSaving(false);
+      setSelectedValue(null);
+      setEditingType(null);
+    }, 300);
   };
 
   // Completion counts for the tracker
@@ -667,9 +729,48 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           </div>
         )}
 
+        {/* ---- Editing a specific rated answer ---- */}
+        {editingType && (() => {
+          const q = config.questions.find(q => q.type === editingType);
+          if (!q) return null;
+          const editRatings = q.ratings ?? DEFAULT_RATINGS;
+          const currentVal = answeredPhaseQuestions.find(a => a.question.type === editingType)?.value ?? null;
+          const QIcon = q.icon;
+          return (
+            <div className="px-4 pt-4 pb-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <QIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                <p className="text-sm font-medium text-foreground">
+                  {q.question}
+                </p>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium ml-auto">
+                  Correzione
+                </span>
+              </div>
+              <div className="flex gap-1.5">
+                {editRatings.map((opt) => (
+                  <RatingButton
+                    key={opt.value}
+                    option={opt}
+                    selected={selectedValue === opt.value || (selectedValue === null && currentVal === opt.value)}
+                    onSelect={() => handleEditRate(editingType, opt.value)}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => { setEditingType(null); setSelectedValue(null); }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronRight className="h-3 w-3 rotate-180" />
+                Annulla
+              </button>
+            </div>
+          );
+        })()}
+
         {/* ---- Completion state ---- */}
-        {allDone && (
-          <div className="px-4 pt-4 pb-3">
+        {allDone && !editingType && (
+          <div className="px-4 pt-4 pb-3 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center">
                 <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
@@ -689,6 +790,33 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                 Aggiorna
               </button>
             </div>
+
+            {/* Answered questions with correction buttons */}
+            {answeredPhaseQuestions.length > 0 && (
+              <div className="space-y-1">
+                {answeredPhaseQuestions.map(({ question, value }) => {
+                  const scale = question.ratings ?? DEFAULT_RATINGS;
+                  const option = scale.find(r => r.value === value);
+                  const QIcon = question.icon;
+                  return (
+                    <div key={question.type} className="flex items-center gap-2 py-1">
+                      <QIcon className={`h-3.5 w-3.5 shrink-0 ${option?.color ?? 'text-muted-foreground'}`} />
+                      <span className="text-xs text-muted-foreground">{question.label}:</span>
+                      <span className={`text-xs font-medium ${option?.color ?? ''}`}>
+                        {option?.label ?? String(value)} ({value}/5)
+                      </span>
+                      <button
+                        onClick={() => setEditingType(question.type)}
+                        className="ml-auto flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary font-medium transition-colors"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                        Correggi
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -703,6 +831,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                   counter={counter}
                   value={val}
                   onTap={() => handleCounter(counter.type)}
+                  onDecrement={() => handleDecrement(counter.type)}
                 />
               );
             })}

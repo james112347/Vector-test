@@ -1,10 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Heart, Compass, Target, Settings } from 'lucide-react';
+import { LayoutDashboard, Heart, Zap, Target, Settings } from 'lucide-react';
 import { usePendingUsers } from '../../lib/usePendingUsers';
 
 const tabs = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
-  { path: '/orientation', label: 'Guida', icon: Compass },
+  { path: '/orientation', label: 'Energy', icon: Zap },
   { path: '/goals', label: 'Obiettivi', icon: Target },
   { path: '/health', label: 'Salute', icon: Heart },
   { path: '/settings', label: 'Altro', icon: Settings },

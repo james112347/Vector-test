@@ -79,6 +79,63 @@ export async function deleteCheckin(id: number, userId?: number): Promise<void> 
 }
 
 /**
+ * Delete the most recent check-in of a given type for today.
+ * Useful for correcting counters (water, caffeine, etc.).
+ * Returns true if an entry was deleted.
+ */
+export async function deleteLastCheckinOfType(
+  userId: number,
+  type: CheckinType,
+): Promise<boolean> {
+  const today = todayString();
+  const items = await db.quickCheckins
+    .where('[userId+date]')
+    .equals([userId, today])
+    .filter(c => c.type === type)
+    .sortBy('time');
+
+  if (items.length === 0) return false;
+
+  const last = items[items.length - 1];
+  if (last.id != null) {
+    await deleteCheckin(last.id, userId);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Delete all check-ins of a given type logged during a specific time-phase today.
+ * Used for correcting rated answers (mood, stress, etc.).
+ */
+export async function deletePhaseCheckins(
+  userId: number,
+  type: CheckinType,
+  phaseStartHour: number,
+): Promise<void> {
+  const today = todayString();
+  const items = await db.quickCheckins
+    .where('[userId+date]')
+    .equals([userId, today])
+    .filter(c => {
+      if (c.type !== type) return false;
+      const [h] = c.time.split(':').map(Number);
+      return h >= phaseStartHour;
+    })
+    .toArray();
+
+  for (const item of items) {
+    if (item.id != null) {
+      await db.quickCheckins.delete(item.id);
+    }
+  }
+
+  db.users.get(userId).then(u => {
+    if (u?.email) pushDataToSupabase(u.email, userId);
+  });
+}
+
+/**
  * Daily summary for AI consumption — structured data the algorithm uses
  * to correlate lifestyle factors with energy levels.
  */
