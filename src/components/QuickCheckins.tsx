@@ -471,6 +471,15 @@ function formatCaffeine(cups: number): string {
   return `~${mg}mg`;
 }
 
+/** Get meal label based on time of day */
+function getMealLabel(time: string): string {
+  const h = parseInt(time.split(':')[0]);
+  if (h < 11) return 'Colazione';
+  if (h < 14) return 'Pranzo';
+  if (h < 18) return 'Spuntino';
+  return 'Cena';
+}
+
 // ---------------------------------------------------------------------------
 // RatingButton sub-component -- clean numbered circles, no emoji icons
 // ---------------------------------------------------------------------------
@@ -862,6 +871,100 @@ export default function QuickCheckins({ userId }: { userId: number }) {
     return new Set(checkins.map(c => c.type));
   }, [checkins]);
 
+  // Full day summary for the scrollable completion window
+  const todaySummary = useMemo(() => {
+    const counterTypes: CheckinType[] = ['water', 'caffeine', 'nap', 'supplement', 'screen_break'];
+    const items: Array<{
+      key: string;
+      icon: typeof Moon;
+      label: string;
+      displayValue: string;
+      color: string;
+      time?: string;
+    }> = [];
+
+    const typeMeta: Record<string, { icon: typeof Moon; label: string; ratings?: RatingOption[] }> = {
+      sleep_quality: { icon: Moon, label: 'Sonno' },
+      mood: { icon: Heart, label: 'Umore' },
+      stress: { icon: Zap, label: 'Stress', ratings: INVERSE_RATINGS },
+      focus: { icon: Brain, label: 'Focus' },
+      activity_done: { icon: Activity, label: 'Movimento', ratings: ACTIVITY_RATINGS },
+    };
+
+    // Meal entries — each shown separately with meal name
+    const mealCheckins = checkins.filter(c => c.type === 'meal_time');
+    for (const entry of mealCheckins) {
+      const opt = MEAL_RATINGS.find(r => r.value === entry.value);
+      items.push({
+        key: `meal_${entry.id ?? entry.time}`,
+        icon: UtensilsCrossed,
+        label: getMealLabel(entry.time),
+        displayValue: opt ? `${opt.label} (${entry.value}/5)` : `${entry.value}/5`,
+        color: opt?.color ?? 'text-muted-foreground',
+        time: entry.time,
+      });
+    }
+
+    // Other rated types — latest per type
+    for (const [type, meta] of Object.entries(typeMeta)) {
+      const entries = checkins.filter(c => c.type === type);
+      if (entries.length === 0) continue;
+      const latest = entries[entries.length - 1];
+      const scale = meta.ratings ?? DEFAULT_RATINGS;
+      const opt = scale.find(r => r.value === latest.value);
+      items.push({
+        key: type,
+        icon: meta.icon,
+        label: meta.label,
+        displayValue: opt ? `${opt.label} (${latest.value}/5)` : `${latest.value}/5`,
+        color: opt?.color ?? 'text-muted-foreground',
+        time: latest.time,
+      });
+    }
+
+    // Current activity
+    const activityEntries = checkins.filter(c => c.type === 'current_activity');
+    if (activityEntries.length > 0) {
+      const latest = activityEntries[activityEntries.length - 1];
+      const act = getActivityOption(latest.value);
+      if (act) {
+        items.push({
+          key: 'current_activity',
+          icon: Clock,
+          label: 'Attivita',
+          displayValue: latest.value > 0 ? act.label : 'Inattivo',
+          color: latest.value > 0 ? act.color : 'text-muted-foreground',
+          time: latest.time,
+        });
+      }
+    }
+
+    // Counters
+    const counterMeta: Record<string, { icon: typeof Moon; label: string; format: (v: number) => string }> = {
+      water: { icon: Droplets, label: 'Acqua', format: v => `${v} bicch. (${formatWaterVolume(v)})` },
+      caffeine: { icon: Coffee, label: 'Caffeina', format: v => `${v} caffe (${formatCaffeine(v)})` },
+      nap: { icon: BedDouble, label: 'Pisolino', format: v => `${v}` },
+      supplement: { icon: Pill, label: 'Integratore', format: v => `${v} dosi` },
+      screen_break: { icon: MonitorOff, label: 'Pausa schermo', format: v => `${v} pause` },
+    };
+
+    for (const cType of counterTypes) {
+      const total = checkins.filter(c => c.type === cType).reduce((s, c) => s + c.value, 0);
+      if (total <= 0) continue;
+      const meta = counterMeta[cType];
+      if (!meta) continue;
+      items.push({
+        key: cType,
+        icon: meta.icon,
+        label: meta.label,
+        displayValue: meta.format(total),
+        color: 'text-foreground',
+      });
+    }
+
+    return items;
+  }, [checkins]);
+
   const PhaseIcon = config.icon;
   const ratings = currentQuestion?.ratings ?? DEFAULT_RATINGS;
 
@@ -870,16 +973,16 @@ export default function QuickCheckins({ userId }: { userId: number }) {
       <CardContent className="p-0">
 
         {/* ---- Phase greeting + question area ---- */}
-        {!allDone && currentQuestion && (
+        {!allDone && !editingType && currentQuestion && (
           <div className="px-4 pt-4 pb-3 space-y-3">
-            {/* Greeting */}
+            {/* Greeting + total progress */}
             <div className="flex items-center gap-2">
               <PhaseIcon className={`h-4 w-4 ${config.iconColor}`} />
               <span className="text-sm font-semibold text-foreground">
                 {config.greeting}
               </span>
               <span className="text-xs text-muted-foreground ml-auto tabular-nums">
-                {currentIdx + 1}/{activeQuestions.length}
+                {answeredPhaseQuestions.length + currentIdx + 1}/{answeredPhaseQuestions.length + activeQuestions.length}
               </span>
             </div>
 
@@ -918,6 +1021,31 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                 <ChevronRight className="h-3 w-3" />
                 Salta
               </button>
+            )}
+
+            {/* Previously answered — tap to correct */}
+            {answeredPhaseQuestions.length > 0 && (
+              <div className="space-y-1 pt-1 border-t border-border/50">
+                {answeredPhaseQuestions.map(({ question, value }) => {
+                  const scale = question.ratings ?? DEFAULT_RATINGS;
+                  const option = scale.find(r => r.value === value);
+                  const QIcon = question.icon;
+                  return (
+                    <button
+                      key={question.type}
+                      onClick={() => setEditingType(question.type)}
+                      className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/40 transition-colors"
+                    >
+                      <QIcon className={`h-3.5 w-3.5 shrink-0 ${option?.color ?? 'text-muted-foreground'}`} />
+                      <span className="text-xs text-muted-foreground">{question.label}</span>
+                      <span className={`text-xs font-medium ${option?.color ?? ''}`}>
+                        {option?.label ?? String(value)}
+                      </span>
+                      <Pencil className="h-2.5 w-2.5 text-muted-foreground/50 ml-auto" />
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -961,9 +1089,10 @@ export default function QuickCheckins({ userId }: { userId: number }) {
           );
         })()}
 
-        {/* ---- Completion state ---- */}
+        {/* ---- Completion state — scrollable parameters window ---- */}
         {allDone && !editingType && (
           <div className="px-4 pt-4 pb-3 space-y-3">
+            {/* Header */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center">
                 <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
@@ -973,7 +1102,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
                   Check-in completato
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {allLoggedTypes.size} parametri raccolti oggi
+                  {todaySummary.length} parametri raccolti oggi
                 </p>
               </div>
               <button
@@ -984,30 +1113,40 @@ export default function QuickCheckins({ userId }: { userId: number }) {
               </button>
             </div>
 
-            {/* Answered questions with correction buttons */}
-            {answeredPhaseQuestions.length > 0 && (
-              <div className="space-y-1">
-                {answeredPhaseQuestions.map(({ question, value }) => {
-                  const scale = question.ratings ?? DEFAULT_RATINGS;
-                  const option = scale.find(r => r.value === value);
-                  const QIcon = question.icon;
-                  return (
-                    <div key={question.type} className="flex items-center gap-2 py-1">
-                      <QIcon className={`h-3.5 w-3.5 shrink-0 ${option?.color ?? 'text-muted-foreground'}`} />
-                      <span className="text-xs text-muted-foreground">{question.label}:</span>
-                      <span className={`text-xs font-medium ${option?.color ?? ''}`}>
-                        {option?.label ?? String(value)} ({value}/5)
-                      </span>
-                      <button
-                        onClick={() => setEditingType(question.type)}
-                        className="ml-auto flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary font-medium transition-colors"
-                      >
-                        <Pencil className="h-2.5 w-2.5" />
-                        Correggi
-                      </button>
-                    </div>
-                  );
-                })}
+            {/* Scrollable parameters window */}
+            {todaySummary.length > 0 && (
+              <div className="rounded-lg border border-border bg-muted/10 max-h-56 overflow-y-auto">
+                <div className="divide-y divide-border/50">
+                  {todaySummary.map((item) => {
+                    const Icon = item.icon;
+                    // Check if this item can be corrected (current phase rated answer)
+                    const phaseAnswer = answeredPhaseQuestions.find(a => a.question.type === item.key);
+                    return (
+                      <div key={item.key} className="flex items-center gap-2.5 px-3 py-2">
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${item.color}`} />
+                        <span className="text-xs text-muted-foreground min-w-0 shrink-0">
+                          {item.label}
+                        </span>
+                        <span className={`text-xs font-medium ${item.color} truncate`}>
+                          {item.displayValue}
+                        </span>
+                        {item.time && (
+                          <span className="text-[10px] text-muted-foreground/60 tabular-nums ml-auto shrink-0">
+                            {item.time}
+                          </span>
+                        )}
+                        {phaseAnswer && (
+                          <button
+                            onClick={() => setEditingType(phaseAnswer.question.type)}
+                            className="shrink-0 ml-auto flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary font-medium transition-colors"
+                          >
+                            <Pencil className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
