@@ -281,6 +281,9 @@ export default function Settings() {
       {/* Install Help Modal */}
       {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}
 
+      {/* Come funziona il sistema */}
+      <HowItWorksSection />
+
       {/* Sahha QR Code Section */}
       <SahhaQRSection isAdmin={!!currentUser?.isAdmin} />
 
@@ -512,6 +515,231 @@ export default function Settings() {
           <p className="text-muted-foreground text-sm">Caricamento utenti...</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function HowItWorksSection() {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <CardTitle className="text-lg">Come funziona Vector</CardTitle>
+        </div>
+        <CardDescription>Il sistema di calcolo energetico, i dati raccolti e l'intelligenza artificiale</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+
+        {/* 1. Data Input */}
+        <div className="rounded-lg border border-border p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-blue-600 dark:text-blue-400">1</span>
+            </div>
+            <p className="text-sm font-semibold">Dati in ingresso</p>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Vector raccoglie dati da piu fonti per costruire un quadro completo della tua energia:
+          </p>
+          <div className="grid grid-cols-1 gap-1.5">
+            {[
+              { label: 'Profilo e routine', desc: 'Eta, peso, cronotipo, orari sveglia/letto/pasti/lavoro' },
+              { label: 'Quick check-in', desc: 'Qualita sonno, umore, stress, focus, acqua, caffeina, pasti, attivita' },
+              { label: 'Energy log giornaliero', desc: 'Livelli fisico/mentale/emotivo (1-10), ore lavoro' },
+              { label: 'Food scanner', desc: 'Calorie, macronutrienti (proteine/carboidrati/grassi), indice glicemico' },
+              { label: 'Sahha Health', desc: 'Biomarker da wearable: frequenza cardiaca, HRV, passi, durata sonno' },
+              { label: 'Screen time', desc: 'Minuti di utilizzo app, sessioni, pause schermo' },
+            ].map(item => (
+              <div key={item.label} className="flex items-start gap-2 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                <div>
+                  <span className="text-[11px] font-medium">{item.label}</span>
+                  <span className="text-[11px] text-muted-foreground"> — {item.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 2. Calcolo Scientifico */}
+        <div className="rounded-lg border border-border p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-violet-500/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-violet-600 dark:text-violet-400">2</span>
+            </div>
+            <p className="text-sm font-semibold">Calcolo scientifico (Energy Score 0-100)</p>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Il punteggio energetico e calcolato in tempo reale come somma di 4 componenti (0-25 ciascuna),
+            basate su modelli scientifici validati:
+          </p>
+          <div className="space-y-2">
+            <ComponentExplainer
+              color="#6366f1"
+              title="Ritmo circadiano (0-25)"
+              model="Modello Borbely Two-Process"
+              desc="Process C (orologio biologico 24h) + Process S (pressione omeostatica del sonno). Include cicli ultradiani BRAC di 90-100min, calo post-prandiale dopo i pasti, e risposta cortisolo mattutino (CAR). Il cronotipo (Leone/Orso/Lupo/Delfino) determina la fase del ritmo."
+            />
+            <ComponentExplainer
+              color="#8b5cf6"
+              title="Sonno (0-25)"
+              model="Modello Van Dongen"
+              desc="Qualita percepita, durata effettiva vs ottimale (8h), debito di sonno cumulativo degli ultimi 7 giorni con peso di recenza. Considera pisolini (recupero parziale), impatto alcol sulla qualita del sonno, e punteggio readiness da Sahha."
+            />
+            <ComponentExplainer
+              color="#22c55e"
+              title="Stile di vita (0-25)"
+              model="Ganio 2011, Nehlig 2018, POMS"
+              desc="Idratazione (ml/kg peso corporeo), bilancio macronutrienti, farmacocinetica caffeina (emivita 5h, effetto su A2A adenosina), attivita fisica (boost acuto POMS), impatto fumo (vasocostrizione) e alcol, affaticamento da schermo."
+            />
+            <ComponentExplainer
+              color="#f59e0b"
+              title="Carico allostatico (0-25)"
+              model="Modello McEwen"
+              desc="Ore di lavoro, stress percepito e trend 7 giorni, umore e trend emotivo, HRV come proxy di recupero autonomico (SDNN), giorni consecutivi con energia bassa (indicatore burnout), focus cognitivo."
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-relaxed mt-1 italic">
+            Quando piu componenti sono critici insieme, si applica una penalita di interazione
+            moltiplicativa (fino a -15 punti) perche la fatica si amplifica in modo non lineare.
+          </p>
+        </div>
+
+        {/* 3. Curva Predittiva */}
+        <div className="rounded-lg border border-border p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-green-600 dark:text-green-400">3</span>
+            </div>
+            <p className="text-sm font-semibold">Curva predittiva (12 ore)</p>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            La curva energetica proietta il tuo livello di energia nelle prossime 12 ore.
+            Combina il ritmo circadiano del tuo cronotipo, la pressione del sonno crescente,
+            il decadimento della caffeina (emivita 5h), i cali post-prandiali previsti
+            (pranzo ~13:00, cena ~20:00 se non ancora loggati) e il trascinamento del debito di sonno.
+            Le ore vicine sono ancorate al punteggio attuale, quelle lontane alla previsione del modello.
+          </p>
+        </div>
+
+        {expanded && (
+          <>
+            {/* 4. Machine Learning */}
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">4</span>
+                </div>
+                <p className="text-sm font-semibold">Machine Learning (Intelligence)</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Dopo 3+ giorni di dati, il motore ML analizza i tuoi pattern:
+              </p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {[
+                  { label: 'Analisi trend', desc: 'La tua energia sta migliorando, e stabile o in calo?' },
+                  { label: 'Rilevamento pattern', desc: 'Es: "quando dormi meno di 6h, il fisico cala del 30% il giorno dopo"' },
+                  { label: 'Correlazioni', desc: 'Quali fattori impattano di piu la tua energia (sonno, stress, attivita...)' },
+                  { label: 'Previsione crash', desc: 'Allarme se i pattern indicano un probabile crollo energetico imminente' },
+                  { label: 'Report settimanale', desc: 'Voto A-F con analisi dettagliata e consigli personalizzati' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-start gap-2 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                    <div>
+                      <span className="text-[11px] font-medium">{item.label}</span>
+                      <span className="text-[11px] text-muted-foreground"> — {item.desc}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 5. Sistema di Orientamento */}
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">5</span>
+                </div>
+                <p className="text-sm font-semibold">Sistema di orientamento</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                In base al tuo stato energetico attuale, il sistema sceglie da un catalogo di 50+
+                attivita quella piu adatta. Confronta il tuo livello di energia con il carico cognitivo
+                e fisico richiesto da ogni attivita, la durata, e il tuo profilo.
+                Il consiglio "Cosa fare adesso" in home viene da questo motore.
+              </p>
+            </div>
+
+            {/* 6. Bottleneck e Azioni */}
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-red-600 dark:text-red-400">6</span>
+                </div>
+                <p className="text-sm font-semibold">Identificazione colli di bottiglia</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Il sistema analizza tutti i fattori e identifica il punto debole piu critico:
+                sonno, idratazione, nutrizione, stress, sovraccarico lavorativo, sedentarieta,
+                caffeina tardiva, affaticamento da schermo, rischio burnout o debito di sonno.
+                Per ogni collo di bottiglia fornisce un consiglio azionabile specifico.
+              </p>
+            </div>
+
+            {/* 7. Privacy */}
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
+              <p className="text-sm font-semibold">Privacy e dati</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Tutti i calcoli avvengono in locale sul tuo dispositivo (offline-first).
+                I dati sono salvati in IndexedDB e sincronizzati con il cloud solo per
+                backup e accesso multi-device. Nessun dato viene condiviso con terze parti.
+                L'IA (Groq) riceve solo dati aggregati e anonimi per generare consigli.
+              </p>
+            </div>
+          </>
+        )}
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-sm text-primary hover:text-primary/80 font-medium py-2 transition-colors"
+        >
+          {expanded ? 'Mostra meno' : 'Mostra tutto il sistema'}
+        </button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ComponentExplainer({
+  color,
+  title,
+  model,
+  desc,
+}: {
+  color: string;
+  title: string;
+  model: string;
+  desc: string;
+}) {
+  return (
+    <div className="rounded-md bg-muted/30 border border-border/50 p-2.5">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+        <span className="text-[11px] font-semibold">{title}</span>
+      </div>
+      <p className="text-[10px] text-muted-foreground/70 italic mb-0.5">
+        Basato su: {model}
+      </p>
+      <p className="text-[10px] text-muted-foreground leading-relaxed">
+        {desc}
+      </p>
     </div>
   );
 }

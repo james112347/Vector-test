@@ -5,7 +5,7 @@ import { Separator } from '../components/ui/separator';
 import {
   User, Pencil, Briefcase, Heart,
   Ruler, Weight, Coffee, Moon, Wine, Cigarette,
-  Dumbbell, Clock, Calendar,
+  Dumbbell, Clock, Calendar, Utensils, Bed, AlarmClock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProfile } from '../lib/useUserProfile';
@@ -56,6 +56,13 @@ const alcoholLabels: Record<string, string> = {
   occasional: 'Occasionale',
   weekly: 'Settimanale',
   daily: 'Quotidiano',
+};
+
+const exerciseTimeLabels: Record<string, string> = {
+  morning: 'Mattina',
+  afternoon: 'Pomeriggio',
+  evening: 'Sera',
+  none: 'Non si allena',
 };
 
 const goalLabels: Record<string, string> = {
@@ -272,6 +279,59 @@ export default function Profile() {
               color="#a78bfa"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Routine giornaliera */}
+      <Card>
+        <CardContent className="py-4">
+          <SectionTitle>Routine giornaliera</SectionTitle>
+          {(profile.typicalWakeTime || profile.typicalBedTime || profile.workStartTime || profile.lunchTime || profile.dinnerTime || profile.exerciseTime) ? (
+            <div className="mt-2 space-y-0">
+              {profile.typicalWakeTime && (
+                <>
+                  <StatItem icon={AlarmClock} label="Sveglia" value={profile.typicalWakeTime} color="#f59e0b" />
+                  <Separator className="my-1" />
+                </>
+              )}
+              {profile.typicalBedTime && (
+                <>
+                  <StatItem icon={Bed} label="A letto" value={profile.typicalBedTime} color="#6366f1" />
+                  <Separator className="my-1" />
+                </>
+              )}
+              {profile.workStartTime && (
+                <>
+                  <StatItem
+                    icon={Briefcase}
+                    label="Lavoro"
+                    value={profile.workEndTime ? `${profile.workStartTime} - ${profile.workEndTime}` : `dalle ${profile.workStartTime}`}
+                    color="#8b5cf6"
+                  />
+                  <Separator className="my-1" />
+                </>
+              )}
+              {profile.lunchTime && (
+                <>
+                  <StatItem icon={Utensils} label="Pranzo" value={profile.lunchTime} color="#22c55e" />
+                  <Separator className="my-1" />
+                </>
+              )}
+              {profile.dinnerTime && (
+                <>
+                  <StatItem icon={Utensils} label="Cena" value={profile.dinnerTime} color="#22c55e" />
+                  <Separator className="my-1" />
+                </>
+              )}
+              {profile.exerciseTime && (
+                <StatItem icon={Dumbbell} label="Allenamento" value={exerciseTimeLabels[profile.exerciseTime] || profile.exerciseTime} color="#ef4444" />
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-2">
+              Nessun dato sulla routine. Modifica il profilo per aggiungere i tuoi orari tipici.
+            </p>
+          )}
         </CardContent>
       </Card>
 
