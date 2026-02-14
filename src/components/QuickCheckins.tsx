@@ -621,7 +621,7 @@ export default function QuickCheckins({ userId }: { userId: number }) {
   const [savingActivity, setSavingActivity] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const phase = useMemo(() => getTimePhase(), []);
   const config = PHASE_CONFIG[phase];
