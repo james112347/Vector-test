@@ -112,12 +112,15 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   3. App tracks behavior frequencies over time
   4. Historical data is preserved and trends are viewable
   5. Predictions improve as the app learns the user's routine
-**Plans**: 1 plan (retroactive)
+**Plans**: 3 plans
 - [x] 07-01-SUMMARY.md -- PWA notifications + feedback chat + screen time tracking
-**Gaps identified**:
-- [ ] Habit Intelligence system (habit-intelligence.ts is skeleton only)
-- [ ] Scheduled reminder system for check-ins
-- [ ] Push notifications (Firebase/FCM for mobile)
+- [ ] 07-02-PLAN.md -- Integrate SmartHabitPrompt into Dashboard + check-in reminder system
+- [ ] 07-03-PLAN.md -- Notification preferences UI in Settings
+**Gaps closing**:
+- [x] ~~Habit Intelligence system~~ (corrected: habit-intelligence.ts is fully implemented, was mislabeled as skeleton)
+- [ ] SmartHabitPrompt not wired into Dashboard (07-02)
+- [ ] Scheduled reminder system for check-ins (07-02)
+- [ ] Notification preferences UI missing (07-03)
 
 ### Phase 8: Owner Data Panel
 **Goal**: The app owner can access all collected user data in an organized, structured format.
@@ -140,21 +143,23 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
 | 4. Energy Engine + AI | 1/1 | Complete (retroactive) | 2026-02-14 |
 | 5. Dashboard & Visualization | 1/1 | Complete (retroactive) | 2026-02-14 |
 | 6. Goals & Smart Balancing | 1/1 | Complete (retroactive) | 2026-02-14 |
-| 7. Notifications + Learning System | 1/1 | Partial (gaps: habit learning, push, reminders) | 2026-02-14 |
+| 7. Notifications + Learning System | 1/3 | Gap closure in progress | 2026-02-14 |
 | 8. Owner Data Panel | 1/1 | Complete (retroactive) | 2026-02-14 |
 
 ## Identified Gaps (Cross-Phase)
 
 | Gap | Phase | Severity | Description |
 |-----|-------|----------|-------------|
-| Habit Intelligence | 7 | Critical | habit-intelligence.ts is skeleton — no real habit learning |
+| ~~Habit Intelligence~~ | ~~7~~ | ~~Critical~~ | ~~Corrected: fully implemented, was mislabeled~~ |
+| SmartHabitPrompt not wired | 7 | Critical | Component exists but never rendered in Dashboard |
+| Notification preferences UI | 7 | Moderate | No settings UI for sound, quiet hours, frequency |
+| Scheduled Reminders | 7 | Moderate | No time-based check-in reminders |
 | Goal Auto-Completion | 6 | Moderate | Goals don't auto-complete from linked check-ins |
 | Data Export | 8 | Moderate | No CSV/PDF export for admin or user |
-| Push Notifications | 7 | Moderate | Browser-only, no Firebase/FCM for mobile |
-| Scheduled Reminders | 7 | Moderate | No time-based check-in reminders |
+| Push Notifications | 7 | Low | Browser-only, no Firebase/FCM for mobile (v2) |
 | Screenshot Support | 3 | Low | Phone usage via manual input only |
 | Calendar View | 5 | Low | Energy history is list-only, no calendar grid |
 
 ---
 *Roadmap defined: 2026-02-11*
-*Last updated: 2026-02-14 -- All phases formally audited and documented with retroactive summaries*
+*Last updated: 2026-02-14 -- Phase 7 gap closure plans created (07-02, 07-03)*
