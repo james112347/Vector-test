@@ -7,13 +7,13 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
 ## Phases
 
 - [x] **Phase 1: PWA Shell + Auth + Design System** - Installable app, password login, T&C, dark mode, neuroscience colors
-- [ ] **Phase 2: Onboarding Questionnaire** - Collect user lifestyle profile (age, weight, work, aspirations, vices, flags)
-- [ ] **Phase 3: Daily Logging** - Sleep, phone usage, work shift, fatigue type, hydration, food input
-- [ ] **Phase 4: Energy Engine + AI** - Calculate energy scores, integrate Groq API for analysis and predictions
-- [ ] **Phase 5: Dashboard & Visualization** - Energy profile, trends, predictions, personalized advice
-- [ ] **Phase 6: Goals & Smart Balancing** - Daily/weekly/long-term goals with AI-driven priority balancing
-- [ ] **Phase 7: Notifications + Learning System** - Smart notifications, feedback loops, routine learning, tracking
-- [ ] **Phase 8: Owner Data Panel** - Organized data access for the app owner
+- [x] **Phase 2: Onboarding Questionnaire** - Collect user lifestyle profile (age, weight, work, aspirations, vices, flags)
+- [x] **Phase 3: Daily Logging** - Sleep, phone usage, work shift, fatigue type, hydration, food input
+- [x] **Phase 4: Energy Engine + AI** - Calculate energy scores, integrate Groq API for analysis and predictions
+- [x] **Phase 5: Dashboard & Visualization** - Energy profile, trends, predictions, personalized advice
+- [x] **Phase 6: Goals & Smart Balancing** - Daily/weekly/long-term goals with AI-driven priority balancing
+- [~] **Phase 7: Notifications + Learning System** - Smart notifications, feedback loops, routine learning, tracking
+- [x] **Phase 8: Owner Data Panel** - Organized data access for the app owner
 
 ## Phase Details
 
@@ -45,7 +45,8 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   3. Multi-step form with progress indicator and back navigation
   4. User can edit their profile after initial onboarding
   5. All collected data is persisted
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 02-01-SUMMARY.md -- 4-step onboarding form + profile editing + Supabase sync
 
 ### Phase 3: Daily Logging
 **Goal**: Users can input daily data (sleep, phone usage, work shift, fatigue type, hydration, food) manually or via screenshots. The app proactively asks relevant questions during the day.
@@ -57,7 +58,8 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   3. User can log work shift, fatigue type, hydration, food
   4. All logs are timestamped
   5. App prompts relevant questions based on time of day
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 03-01-SUMMARY.md -- Energy logging + 12+ quick check-in types + time-phased prompts
 
 ### Phase 4: Energy Engine + AI Integration
 **Goal**: The system computes energy scores (physical, mental, emotional, total) from profile + daily logs, and the Groq AI analyzes data to generate personalized advice and predictions.
@@ -71,7 +73,8 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   5. AI produces predictions ("if nothing changes...")
   6. AI alerts when energy is low or habits are harmful
   7. Stress level and fatigue type are identified
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 04-01-SUMMARY.md -- Scientific 4-component model + Groq AI + chronotype + predictions
 
 ### Phase 5: Dashboard & Visualization
 **Goal**: Users see their energy scores, predictions, trends, and personalized advice on a clear, informative dashboard.
@@ -83,7 +86,8 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   3. Personalized advice and alerts are visible
   4. User can see accumulated stress
   5. Information is educational and helps user understand their state
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 05-01-SUMMARY.md -- Dashboard with widgets, orientation, daily history, admin stats
 
 ### Phase 6: Goals & Smart Balancing
 **Goal**: Users set goals at different time horizons with importance levels. The AI suggests which goals to focus on based on current energy and balances productivity vs recovery.
@@ -95,7 +99,8 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   3. AI recommends which goals to focus on given current energy
   4. App suggests productivity actions vs recovery actions
   5. Goals interact with the energy dashboard
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 06-01-SUMMARY.md -- WOOP goals + AI wizard + energy budget + chronotype scheduling
 
 ### Phase 7: Notifications + Learning System
 **Goal**: Smart notifications with logical timing, targeted feedback requests, and the learning system that improves predictions by studying user routine. Long-term tracking and frequency analysis.
@@ -107,7 +112,12 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   3. App tracks behavior frequencies over time
   4. Historical data is preserved and trends are viewable
   5. Predictions improve as the app learns the user's routine
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 07-01-SUMMARY.md -- PWA notifications + feedback chat + screen time tracking
+**Gaps identified**:
+- [ ] Habit Intelligence system (habit-intelligence.ts is skeleton only)
+- [ ] Scheduled reminder system for check-ins
+- [ ] Push notifications (Firebase/FCM for mobile)
 
 ### Phase 8: Owner Data Panel
 **Goal**: The app owner can access all collected user data in an organized, structured format.
@@ -117,23 +127,34 @@ Vector is built in 8 phases, each delivering a working increment. We start with 
   1. Owner can see all user profiles and their data
   2. Owner can see energy scores, daily logs, and behavior frequencies per user
   3. Data is presented in structured tables and summaries
-**Plans**: TBD
+**Plans**: 1 plan (retroactive)
+- [x] 08-01-SUMMARY.md -- Admin dashboard + user management + feedback + hybrid analysis
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. PWA Shell + Auth + Design System | 4/4 | Complete | 2026-02-13 |
-| 2. Onboarding Questionnaire | -/- | Implemented (untracked) | - |
-| 3. Daily Logging | -/- | Implemented (untracked) | - |
-| 4. Energy Engine + AI | -/- | Implemented (untracked) | - |
-| 5. Dashboard & Visualization | -/- | Implemented (untracked) | - |
-| 6. Goals & Smart Balancing | -/- | Implemented (untracked) | - |
-| 7. Notifications + Learning System | -/- | Implemented (untracked) | - |
-| 8. Owner Data Panel | -/- | Implemented (untracked) | - |
+| 2. Onboarding Questionnaire | 1/1 | Complete (retroactive) | 2026-02-14 |
+| 3. Daily Logging | 1/1 | Complete (retroactive) | 2026-02-14 |
+| 4. Energy Engine + AI | 1/1 | Complete (retroactive) | 2026-02-14 |
+| 5. Dashboard & Visualization | 1/1 | Complete (retroactive) | 2026-02-14 |
+| 6. Goals & Smart Balancing | 1/1 | Complete (retroactive) | 2026-02-14 |
+| 7. Notifications + Learning System | 1/1 | Partial (gaps: habit learning, push, reminders) | 2026-02-14 |
+| 8. Owner Data Panel | 1/1 | Complete (retroactive) | 2026-02-14 |
 
-> **Note:** Phases 2-8 were implemented incrementally in code without formal GSD plan documents. The features exist in the codebase but were not tracked through the planning workflow.
+## Identified Gaps (Cross-Phase)
+
+| Gap | Phase | Severity | Description |
+|-----|-------|----------|-------------|
+| Habit Intelligence | 7 | Critical | habit-intelligence.ts is skeleton — no real habit learning |
+| Goal Auto-Completion | 6 | Moderate | Goals don't auto-complete from linked check-ins |
+| Data Export | 8 | Moderate | No CSV/PDF export for admin or user |
+| Push Notifications | 7 | Moderate | Browser-only, no Firebase/FCM for mobile |
+| Scheduled Reminders | 7 | Moderate | No time-based check-in reminders |
+| Screenshot Support | 3 | Low | Phone usage via manual input only |
+| Calendar View | 5 | Low | Energy history is list-only, no calendar grid |
 
 ---
 *Roadmap defined: 2026-02-11*
-*Last updated: 2026-02-13 -- Phase 1 formally closed, Phases 2-8 acknowledged as implemented*
+*Last updated: 2026-02-14 -- All phases formally audited and documented with retroactive summaries*
