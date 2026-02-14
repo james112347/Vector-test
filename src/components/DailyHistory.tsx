@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Moon, Droplets, Coffee, UtensilsCrossed, Brain, Activity,
-  Zap, Heart, ChevronDown, ChevronRight, Calendar,
+  Zap, Heart, ChevronDown, Calendar,
   BedDouble, Pill, MonitorOff,
   BookOpen, Briefcase, Sofa, Dumbbell, Gamepad2, Users, Car,
 } from 'lucide-react';
@@ -245,69 +245,102 @@ function DayRow({ summary, expanded, onToggle }: {
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const count = completionCount(summary);
+  const s = summary;
 
-  // Quick mood/sleep/stress indicator dots
-  const dots: Array<{ color: string; title: string }> = [];
-  if (summary.mood != null) {
-    const v = summary.mood;
-    dots.push({
-      color: v >= 4 ? 'bg-green-500' : v >= 3 ? 'bg-amber-500' : 'bg-red-500',
-      title: `Umore: ${ratingLabel(summary.mood, MOOD_LABELS)}`,
+  // Build quick summary chips shown always (collapsed view)
+  const chips: Array<{ icon: typeof Moon; label: string; value: string; colorClass: string }> = [];
+
+  if (s.mood != null) {
+    chips.push({
+      icon: Heart,
+      label: 'Umore',
+      value: ratingLabel(s.mood, MOOD_LABELS),
+      colorClass: s.mood >= 4 ? 'text-green-600 dark:text-green-400' : s.mood >= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400',
     });
   }
-  if (summary.sleepQuality != null) {
-    const v = summary.sleepQuality;
-    dots.push({
-      color: v >= 4 ? 'bg-blue-500' : v >= 3 ? 'bg-amber-500' : 'bg-red-500',
-      title: `Sonno: ${ratingLabel(summary.sleepQuality, SLEEP_LABELS)}`,
+  if (s.sleepQuality != null) {
+    chips.push({
+      icon: Moon,
+      label: 'Sonno',
+      value: ratingLabel(s.sleepQuality, SLEEP_LABELS),
+      colorClass: s.sleepQuality >= 4 ? 'text-blue-600 dark:text-blue-400' : s.sleepQuality >= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400',
     });
   }
-  if (summary.stress != null) {
-    const v = summary.stress;
-    dots.push({
-      color: v >= 4 ? 'bg-green-500' : v >= 3 ? 'bg-amber-500' : 'bg-red-500',
-      title: `Stress: ${ratingLabel(summary.stress, STRESS_LABELS)}`,
+  if (s.stress != null) {
+    chips.push({
+      icon: Zap,
+      label: 'Stress',
+      value: ratingLabel(s.stress, STRESS_LABELS),
+      colorClass: s.stress >= 4 ? 'text-green-600 dark:text-green-400' : s.stress >= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400',
     });
   }
+  if (s.focusLevel != null) {
+    chips.push({
+      icon: Brain,
+      label: 'Focus',
+      value: ratingLabel(s.focusLevel, FOCUS_LABELS),
+      colorClass: s.focusLevel >= 4 ? 'text-green-600 dark:text-green-400' : s.focusLevel >= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400',
+    });
+  }
+
+  // Counters line
+  const counters: Array<{ icon: typeof Droplets; value: string; colorClass: string }> = [];
+  if (s.water > 0) counters.push({ icon: Droplets, value: `${s.water}`, colorClass: 'text-blue-600 dark:text-blue-400' });
+  if (s.caffeine > 0) counters.push({ icon: Coffee, value: `${s.caffeine}`, colorClass: 'text-amber-600 dark:text-amber-400' });
+  if (s.activityDone != null) counters.push({ icon: Activity, value: ratingLabel(s.activityDone, ACTIVITY_LABELS), colorClass: 'text-orange-600 dark:text-orange-400' });
+  if (s.mealQuality != null) counters.push({ icon: UtensilsCrossed, value: ratingLabel(s.mealQuality, MEAL_LABELS), colorClass: 'text-emerald-600 dark:text-emerald-400' });
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-muted/50 transition-colors"
+        className="w-full px-3.5 py-3 text-left hover:bg-muted/50 transition-colors"
       >
-        {/* Date */}
-        <div className="min-w-[72px]">
-          <p className="text-sm font-semibold">{formatDate(summary.date)}</p>
+        {/* Top line: date + expand */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <p className="text-sm font-semibold">{formatDate(s.date)}</p>
+          <span className="text-[10px] text-muted-foreground ml-auto">{expanded ? 'Chiudi' : 'Dettagli'}</span>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
         </div>
 
-        {/* Indicator dots */}
-        <div className="flex items-center gap-1">
-          {dots.map((d, i) => (
-            <span key={i} className={`w-2 h-2 rounded-full ${d.color}`} title={d.title} />
-          ))}
-        </div>
-
-        {/* Completion badge */}
-        <span className="ml-auto text-[10px] text-muted-foreground">
-          {count} dati
-        </span>
-
-        {/* Water quick indicator */}
-        {summary.water > 0 && (
-          <span className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-0.5">
-            <Droplets className="h-3 w-3" />{summary.water}
-          </span>
+        {/* Summary chips: mood, sleep, stress, focus */}
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mb-1">
+            {chips.map(c => {
+              const Icon = c.icon;
+              return (
+                <span key={c.label} className={`inline-flex items-center gap-1 text-[11px] font-medium ${c.colorClass}`}>
+                  <Icon className="h-3 w-3" />
+                  {c.value}
+                </span>
+              );
+            })}
+          </div>
         )}
 
-        {/* Expand icon */}
-        <ChevronDown className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+        {/* Counters line: water, caffeine, activity, meals */}
+        {counters.length > 0 && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {counters.map((c, i) => {
+              const Icon = c.icon;
+              return (
+                <span key={i} className={`inline-flex items-center gap-1 text-[11px] ${c.colorClass}`}>
+                  <Icon className="h-3 w-3" />
+                  {c.value}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {chips.length === 0 && counters.length === 0 && (
+          <p className="text-[11px] text-muted-foreground italic">Pochi dati registrati</p>
+        )}
       </button>
 
       {expanded && (
         <div className="px-3.5 pb-3 border-t border-border">
-          <DayDetail summary={summary} />
+          <DayDetail summary={s} />
         </div>
       )}
     </div>
