@@ -66,24 +66,6 @@ const CURRENT_ACTIVITY_MAP: Record<number, { label: string; icon: typeof BookOpe
   7: { label: 'Spostamenti', icon: Car, color: 'text-amber-600 dark:text-amber-400' },
 };
 
-/** Count how many metrics were logged for a day */
-function completionCount(s: DailyCheckinSummary): number {
-  let count = 0;
-  if (s.sleepQuality != null) count++;
-  if (s.mood != null) count++;
-  if (s.stress != null) count++;
-  if (s.focusLevel != null) count++;
-  if (s.activityDone != null) count++;
-  if (s.mealQuality != null) count++;
-  if (s.water > 0) count++;
-  if (s.caffeine > 0) count++;
-  if (s.nap != null) count++;
-  if (s.supplement > 0) count++;
-  if (s.screenBreak > 0) count++;
-  if (s.activities.length > 0) count++;
-  return count;
-}
-
 // ---------------------------------------------------------------------------
 // Day detail card (expanded view)
 // ---------------------------------------------------------------------------
