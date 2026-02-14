@@ -9,11 +9,9 @@ import {
   syncAll,
   getCachedScores,
   getCachedBiomarkers,
-  getScoreHistory,
   isSahhaAvailable,
 } from '../lib/sahha-data';
 import { getDemoScores, getDemoBiomarkers } from '../lib/sahha-demo';
-import { scoreStateLabel, scoreStateColor } from '../lib/sahha';
 import { getRecentLogs } from '../lib/energy';
 import type { SahhaScoreLog, SahhaBiomarkerLog, EnergyLog } from '../db/schema';
 import {
@@ -30,7 +28,6 @@ import {
   TrendingUp,
   ChevronLeft,
   ChevronRight,
-  Calendar,
   Smartphone,
   CheckCircle2,
   Circle,
@@ -48,343 +45,6 @@ const SAHHA_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.sah
 
 type SetupStep = 'choose_platform' | 'ios_guide' | 'android_guide' | 'waiting';
 
-// ---------------------------------------------------------------------------
-// ScoreCard
-// ---------------------------------------------------------------------------
-
-function ScoreCard({
-  score,
-  onTap,
-}: {
-  score: SahhaScoreLog;
-  onTap?: () => void;
-}) {
-  const percentage = Math.round(score.score * 100);
-  const radius = 32;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (percentage / 100) * circumference;
-
-  const iconMap: Record<string, typeof Activity> = {
-    activity: Activity,
-    sleep: Moon,
-    wellbeing: Heart,
-    readiness: Zap,
-    mental_wellbeing: Brain,
-  };
-  const colorMap: Record<string, string> = {
-    activity: '#3b82f6',
-    sleep: '#8b5cf6',
-    wellbeing: '#22c55e',
-    readiness: '#f59e0b',
-    mental_wellbeing: '#ec4899',
-  };
-  const labelMap: Record<string, string> = {
-    activity: 'Attivita',
-    sleep: 'Sonno',
-    wellbeing: 'Benessere',
-    readiness: 'Prontezza',
-    mental_wellbeing: 'Mente',
-  };
-
-  const Icon = iconMap[score.type] || Activity;
-  const color = colorMap[score.type] || '#6b7280';
-  const label = labelMap[score.type] || score.type;
-
-  return (
-    <Card
-      className={onTap ? 'cursor-pointer active:scale-[0.98] transition-transform' : ''}
-      onClick={onTap}
-    >
-      <CardContent className="py-4">
-        <div className="flex items-center gap-4">
-          <div className="relative w-20 h-20 shrink-0">
-            <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-              <circle
-                cx="40" cy="40" r={radius}
-                fill="none" stroke="currentColor"
-                className="text-muted" strokeWidth="6"
-              />
-              <circle
-                cx="40" cy="40" r={radius}
-                fill="none" stroke={color}
-                strokeWidth="6" strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={offset}
-                className="transition-all duration-500"
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-lg font-bold">
-              {percentage}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Icon className="h-4 w-4" style={{ color }} />
-              <span className="font-semibold text-sm">{label}</span>
-            </div>
-            <span className={`text-sm font-medium ${scoreStateColor(score.state)}`}>
-              {scoreStateLabel(score.state)}
-            </span>
-            <p className="text-xs text-muted-foreground mt-1">
-              {new Date(score.scoreDateTime).toLocaleDateString('it-IT', {
-                day: 'numeric',
-                month: 'short',
-              })}
-            </p>
-          </div>
-          {onTap && (
-            <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ScoreHistory
-// ---------------------------------------------------------------------------
-
-function ScoreHistory({
-  history,
-  type,
-  onBack,
-}: {
-  history: SahhaScoreLog[];
-  type: string;
-  onBack: () => void;
-}) {
-  const labelMap: Record<string, string> = {
-    activity: 'Attivita',
-    sleep: 'Sonno',
-    wellbeing: 'Benessere',
-    readiness: 'Prontezza',
-    mental_wellbeing: 'Mente',
-  };
-  const colorMap: Record<string, string> = {
-    activity: '#3b82f6',
-    sleep: '#8b5cf6',
-    wellbeing: '#22c55e',
-    readiness: '#f59e0b',
-    mental_wellbeing: '#ec4899',
-  };
-
-  const label = labelMap[type] || type;
-  const color = colorMap[type] || '#6b7280';
-
-  const byDay = new Map<string, SahhaScoreLog>();
-  for (const s of history) {
-    const day = s.scoreDateTime.slice(0, 10);
-    const existing = byDay.get(day);
-    if (!existing || s.scoreDateTime > existing.scoreDateTime) {
-      byDay.set(day, s);
-    }
-  }
-  const daily = Array.from(byDay.values()).sort((a, b) =>
-    a.scoreDateTime.localeCompare(b.scoreDateTime),
-  );
-
-  const maxH = 120;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-base font-semibold">Storico {label}</h2>
-      </div>
-
-      {daily.length === 0 ? (
-        <Card>
-          <CardContent className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Nessuno storico disponibile.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-end gap-1 h-[140px]">
-              {daily.map((s) => {
-                const pct = Math.round(s.score * 100);
-                const barH = Math.max(4, (pct / 100) * maxH);
-                return (
-                  <div
-                    key={s.scoreDateTime}
-                    className="flex-1 flex flex-col items-center gap-1"
-                  >
-                    <span className="text-[10px] text-muted-foreground tabular-nums">
-                      {pct}
-                    </span>
-                    <div
-                      className="w-full rounded-t-sm transition-all"
-                      style={{ height: barH, backgroundColor: color, opacity: 0.8 }}
-                    />
-                    <span className="text-[9px] text-muted-foreground">
-                      {new Date(s.scoreDateTime).toLocaleDateString('it-IT', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {daily.length > 1 && (
-              <div className="flex justify-between mt-4 pt-3 border-t text-xs text-muted-foreground">
-                <span>
-                  Media:{' '}
-                  <strong className="text-foreground">
-                    {Math.round(
-                      (daily.reduce((sum, s) => sum + s.score, 0) / daily.length) * 100,
-                    )}%
-                  </strong>
-                </span>
-                <span>
-                  Min:{' '}
-                  <strong className="text-foreground">
-                    {Math.round(Math.min(...daily.map((s) => s.score)) * 100)}%
-                  </strong>
-                </span>
-                <span>
-                  Max:{' '}
-                  <strong className="text-foreground">
-                    {Math.round(Math.max(...daily.map((s) => s.score)) * 100)}%
-                  </strong>
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Dettaglio giornaliero</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {daily.length === 0 && (
-            <p className="text-sm text-muted-foreground py-2">Nessun dato.</p>
-          )}
-          {daily
-            .slice()
-            .reverse()
-            .map((s) => (
-              <div
-                key={s.scoreDateTime}
-                className="flex items-center justify-between py-2 border-b border-border last:border-0"
-              >
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm">
-                    {new Date(s.scoreDateTime).toLocaleDateString('it-IT', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-medium ${scoreStateColor(s.state)}`}>
-                    {scoreStateLabel(s.state)}
-                  </span>
-                  <span className="text-sm font-bold tabular-nums">
-                    {Math.round(s.score * 100)}%
-                  </span>
-                </div>
-              </div>
-            ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// BiomarkerRow
-// ---------------------------------------------------------------------------
-
-function BiomarkerRow({ biomarker }: { biomarker: SahhaBiomarkerLog }) {
-  const labelMap: Record<string, string> = {
-    steps: 'Passi',
-    heart_rate_resting: 'FC a riposo',
-    heart_rate_variability_sdnn: 'HRV (SDNN)',
-    sleep_duration: 'Durata sonno',
-    sleep_in_bed_duration: 'Tempo a letto',
-    sleep_debt: 'Debito di sonno',
-    sleep_regularity: 'Regolarita sonno',
-    sleep_start_time: 'Inizio sonno',
-    sleep_end_time: 'Fine sonno',
-    sleep_mid_time: 'Meta sonno',
-    sleep_rem_duration: 'Sonno REM',
-    sleep_deep_duration: 'Sonno profondo',
-    sleep_light_duration: 'Sonno leggero',
-    active_energy_burned: 'Calorie attive',
-    total_energy_burned: 'Calorie totali',
-    floors_climbed: 'Piani saliti',
-    active_hours: 'Ore attive',
-    oxygen_saturation: 'SpO2',
-    respiratory_rate: 'Freq. respiratoria',
-    vo2_max: 'VO2 Max',
-    weight: 'Peso',
-    body_mass_index: 'BMI',
-  };
-
-  const unitMap: Record<string, string> = {
-    count: '',
-    bpm: 'bpm',
-    ms: 'ms',
-    min: 'min',
-    minute: 'min',
-    hour: 'h',
-    kcal: 'kcal',
-    '%': '%',
-    percentage: '%',
-    'mL/kg/min': 'mL/kg/min',
-    kg: 'kg',
-    'kg/m2': '',
-    datetime: '',
-  };
-
-  // Format datetime values nicely
-  if (biomarker.unit === 'datetime') {
-    const dateVal = new Date(biomarker.value);
-    if (!isNaN(dateVal.getTime())) {
-      const displayName = labelMap[biomarker.type] || biomarker.type.replaceAll('_', ' ');
-      return (
-        <div className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
-          <span className="text-sm text-foreground">{displayName}</span>
-          <span className="text-sm font-medium tabular-nums">
-            {dateVal.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-      );
-    }
-  }
-
-  const displayName = labelMap[biomarker.type] || biomarker.type.replaceAll('_', ' ');
-  const displayUnit = unitMap[biomarker.unit] ?? biomarker.unit ?? '';
-  const numValue = parseFloat(biomarker.value);
-  const displayValue = Number.isFinite(numValue)
-    ? numValue % 1 === 0
-      ? numValue.toLocaleString('it-IT')
-      : numValue.toFixed(1)
-    : biomarker.value;
-
-  return (
-    <div className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
-      <span className="text-sm text-foreground">{displayName}</span>
-      <span className="text-sm font-medium tabular-nums">
-        {displayValue}
-        {displayUnit && (
-          <span className="text-muted-foreground ml-1 text-xs">{displayUnit}</span>
-        )}
-      </span>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Key Metric Card (passi, sonno, FC)
@@ -1390,8 +1050,6 @@ export default function Health() {
   const [syncing, setSyncing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [historyType, setHistoryType] = useState<string | null>(null);
-  const [historyData, setHistoryData] = useState<SahhaScoreLog[]>([]);
   const [setupStep, setSetupStep] = useState<SetupStep | null>(null);
 
   const loadData = useCallback(async () => {
@@ -1450,7 +1108,6 @@ export default function Health() {
     setConnected(false);
     setScores([]);
     setBiomarkers([]);
-    setHistoryType(null);
     setSetupStep(null);
   };
 
@@ -1487,21 +1144,8 @@ export default function Health() {
     setConnected(false);
     setScores([]);
     setBiomarkers([]);
-    setHistoryType(null);
   };
 
-  const openHistory = async (type: string) => {
-    if (demo) {
-      const demoHistory = scores.filter((s) => s.type === type);
-      setHistoryData(demoHistory);
-      setHistoryType(type);
-      return;
-    }
-    if (!user?.id) return;
-    const history = await getScoreHistory(user.id, type);
-    setHistoryData(history);
-    setHistoryType(type);
-  };
 
   if (loading) {
     return (
@@ -1512,18 +1156,6 @@ export default function Health() {
     );
   }
 
-  // History detail view
-  if (historyType) {
-    return (
-      <div className="space-y-4 pb-24">
-        <ScoreHistory
-          history={historyData}
-          type={historyType}
-          onBack={() => setHistoryType(null)}
-        />
-      </div>
-    );
-  }
 
   // Setup wizard active
   if (setupStep) {
@@ -1604,23 +1236,6 @@ export default function Health() {
   }
   const latestScores = Object.values(latestByType);
 
-  // Group biomarkers by category
-  const biomarkersByCategory = biomarkers.reduce<Record<string, SahhaBiomarkerLog[]>>(
-    (acc, b) => {
-      const cat = b.category;
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(b);
-      return acc;
-    },
-    {},
-  );
-
-  const categoryLabels: Record<string, string> = {
-    activity: 'Attivita',
-    sleep: 'Sonno',
-    vitals: 'Parametri vitali',
-    body: 'Corpo',
-  };
 
   // Not connected — show connection landing
   if (!connected && !demo) {
@@ -1855,75 +1470,7 @@ export default function Health() {
       {/* Energy-Health Correlation */}
       <EnergyHealthCorrelation energyLogs={energyLogs} scores={latestScores} />
 
-      {/* Health Scores Detail */}
-      {latestScores.length > 0 ? (
-        <div>
-          <h2 className="text-base font-semibold mb-3">Score dettagliati</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {latestScores.map((s) => (
-              <ScoreCard
-                key={s.type}
-                score={s}
-                onTap={() => openHistory(s.type)}
-              />
-            ))}
-          </div>
-          {!demo && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Tocca uno score per vedere lo storico
-            </p>
-          )}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="py-6 text-center space-y-3">
-            <Watch className="h-8 w-8 mx-auto text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Nessuno score disponibile ancora.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              I dati appariranno dopo la prima sincronizzazione dall'app Sahha sul tuo telefono.
-            </p>
-            {!demo && (
-              <div className="flex flex-col items-center gap-2 pt-1">
-                <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                  Controlla adesso
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleDemo}>
-                  <FlaskConical className="h-4 w-4 mr-2" />
-                  Visualizza dati demo
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Biomarkers by Category */}
-      {Object.keys(biomarkersByCategory).length > 0 && (
-        <div>
-          <h2 className="text-base font-semibold mb-3">Tutti i biomarker</h2>
-          {Object.entries(biomarkersByCategory).map(([category, items]) => (
-            <Card key={category} className="mb-3">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  {category === 'activity' && <Activity className="h-4 w-4 text-blue-500" />}
-                  {category === 'sleep' && <Moon className="h-4 w-4 text-purple-500" />}
-                  {category === 'vitals' && <Heart className="h-4 w-4 text-red-500" />}
-                  {category === 'body' && <Zap className="h-4 w-4 text-amber-500" />}
-                  {categoryLabels[category] || category}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {items.map((b, i) => (
-                  <BiomarkerRow key={`${b.type}-${i}`} biomarker={b} />
-                ))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
 
       {/* Sync info + Disconnect */}
       <div className="flex items-center justify-between pt-2">
