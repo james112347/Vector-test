@@ -9,6 +9,7 @@ import { getUnreadFeedbackCount } from '../lib/feedback';
 import { getAllUsers } from '../lib/auth';
 import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
+import DailyHistory from '../components/DailyHistory';
 import { getActiveGoals } from '../lib/goals';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
 import { CATEGORY_LABELS } from '../lib/energy-orientation';
@@ -277,7 +278,10 @@ export default function Dashboard() {
         </button>
       )}
 
-      {/* 7. Intelligence Link (if enough data) */}
+      {/* 7. Daily History — storico completo giornate */}
+      {user?.id && <DailyHistory userId={user.id} />}
+
+      {/* 8. Intelligence Link (if enough data) */}
       {checkinSummaries.length >= 3 && (
         <button
           onClick={() => navigate('/insights')}
