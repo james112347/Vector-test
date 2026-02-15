@@ -94,9 +94,17 @@ Enable users to input daily data (sleep, phone usage, work shift, fatigue type, 
 - [x] All logs are timestamped (date + time fields)
 - [x] App prompts relevant questions based on time of day (phased check-in system)
 
+## Cross-Cutting Integration
+
+- **Habit intelligence**: Check-in data (14 days) feeds into habit-intelligence.ts for pattern analysis and smart notification generation
+- **Goal auto-tracking**: Linked check-in types auto-increment goals (water → water goals, stress → stress goals)
+- **Energy engine**: All logs and check-ins consumed by Phase 4 scientific energy model
+- **Screen time**: ScreenTimeLog auto-tracked passively, feeds into lifestyle component
+- **IndexedDB**: energyLogs and quickCheckins tables in Dexie v13
+
 ## Known Gaps
 
-- No screenshot support for phone usage (mentioned in requirements, not implemented)
+- No screenshot support for phone usage (deferred to v2, manual input sufficient)
 - Food logging is basic (1-5 quality scale, no macro/calorie tracking)
 - No fatigue type explicit input (derived from energy engine calculations)
 - No photo attachment for meals

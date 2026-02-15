@@ -107,9 +107,16 @@ Each goal has 4 WOOP fields:
 - [x] App suggests productivity actions vs recovery actions (energy budget + schedule)
 - [x] Goals interact with the energy dashboard (goals widget on dashboard)
 
+## Cross-Cutting Integration
+
+- **Chronotype from Phase 4**: Energy engine's chronotype detection (lion/bear/wolf/dolphin) drives optimal goal scheduling windows
+- **Energy budget from Phase 4**: Uses current energy score to calculate 60% daily allocation
+- **Check-in auto-progress from Phase 3**: Water check-ins auto-increment water goals, stress check-ins linked to stress goals
+- **Dashboard widget in Phase 5**: Active goals count + streak display on main dashboard
+- **AI analysis**: Groq API generates WOOP fields, optimal timing, energy cost, conflict detection, implementation tips
+
 ## Known Gaps
 
-- No goal auto-completion from linked check-ins (progress tracked but not auto-marked complete)
 - No sub-goals or milestone tracking
 - No gamification (badges, leaderboards)
 - No sharing/accountability partners

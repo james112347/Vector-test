@@ -96,6 +96,13 @@ Build a multi-step onboarding form that collects all lifestyle data needed for e
 - [x] User can edit their profile after initial onboarding (ProfileEdit page)
 - [x] All collected data is persisted (IndexedDB + Supabase sync)
 
+## Cross-Cutting Integration
+
+- **Supabase sync**: `pushDataToSupabase()` syncs profile data for cross-device access
+- **Circadian data**: Routine times feed directly into Phase 4 chronotype detection (lion/bear/wolf/dolphin)
+- **Goal selection**: Primary goal drives Phase 6 WOOP goal recommendations
+- **IndexedDB**: UserProfile stored in Dexie v13, survives restarts
+
 ## Known Gaps
 
 - No photo/avatar upload

@@ -85,11 +85,20 @@ Build the dashboard that shows energy scores, predictions, trends, and personali
 - [x] User can see accumulated stress (allostatic score in energy card)
 - [x] Information is educational (orientation explains why recommendations are given)
 
+## Cross-Cutting Integration
+
+- **Energy orientation**: useEnergyOrientation() hook provides "Cosa fare adesso" recommendations with reasoning
+- **Goals widget**: Shows active goals count and streaks from Phase 6
+- **Quick check-ins**: Phase 3 QuickCheckins component embedded directly
+- **Admin stats**: Fetches from Phase 8 admin functions (getAllUsers, getUnreadFeedbackCount, getAllUserActivity)
+- **Insights link**: Connects to AI-powered Insights page (426 lines) after 3+ days of data
+- **Auto-refresh**: Dashboard refreshes data on visibility change
+
 ## Known Gaps
 
-- No calendar view of energy scores (only 7-day list)
-- No weekly summary card
+- No calendar view of energy scores (deferred to v2, VIS-01)
+- No weekly summary card (deferred to v2, VIS-02)
+- SmartHabitPrompt component not yet rendered in dashboard (planned in 07-02)
 - No prediction crash warnings shown on dashboard
-- No push notification triggers from dashboard state
 
 ## Self-Check: PASSED

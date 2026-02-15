@@ -105,13 +105,20 @@ Build the admin panel where the app owner can access all collected user data in 
 - [x] Owner can see energy scores, daily logs, and behavior frequencies per user
 - [x] Data is presented in structured tables and summaries
 
+## Cross-Cutting Integration
+
+- **Sahha data**: Per-user drill-down shows Sahha scores and biomarkers when available
+- **Supabase**: Admin approval syncs via Supabase for cross-device consistency
+- **Feedback system from Phase 7**: FeedbackChat data flows to admin panel for management
+- **Hybrid AI**: Groq-powered cross-user analysis uses data from all phases
+- **Auth from Phase 1**: Admin role checking via AuthContext, admin approval workflow
+
 ## Known Gaps
 
-- No CSV/PDF export of data
+- No CSV/PDF export of data (deferred to v2, EXPORT-01..02)
 - No user cohort segmentation UI
 - No predictive churn alerts (only scoring)
 - No data retention policy enforcement
-- No A/B test framework
 - No usage analytics dashboard beyond basic stats
 
 ## Self-Check: PASSED

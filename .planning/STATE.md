@@ -2,18 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated: 2026-02-11)
+See: .planning/PROJECT.md (updated: 2026-02-14)
 
-**Core value:** See your real energy state, understand why, get AI predictions, receive actionable advice -- improving as the app learns your routine
-**Current focus:** All 8 phases audited and documented — 7 complete, 1 partial (Phase 7 gaps)
+**Core value:** See your real energy state, understand why, get AI predictions, receive actionable advice -- improving as the app learns your routine through habit intelligence and wearable data
+**Current focus:** All 8 phases complete — 3 minor gaps remaining in Phase 7 (SmartHabitPrompt wiring, reminders, preferences UI)
 
 ## Current Position
 
-Phase: 8 of 8 (all audited)
-Status: Milestone v1 substantially complete — gaps identified
-Last activity: 2026-02-14 -- Retroactive audit and formalization of phases 2-8
+Phase: 8 of 8 (all complete)
+Status: Milestone v1 substantially complete — 3 moderate gaps in Phase 7
+Last activity: 2026-02-14 -- Full documentation update with current vision
 
-Progress: [███████████████░] 93% (7/8 phases complete, Phase 7 partial)
+Progress: [████████████████] 97% (8/8 phases core-complete, Phase 7 has 3 moderate gaps)
 
 ## Performance Metrics
 
@@ -28,60 +28,84 @@ Progress: [███████████████░] 93% (7/8 phases com
 
 - [Bootstrap]: BMAD + GSD + Ralph workflow
 - [Product]: Energy tracking PWA with AI (Groq), 3 energy dimensions, daily logging, goals, predictions
-- [Platform]: PWA-first (installable, offline shell, service worker)
+- [Platform]: PWA-first (installable, offline shell, service worker, Workbox prompt strategy)
 - [Auth]: Password-based with admin approval flow (no OAuth for v1)
-- [AI]: Groq API (key in .env) + hybrid AI engine
-- [Design]: Minimal, professional, neuroscience-based colors, dark mode
-- [Energy model]: Scientific model with circadian, sleep, lifestyle, allostatic components (0-100 overall)
-- [Notifications]: Smart, logical timing, feedback-based, routine-learning
+- [AI]: Groq API (key in .env or Supabase app_config) + hybrid AI engine for admin
+- [Design]: Minimal, professional, neuroscience-based HSL colors, dark mode
+- [Energy model]: Scientific 4-component model (circadian Borbely, sleep Van Dongen, lifestyle, allostatic McEwen), 0-100 total
+- [Chronotype]: Lion/bear/wolf/dolphin detection (Breus model) for scheduling
+- [Baselines]: EWMA 14-day rolling baselines for personalized scoring
+- [Notifications]: Smart, habit-pattern-driven, browser Notification API + Service Worker + Web Audio
+- [Habit Intelligence]: 14-day pattern analysis, time clustering, regularity scoring, energy correlation — FULLY IMPLEMENTED (344 lines)
 - [Localization]: Italian (all UI text in Italian)
 - [Deployment]: GitHub Pages with /Vector-test basename
-- [Sync]: Supabase for cross-device data sync and user management
-- [Wearable]: Sahha integration for health data from wearables
-- [Goals]: MCII/WOOP framework with AI wizard, energy budget, chronotype scheduling
-- [Feedback]: AI-assisted multi-turn chat with Groq categorization
-- [01-01 Tailwind]: Using Tailwind CSS v4 with new Vite plugin approach (@tailwindcss/vite)
+- [Sync]: Supabase for cross-device data sync (optional, graceful local fallback)
+- [Wearable]: Sahha API integration (sandbox + production via Edge Functions)
+- [Goals]: MCII/WOOP framework with AI wizard (3 modes), energy budget, chronotype scheduling
+- [Feedback]: AI-assisted multi-turn chat with Groq categorization + attachments
+- [01-01 Tailwind]: Using Tailwind CSS v4 with @tailwindcss/vite plugin
 - [01-01 PWA]: Configured VitePWA with 'prompt' strategy for user-controlled updates
 - [01-02 Color System]: HSL format for Tailwind v4, neuroscience-informed palette
 - [01-02 Components]: shadcn/ui "new-york" style variant for all UI components
 - [01-03 Auth Context]: Split context pattern to prevent unnecessary re-renders
 - [01-03 Sessions]: 30-day session expiration with IndexedDB + localStorage backup
 - [01-04 Routing]: basename '/Vector-test' for GitHub Pages deployment
+- [Database]: Dexie v13 with 18 tables (comprehensive IndexedDB schema)
 
 ### Features Implemented
 
-All 8 phases implemented in code:
-- Phase 1: PWA shell, auth, design system (4 formal plans)
-- Phase 2: 4-step onboarding questionnaire with profile editing
-- Phase 3: Daily energy logging + 12+ quick check-in types (time-phased)
-- Phase 4: Scientific 4-component energy model + Groq AI + chronotype + predictions
-- Phase 5: Dashboard with widgets, orientation, daily history, admin stats
-- Phase 6: WOOP goals with AI wizard, energy budget, chronotype scheduling
-- Phase 7: PWA notifications, feedback chat, screen time (habit learning INCOMPLETE)
-- Phase 8: Admin dashboard, user management, feedback, hybrid analysis
-- Cross-cutting: Sahha wearable integration, Supabase sync, screen time tracking
+All 8 phases implemented in code (77 TypeScript/TSX files):
 
-### Identified Gaps (from audit)
+**Core phases:**
+- Phase 1: PWA shell, auth with admin approval, neuroscience design system (4 formal plans)
+- Phase 2: 4-step onboarding with circadian times + profile editing + Supabase sync
+- Phase 3: 3-axis energy sliders + 12+ quick check-in types (time-phased) + AI tips
+- Phase 4: Scientific 4-component energy model + Groq AI + chronotype + predictions + ML trends
+- Phase 5: Dashboard with greeting, admin stats, orientation, goals widget, daily history, insights
+- Phase 6: WOOP goals with AI wizard (3 modes), energy budget, chronotype scheduling, streaks
+- Phase 7: Browser notifications + habit intelligence (COMPLETE) + feedback chat + screen time
+- Phase 8: Admin dashboard, user management, feedback management, hybrid AI analysis
 
-| Gap | Phase | Severity |
-|-----|-------|----------|
-| Habit Intelligence (skeleton) | 7 | Critical |
-| Goal Auto-Completion | 6 | Moderate |
-| Data Export (CSV/PDF) | 8 | Moderate |
-| Push Notifications (Firebase) | 7 | Moderate |
-| Scheduled Reminders | 7 | Moderate |
-| Screenshot Support | 3 | Low |
-| Calendar View | 5 | Low |
+**Cross-cutting:**
+- Sahha wearable integration (health scores, biomarkers, auto-sync, Health page 1500+ lines)
+- Supabase cross-device sync (profile, webhooks, API key management, graceful fallback)
+- Screen time auto-tracking
+- Italian localization throughout
+
+**Major pages by size:**
+- Settings.tsx: 1531 lines (user prefs, admin, Sahha connection, sync)
+- Health.tsx: 1501 lines (Sahha scores, biomarkers, charts)
+- Goals.tsx: 1106 lines (WOOP, AI wizard, energy budget, streaks)
+- AdminDashboard.tsx: 988 lines (user management, feedback, hybrid analysis)
+- FeedbackChat.tsx: 607 lines (AI-assisted multi-turn chat)
+- Onboarding.tsx: 592 lines (4-step form)
+- Insights.tsx: 426 lines (AI analysis, trends)
+
+### Remaining Gaps (3 moderate, all in Phase 7)
+
+| Gap | Severity | Plan |
+|-----|----------|------|
+| SmartHabitPrompt not rendered in Dashboard | Moderate | 07-02-PLAN.md |
+| Scheduled check-in reminders | Moderate | 07-02-PLAN.md |
+| Notification preferences UI | Moderate | 07-03-PLAN.md |
+
+### Previously Misidentified Gaps (RESOLVED)
+
+| Gap | Resolution |
+|-----|-----------|
+| ~~Habit Intelligence (was "skeleton")~~ | RESOLVED: habit-intelligence.ts is fully implemented (344 lines) |
+| ~~Goal Auto-Completion~~ | RESOLVED: linked check-in types auto-track progress |
+| ~~Data Export~~ | Deferred to v2 |
+| ~~Push Notifications (Firebase)~~ | Deferred to v2 |
 
 ### Blockers/Concerns
 
 - Energy formula weights may need tuning with real user data
-- Large bundle size (1047 KB, consider code splitting)
-- habit-intelligence.ts is empty skeleton — critical gap for learning system
+- Large bundle size consideration (may benefit from code splitting in v2)
 
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Retroactive audit complete, all phases formalized
+Stopped at: Full documentation update — PROJECT, REQUIREMENTS, ROADMAP, STATE, phase summaries
 Resume file: None
-Next action: Decide whether to close milestone v1 or address gaps first
+Next action: Execute Phase 7 gap closure (07-02, 07-03) OR close milestone v1

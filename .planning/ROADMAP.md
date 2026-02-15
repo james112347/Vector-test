@@ -2,164 +2,193 @@
 
 ## Overview
 
-Vector is built in 8 phases, each delivering a working increment. We start with the installable PWA shell, auth, and design system. Then onboarding collects the user's lifestyle profile. Daily logging enables real-time data input. The energy engine + AI (Groq) computes scores and generates insights. The dashboard visualizes everything. Goals let users plan and prioritize. Notifications and the learning system close the feedback loop. Finally, the owner panel provides organized access to all collected data.
+Vector is an energy tracking PWA built in 8 phases, each delivering a working increment. Phase 1 establishes the installable PWA shell, password auth with admin approval, and neuroscience-based design system. Phase 2 collects the user's lifestyle profile via 4-step onboarding with circadian routine times. Phase 3 enables daily data input through 3-axis energy sliders and 12+ time-phased quick check-ins. Phase 4 implements a scientific 4-component energy model (0-100) with Groq AI for predictions and chronotype detection. Phase 5 builds the dashboard with orientation recommendations, admin stats, goals widget, and daily history. Phase 6 adds MCII/WOOP goals with AI wizard, energy budget, and chronotype scheduling. Phase 7 delivers smart notifications, habit intelligence (pattern learning + smart prompts), feedback chat, and screen time tracking. Phase 8 provides the admin panel with user management, feedback management, and hybrid AI analysis. Cross-cutting features (Sahha wearable integration, Supabase sync, Health page) were implemented throughout.
 
 ## Phases
 
-- [x] **Phase 1: PWA Shell + Auth + Design System** - Installable app, password login, T&C, dark mode, neuroscience colors
-- [x] **Phase 2: Onboarding Questionnaire** - Collect user lifestyle profile (age, weight, work, aspirations, vices, flags)
-- [x] **Phase 3: Daily Logging** - Sleep, phone usage, work shift, fatigue type, hydration, food input
-- [x] **Phase 4: Energy Engine + AI** - Calculate energy scores, integrate Groq API for analysis and predictions
-- [x] **Phase 5: Dashboard & Visualization** - Energy profile, trends, predictions, personalized advice
-- [x] **Phase 6: Goals & Smart Balancing** - Daily/weekly/long-term goals with AI-driven priority balancing
-- [~] **Phase 7: Notifications + Learning System** - Smart notifications, feedback loops, routine learning, tracking
-- [x] **Phase 8: Owner Data Panel** - Organized data access for the app owner
+- [x] **Phase 1: PWA Shell + Auth + Design System** - Installable app, password login with admin approval, T&C, dark mode, neuroscience HSL colors
+- [x] **Phase 2: Onboarding Questionnaire** - 4-step form: personal data, occupation, habits/routine (circadian times), goals + Supabase sync
+- [x] **Phase 3: Daily Logging** - 3-axis energy sliders (1-10), 12+ quick check-in types, time-phased prompts, AI tips
+- [x] **Phase 4: Energy Engine + AI** - Scientific 4-component model (0-100), chronotype, 12h predictions, Groq AI, ML trends
+- [x] **Phase 5: Dashboard & Visualization** - Time-aware greeting, admin stats, orientation, goals widget, daily history, insights link
+- [x] **Phase 6: Goals & Smart Balancing** - WOOP framework, AI wizard (3 modes), energy budget, chronotype scheduling, streaks
+- [x] **Phase 7: Notifications + Learning System** - Browser notifications, habit intelligence, feedback chat, screen time tracking
+- [x] **Phase 8: Owner Data Panel** - Admin dashboard, user management, feedback management, hybrid AI analysis
+
+## Cross-Cutting Features (implemented throughout phases)
+
+- **Wearable Integration (Sahha)**: Health scores + biomarkers, auto-sync, Health page (1500+ lines)
+- **Cross-Device Sync (Supabase)**: Profile sync, webhook data, API key management, graceful local fallback
+- **Italian Localization**: All UI text in Italian
+- **Screen Time Tracking**: Passive auto-tracking of app usage
 
 ## Phase Details
 
 ### Phase 1: PWA Shell + Auth + Design System
-**Goal**: A working PWA installable on the home screen, with password auth, T&C acceptance, dark mode toggle, and the neuroscience-based design system that all future phases build on.
+**Goal**: A working PWA installable on the home screen, with password auth (including admin approval workflow), T&C acceptance, dark mode toggle, and the neuroscience-based design system that all future phases build on.
 **Depends on**: Nothing (first phase)
-**Requirements**: AUTH-01..05, PWA-01..03, DESIGN-01..05
+**Requirements**: AUTH-01..07, PWA-01..03, DESIGN-01..05
 **Success Criteria** (what must be TRUE):
   1. User can install the app on their phone's home screen
   2. App shows a login wall -- no content visible without authentication
   3. New user must accept T&C before registration completes
-  4. User session persists after closing and reopening the app
-  5. App shell loads even when offline
-  6. Dark mode toggle works and preference is saved
-  7. Design follows neuroscience color principles (documented in design tokens)
+  4. User session persists after closing and reopening the app (30-day expiration)
+  5. App shell loads even when offline (Workbox, prompt strategy)
+  6. Dark mode toggle works and preference is saved (localStorage)
+  7. Design follows neuroscience color principles (HSL tokens documented)
+  8. Admin can approve/revoke users
 **Plans**: 4 plans
-- [x] 01-01-PLAN.md -- Project scaffolding + Vite + React 19 + PWA configuration
-- [x] 01-02-PLAN.md -- Neuroscience design system + dark mode + shadcn/ui components
-- [x] 01-03-PLAN.md -- Auth database (Dexie.js) + AuthContext + helpers
-- [x] 01-04-PLAN.md -- Auth pages + App shell + routing + verification checkpoint
+- [x] 01-01-PLAN.md -- Project scaffolding + Vite 6 + React 19 + TypeScript + PWA configuration
+- [x] 01-02-PLAN.md -- Neuroscience design system (HSL) + dark mode + shadcn/ui (new-york style)
+- [x] 01-03-PLAN.md -- Auth database (Dexie.js) + AuthContext (split pattern) + session helpers
+- [x] 01-04-PLAN.md -- Auth pages + App shell + routing (React Router v7) + verification
 
 ### Phase 2: Onboarding Questionnaire
-**Goal**: First-time users complete a multi-step onboarding form collecting all lifestyle data needed for energy calculation.
+**Goal**: First-time users complete a 4-step onboarding form collecting all lifestyle data needed for energy calculation, including circadian routine times for chronotype-aware features.
 **Depends on**: Phase 1
 **Requirements**: ONB-01..08
 **Success Criteria** (what must be TRUE):
-  1. New user is prompted to complete onboarding after first login
-  2. Form collects: age, weight, student/worker status, work type, schedule, aspirations, vices, segnalazioni
-  3. Multi-step form with progress indicator and back navigation
-  4. User can edit their profile after initial onboarding
-  5. All collected data is persisted
+  1. New user is prompted to complete onboarding after first login (ProtectedRoute gate)
+  2. Form collects: personal data, occupation (conditional), habits/routine, goals
+  3. Circadian routine times (wake, bed, work start/end, lunch, dinner, exercise) in HH:MM
+  4. Multi-step form with stepper progress bar and back navigation
+  5. User can edit their profile after initial onboarding (ProfileEdit page)
+  6. All collected data persisted (IndexedDB + Supabase sync on save)
 **Plans**: 1 plan (retroactive)
 - [x] 02-01-SUMMARY.md -- 4-step onboarding form + profile editing + Supabase sync
 
 ### Phase 3: Daily Logging
-**Goal**: Users can input daily data (sleep, phone usage, work shift, fatigue type, hydration, food) manually or via screenshots. The app proactively asks relevant questions during the day.
+**Goal**: Users input daily data through 3-axis energy sliders and 12+ quick check-in types organized by time of day. AI generates tips and low-energy alerts.
 **Depends on**: Phase 2
 **Requirements**: LOG-01..08
 **Success Criteria** (what must be TRUE):
-  1. User can log sleep duration and quality
-  2. User can log phone/screen usage (manual or screenshot)
-  3. User can log work shift, fatigue type, hydration, food
-  4. All logs are timestamped
-  5. App prompts relevant questions based on time of day
+  1. User can log physical, mental, emotional energy (1-10 sliders)
+  2. 12+ check-in types: sleep_quality, water, caffeine, meals, focus, stress, mood, nap, screen_break, supplements, activity_done
+  3. Time-phased check-ins: morning <11h, midday <14h, afternoon <18h, evening
+  4. AI quick tips cached per day via Groq
+  5. Low-energy alerts triggered when average < 5
+  6. All logs timestamped with date + time fields
+  7. Goal auto-increment from linked check-ins (water → water goals)
 **Plans**: 1 plan (retroactive)
-- [x] 03-01-SUMMARY.md -- Energy logging + 12+ quick check-in types + time-phased prompts
+- [x] 03-01-SUMMARY.md -- Energy logging + 12+ quick check-in types + time-phased prompts + AI tips
 
 ### Phase 4: Energy Engine + AI Integration
-**Goal**: The system computes energy scores (physical, mental, emotional, total) from profile + daily logs, and the Groq AI analyzes data to generate personalized advice and predictions.
+**Goal**: Scientific energy model computes scores from profile + daily logs across 4 components (0-25 each, 0-100 total). Groq AI analyzes data for personalized advice, predictions, and pattern detection. Chronotype detection and ML trend analysis.
 **Depends on**: Phase 3
-**Requirements**: ENRG-01..08, AI-01..07
+**Requirements**: ENRG-01..08, AI-01..08
 **Success Criteria** (what must be TRUE):
-  1. Energy scores are calculated from all available data
-  2. Physical, mental, emotional, and total scores are computed separately
-  3. Segnalazioni weigh heavily in calculations
-  4. Groq AI generates personalized advice
-  5. AI produces predictions ("if nothing changes...")
-  6. AI alerts when energy is low or habits are harmful
-  7. Stress level and fatigue type are identified
+  1. 4-component model: circadian (Borbely), sleep (Van Dongen), lifestyle (Ganio/Nehlig), allostatic (McEwen)
+  2. Total score 0-100 with multiplicative interaction penalty
+  3. Chronotype detection: lion/bear/wolf/dolphin (Breus model)
+  4. 12-hour predicted energy curve (6 data points)
+  5. EWMA 14-day rolling baselines for personalization
+  6. Groq AI generates Italian advice, predictions, alerts
+  7. ML engine: 7/14/30 day trend analysis
+  8. Hybrid analysis for admin (cross-user patterns)
 **Plans**: 1 plan (retroactive)
-- [x] 04-01-SUMMARY.md -- Scientific 4-component model + Groq AI + chronotype + predictions
+- [x] 04-01-SUMMARY.md -- Scientific 4-component model + Groq AI + chronotype + predictions + ML trends
 
 ### Phase 5: Dashboard & Visualization
-**Goal**: Users see their energy scores, predictions, trends, and personalized advice on a clear, informative dashboard.
+**Goal**: Users see their energy state, recommendations, goals, and history on a clear dashboard with admin-specific widgets. Energy orientation system provides actionable "what to do now" recommendations.
 **Depends on**: Phase 4
-**Requirements**: DASH-01..06
+**Requirements**: DASH-01..07
 **Success Criteria** (what must be TRUE):
-  1. Dashboard shows total + individual energy scores with visual indicators
-  2. Predictions and trends are displayed (charts/graphs)
-  3. Personalized advice and alerts are visible
-  4. User can see accumulated stress
-  5. Information is educational and helps user understand their state
+  1. Time-aware Italian greeting (Buongiorno/Buon pomeriggio/Buonasera)
+  2. Admin stats grid: users, feedback, sessions, active today
+  3. Quick check-ins embedded in dashboard
+  4. "Cosa fare adesso" -- top recommendation from energy orientation with reasoning
+  5. Goals widget with active count and streak display
+  6. Daily history (last 7 days with mini-charts)
+  7. Intelligence link to Insights page (after 3+ days data)
+  8. Auto-refresh on visibility change
 **Plans**: 1 plan (retroactive)
-- [x] 05-01-SUMMARY.md -- Dashboard with widgets, orientation, daily history, admin stats
+- [x] 05-01-SUMMARY.md -- Dashboard with widgets, orientation, daily history, admin stats, insights link
 
 ### Phase 6: Goals & Smart Balancing
-**Goal**: Users set goals at different time horizons with importance levels. The AI suggests which goals to focus on based on current energy and balances productivity vs recovery.
+**Goal**: Users set goals using the evidence-based MCII/WOOP framework with AI wizard assistance. Energy budget prevents overcommitment. Chronotype-based scheduling optimizes goal timing.
 **Depends on**: Phase 5
-**Requirements**: GOAL-01..06
+**Requirements**: GOAL-01..09
 **Success Criteria** (what must be TRUE):
-  1. User can create daily, weekly, short-term, and long-term goals
-  2. Goals have priority/importance levels
-  3. AI recommends which goals to focus on given current energy
-  4. App suggests productivity actions vs recovery actions
-  5. Goals interact with the energy dashboard
+  1. WOOP framework: Wish, Outcome, Obstacle, Plan for each goal
+  2. AI wizard: Quick mode + Template mode (10+ Italian) + Custom mode
+  3. Energy budget: 60% daily allocation, >70% overload warning
+  4. Chronotype scheduling: optimal windows per lion/bear/wolf/dolphin
+  5. Goal categories: energy, sleep, fitness, stress, nutrition, productivity, custom
+  6. Timeframes: daily, weekly, monthly
+  7. Streak tracking (current + best), status management (active/paused/completed/abandoned)
+  8. Linked check-in auto-progress (water → water goals, stress → stress goals)
 **Plans**: 1 plan (retroactive)
-- [x] 06-01-SUMMARY.md -- WOOP goals + AI wizard + energy budget + chronotype scheduling
+- [x] 06-01-SUMMARY.md -- WOOP goals + AI wizard (3 modes) + energy budget + chronotype scheduling + streaks
 
 ### Phase 7: Notifications + Learning System
-**Goal**: Smart notifications with logical timing, targeted feedback requests, and the learning system that improves predictions by studying user routine. Long-term tracking and frequency analysis.
+**Goal**: Smart browser notifications with sound, habit intelligence system that learns user patterns and generates context-aware prompts, AI-assisted feedback chat, and screen time tracking. The learning system is the core differentiator.
 **Depends on**: Phase 6
-**Requirements**: NOTIF-01..04, TRACK-01..04
+**Requirements**: NOTIF-01..04, HABIT-01..07, TRACK-01..05, FEED-01..04
 **Success Criteria** (what must be TRUE):
-  1. Notifications fire at logical times (not random)
-  2. Notifications request specific feedback to update predictions
-  3. App tracks behavior frequencies over time
-  4. Historical data is preserved and trends are viewable
-  5. Predictions improve as the app learns the user's routine
+  1. Browser notifications via Notification API + Service Worker
+  2. Sound alerts via Web Audio API (gentle for suggestions, alert for warnings)
+  3. App badge (navigator.setAppBadge) for PWA unread count
+  4. Habit intelligence: 14-day pattern analysis with time clustering
+  5. Smart notification generation: optimal times, quick-response options, spam prevention
+  6. Regularity scoring + energy correlation analysis per habit
+  7. AI-assisted feedback chat (Groq categorization, multi-turn, attachments)
+  8. Screen time auto-tracking (minutes, sessions, longest session)
+  9. Admin notification hooks for new feedback
 **Plans**: 3 plans
-- [x] 07-01-SUMMARY.md -- PWA notifications + feedback chat + screen time tracking
-- [ ] 07-02-PLAN.md -- Integrate SmartHabitPrompt into Dashboard + check-in reminder system
-- [ ] 07-03-PLAN.md -- Notification preferences UI in Settings
-**Gaps closing**:
-- [x] ~~Habit Intelligence system~~ (corrected: habit-intelligence.ts is fully implemented, was mislabeled as skeleton)
-- [ ] SmartHabitPrompt not wired into Dashboard (07-02)
-- [ ] Scheduled reminder system for check-ins (07-02)
-- [ ] Notification preferences UI missing (07-03)
+- [x] 07-01-SUMMARY.md -- PWA notifications + habit intelligence + feedback chat + screen time tracking
+- [ ] 07-02-PLAN.md -- Wire SmartHabitPrompt into Dashboard + scheduled check-in reminders
+- [ ] 07-03-PLAN.md -- Notification preferences UI in Settings (sound, quiet hours, frequency)
+**Remaining gaps**:
+- [ ] SmartHabitPrompt not rendered in Dashboard (component exists, 88 lines, production-ready)
+- [ ] Scheduled reminder system for check-ins
+- [ ] Notification preferences UI missing
 
 ### Phase 8: Owner Data Panel
-**Goal**: The app owner can access all collected user data in an organized, structured format.
+**Goal**: Admin dashboard where the app owner can manage users, view all collected data per-user, manage feedback, and run hybrid AI analysis across all users.
 **Depends on**: Phase 7
-**Requirements**: DATA-01..03
+**Requirements**: DATA-01..05
 **Success Criteria** (what must be TRUE):
-  1. Owner can see all user profiles and their data
-  2. Owner can see energy scores, daily logs, and behavior frequencies per user
-  3. Data is presented in structured tables and summaries
+  1. User management: approve, revoke, delete, reset password
+  2. Per-user drill-down: profile, energy logs, Sahha scores, biomarkers, check-ins, goals, screen time
+  3. Stats grid: total users, approved, sessions, active today, unread feedback
+  4. Feedback management: view, reply, delete with AI categorization
+  5. Hybrid AI analysis: cross-user patterns, churn risk, feature adoption
+  6. Italian time-ago labels throughout (ora, N min fa, N h fa, N gg fa)
 **Plans**: 1 plan (retroactive)
-- [x] 08-01-SUMMARY.md -- Admin dashboard + user management + feedback + hybrid analysis
+- [x] 08-01-SUMMARY.md -- Admin dashboard + user management + feedback management + hybrid AI analysis
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. PWA Shell + Auth + Design System | 4/4 | Complete | 2026-02-13 |
-| 2. Onboarding Questionnaire | 1/1 | Complete (retroactive) | 2026-02-14 |
-| 3. Daily Logging | 1/1 | Complete (retroactive) | 2026-02-14 |
-| 4. Energy Engine + AI | 1/1 | Complete (retroactive) | 2026-02-14 |
-| 5. Dashboard & Visualization | 1/1 | Complete (retroactive) | 2026-02-14 |
-| 6. Goals & Smart Balancing | 1/1 | Complete (retroactive) | 2026-02-14 |
-| 7. Notifications + Learning System | 1/3 | Gap closure in progress | 2026-02-14 |
-| 8. Owner Data Panel | 1/1 | Complete (retroactive) | 2026-02-14 |
+| 2. Onboarding Questionnaire | 1/1 | Complete | 2026-02-14 |
+| 3. Daily Logging | 1/1 | Complete | 2026-02-14 |
+| 4. Energy Engine + AI | 1/1 | Complete | 2026-02-14 |
+| 5. Dashboard & Visualization | 1/1 | Complete | 2026-02-14 |
+| 6. Goals & Smart Balancing | 1/1 | Complete | 2026-02-14 |
+| 7. Notifications + Learning System | 1/3 | Core complete, gap closure pending | 2026-02-14 |
+| 8. Owner Data Panel | 1/1 | Complete | 2026-02-14 |
 
-## Identified Gaps (Cross-Phase)
+## Remaining Gaps (Phase 7 only)
 
-| Gap | Phase | Severity | Description |
-|-----|-------|----------|-------------|
-| ~~Habit Intelligence~~ | ~~7~~ | ~~Critical~~ | ~~Corrected: fully implemented, was mislabeled~~ |
-| SmartHabitPrompt not wired | 7 | Critical | Component exists but never rendered in Dashboard |
-| Notification preferences UI | 7 | Moderate | No settings UI for sound, quiet hours, frequency |
-| Scheduled Reminders | 7 | Moderate | No time-based check-in reminders |
-| Goal Auto-Completion | 6 | Moderate | Goals don't auto-complete from linked check-ins |
-| Data Export | 8 | Moderate | No CSV/PDF export for admin or user |
-| Push Notifications | 7 | Low | Browser-only, no Firebase/FCM for mobile (v2) |
-| Screenshot Support | 3 | Low | Phone usage via manual input only |
-| Calendar View | 5 | Low | Energy history is list-only, no calendar grid |
+| Gap | Severity | Description |
+|-----|----------|-------------|
+| SmartHabitPrompt not wired | Moderate | Component exists (88 lines, production-ready) but not rendered in Dashboard |
+| Notification preferences UI | Moderate | No settings UI for sound, quiet hours, frequency |
+| Scheduled Reminders | Moderate | No time-based check-in reminders |
+
+## Resolved (Previously Identified Gaps)
+
+| Gap | Resolution |
+|-----|-----------|
+| ~~Habit Intelligence skeleton~~ | RESOLVED: habit-intelligence.ts is fully implemented (344 lines), was mislabeled |
+| ~~Goal Auto-Completion~~ | RESOLVED: linked check-in types auto-track progress |
+| ~~Data Export~~ | Deferred to v2 (EXPORT-01..02) |
+| ~~Push Notifications~~ | Deferred to v2 (PUSH-01..02) |
+| ~~Screenshot Support~~ | Deferred to v2 (manual input sufficient) |
+| ~~Calendar View~~ | Deferred to v2 (VIS-01) |
 
 ---
 *Roadmap defined: 2026-02-11*
-*Last updated: 2026-02-14 -- Phase 7 gap closure plans created (07-02, 07-03)*
+*Last updated: 2026-02-14 -- all phases updated with current vision (Sahha, Supabase, WOOP, habit intelligence, scientific model, cross-cutting features)*

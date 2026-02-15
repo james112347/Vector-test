@@ -118,6 +118,15 @@ Build the system that computes energy scores from profile + daily logs and integ
 - [x] AI alerts when energy is low or habits are harmful
 - [x] Stress level and fatigue type are identified (allostatic component)
 
+## Cross-Cutting Integration
+
+- **Sahha wearable data**: Sahha scores (wellbeing, activity, sleep, readiness, mental_wellbeing) feed into energy calculations when available
+- **Supabase**: Groq API key can be fetched from Supabase app_config table (fallback to .env)
+- **Habit intelligence**: EWMA baselines and energy correlations used by habit-intelligence.ts
+- **Goals**: Chronotype detection drives Phase 6 goal scheduling (optimal windows per type)
+- **Dashboard**: Energy scores displayed in Phase 5 orientation system ("Cosa fare adesso")
+- **IndexedDB**: scientificEnergyScores table in Dexie v13 preserves historical calculations
+
 ## Known Gaps
 
 - No real HRV integration (only Sahha proxy when available)
