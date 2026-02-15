@@ -9,7 +9,9 @@ import { getUnreadFeedbackCount } from '../lib/feedback';
 import { getAllUsers } from '../lib/auth';
 import { getAllUserActivity } from '../lib/useActivityTracker';
 import QuickCheckins from '../components/QuickCheckins';
+import SmartHabitPrompt from '../components/SmartHabitPrompt';
 import DailyHistory from '../components/DailyHistory';
+import { scheduleCheckinReminders } from '../lib/checkin-reminders';
 import { getActiveGoals } from '../lib/goals';
 import { useEnergyOrientation } from '../lib/useEnergyOrientation';
 import { CATEGORY_LABELS } from '../lib/energy-orientation';
@@ -52,6 +54,8 @@ export default function Dashboard() {
       ]);
       setCheckinSummaries(summaries);
       setActiveGoals(goals);
+      // Schedule check-in reminders based on habit patterns
+      scheduleCheckinReminders(uid).catch(() => {});
     } finally {
       refreshing.current = false;
       setLoading(false);
@@ -224,6 +228,9 @@ export default function Dashboard() {
 
       {/* 3. Quick Check-ins — data collection (in alto per priorita) */}
       {user?.id && <QuickCheckins userId={user.id} />}
+
+      {/* 3b. Smart Habit Prompts — notifiche in-app basate su pattern abitudini */}
+      {user?.id && <SmartHabitPrompt userId={user.id} />}
 
       {/* 4. Cosa fare adesso — top recommendation from orientation system */}
       {topRec && (

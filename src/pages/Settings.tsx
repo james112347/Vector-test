@@ -7,6 +7,8 @@ import { useAuthState } from '../contexts/AuthContext';
 import { useDarkMode } from '../lib/useDarkMode';
 import { useAppSettings } from '../lib/useAppSettings';
 import { isNotificationSupported, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
+import { getOrientationPreferences, updateOrientationPreferences } from '../lib/energy-orientation/notification-manager';
+import type { OrientationPreferences } from '../lib/energy-orientation/types';
 import { getAllUsers, approveUser, revokeUser, deleteUser, isAdminEmail, changePassword } from '../lib/auth';
 import { getAllUserActivity, type UserActivity } from '../lib/useActivityTracker';
 import { getSahhaQR, saveSahhaQR, deleteSahhaQR } from '../lib/qr-config';
@@ -32,6 +34,8 @@ export default function Settings() {
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState(false);
   const [pwdLoading, setPwdLoading] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState<OrientationPreferences | null>(null);
+  const [notifPrefsLoading, setNotifPrefsLoading] = useState(true);
   const navigate = useNavigate();
 
   const loadUsers = async () => {
@@ -53,6 +57,19 @@ export default function Settings() {
       getAllUserActivity().then(setActivityData);
     }
   }, [currentUser?.isAdmin]);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    getOrientationPreferences(currentUser.id)
+      .then(p => { setNotifPrefs(p); setNotifPrefsLoading(false); })
+      .catch(() => setNotifPrefsLoading(false));
+  }, [currentUser?.id]);
+
+  const updateNotifPref = async (updates: Partial<OrientationPreferences>) => {
+    if (!currentUser?.id || !notifPrefs) return;
+    await updateOrientationPreferences(currentUser.id, updates);
+    setNotifPrefs(prev => prev ? { ...prev, ...updates } : prev);
+  };
 
   const handleApprove = async (userId: number, email: string) => {
     setActionLoading(userId);
@@ -296,6 +313,90 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Preferenze Notifiche */}
+      {!notifPrefsLoading && notifPrefs && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Preferenze Notifiche</CardTitle>
+            <CardDescription>Controlla come e quando ricevi le notifiche intelligenti</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Sound toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Suoni notifiche</p>
+                <p className="text-sm text-muted-foreground">Riproduci un tono quando arriva una notifica</p>
+              </div>
+              <button
+                onClick={() => updateNotifPref({ soundEnabled: !notifPrefs.soundEnabled })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                  notifPrefs.soundEnabled ? 'bg-primary' : 'bg-muted'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  notifPrefs.soundEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+            <Separator />
+            {/* Quiet hours */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Ore silenziose</p>
+                <p className="text-sm text-muted-foreground">Nessuna notifica in questo intervallo</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="text-xs text-muted-foreground mb-1 block">Dalle</label>
+                <input
+                  type="time"
+                  value={notifPrefs.quietHours.start}
+                  onChange={(e) => updateNotifPref({ quietHours: { ...notifPrefs.quietHours, start: e.target.value } })}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-muted-foreground mb-1 block">Alle</label>
+                <input
+                  type="time"
+                  value={notifPrefs.quietHours.end}
+                  onChange={(e) => updateNotifPref({ quietHours: { ...notifPrefs.quietHours, end: e.target.value } })}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm"
+                />
+              </div>
+            </div>
+            <Separator />
+            {/* Suggestion frequency */}
+            <div>
+              <div className="mb-2">
+                <p className="text-sm font-medium">Frequenza suggerimenti</p>
+                <p className="text-sm text-muted-foreground">Quante notifiche intelligenti vuoi ricevere</p>
+              </div>
+              <div className="flex gap-2">
+                {([
+                  { value: 'low' as const, label: 'Poche' },
+                  { value: 'medium' as const, label: 'Moderate' },
+                  { value: 'high' as const, label: 'Frequenti' },
+                ]).map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateNotifPref({ suggestionFrequency: opt.value })}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      notifPrefs.suggestionFrequency === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Install Help Modal */}
       {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}

@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated: 2026-02-14)
 
 **Core value:** See your real energy state, understand why, get AI predictions, receive actionable advice -- improving as the app learns your routine through habit intelligence and wearable data
-**Current focus:** All 8 phases complete — 3 minor gaps remaining in Phase 7 (SmartHabitPrompt wiring, reminders, preferences UI)
+**Current focus:** All 8 phases complete — all gaps closed
 
 ## Current Position
 
 Phase: 8 of 8 (all complete)
-Status: Milestone v1 substantially complete — 3 moderate gaps in Phase 7
-Last activity: 2026-02-14 -- Full documentation update with current vision
+Status: Milestone v1 complete — all Phase 7 gaps closed
+Last activity: 2026-02-15 -- Phase 7 gap closure (07-02, 07-03)
 
-Progress: [████████████████] 97% (8/8 phases core-complete, Phase 7 has 3 moderate gaps)
+Progress: [████████████████] 100% (8/8 phases complete, all gaps closed)
 
 ## Performance Metrics
 
@@ -81,18 +81,17 @@ All 8 phases implemented in code (77 TypeScript/TSX files):
 - Onboarding.tsx: 592 lines (4-step form)
 - Insights.tsx: 426 lines (AI analysis, trends)
 
-### Remaining Gaps (3 moderate, all in Phase 7)
+### Remaining Gaps
 
-| Gap | Severity | Plan |
-|-----|----------|------|
-| SmartHabitPrompt not rendered in Dashboard | Moderate | 07-02-PLAN.md |
-| Scheduled check-in reminders | Moderate | 07-02-PLAN.md |
-| Notification preferences UI | Moderate | 07-03-PLAN.md |
+None — all gaps closed.
 
-### Previously Misidentified Gaps (RESOLVED)
+### Previously Identified Gaps (ALL RESOLVED)
 
 | Gap | Resolution |
 |-----|-----------|
+| ~~SmartHabitPrompt not rendered~~ | RESOLVED: 07-02 — integrated into Dashboard |
+| ~~Scheduled check-in reminders~~ | RESOLVED: 07-02 — checkin-reminders.ts with setTimeout-based scheduling |
+| ~~Notification preferences UI~~ | RESOLVED: 07-03 — Preferenze Notifiche card in Settings |
 | ~~Habit Intelligence (was "skeleton")~~ | RESOLVED: habit-intelligence.ts is fully implemented (344 lines) |
 | ~~Goal Auto-Completion~~ | RESOLVED: linked check-in types auto-track progress |
 | ~~Data Export~~ | Deferred to v2 |
@@ -105,7 +104,7 @@ All 8 phases implemented in code (77 TypeScript/TSX files):
 
 ## Session Continuity
 
-Last session: 2026-02-14
-Stopped at: Full documentation update — PROJECT, REQUIREMENTS, ROADMAP, STATE, phase summaries
+Last session: 2026-02-15
+Stopped at: Phase 7 gap closure complete — all 3 gaps closed (07-02, 07-03)
 Resume file: None
-Next action: Execute Phase 7 gap closure (07-02, 07-03) OR close milestone v1
+Next action: Close milestone v1

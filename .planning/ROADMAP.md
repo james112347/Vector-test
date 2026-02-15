@@ -136,12 +136,8 @@ Vector is an energy tracking PWA built in 8 phases, each delivering a working in
   9. Admin notification hooks for new feedback
 **Plans**: 3 plans
 - [x] 07-01-SUMMARY.md -- PWA notifications + habit intelligence + feedback chat + screen time tracking
-- [ ] 07-02-PLAN.md -- Wire SmartHabitPrompt into Dashboard + scheduled check-in reminders
-- [ ] 07-03-PLAN.md -- Notification preferences UI in Settings (sound, quiet hours, frequency)
-**Remaining gaps**:
-- [ ] SmartHabitPrompt not rendered in Dashboard (component exists, 88 lines, production-ready)
-- [ ] Scheduled reminder system for check-ins
-- [ ] Notification preferences UI missing
+- [x] 07-02-PLAN.md -- Wire SmartHabitPrompt into Dashboard + scheduled check-in reminders
+- [x] 07-03-PLAN.md -- Notification preferences UI in Settings (sound, quiet hours, frequency)
 
 ### Phase 8: Owner Data Panel
 **Goal**: Admin dashboard where the app owner can manage users, view all collected data per-user, manage feedback, and run hybrid AI analysis across all users.
@@ -167,21 +163,20 @@ Vector is an energy tracking PWA built in 8 phases, each delivering a working in
 | 4. Energy Engine + AI | 1/1 | Complete | 2026-02-14 |
 | 5. Dashboard & Visualization | 1/1 | Complete | 2026-02-14 |
 | 6. Goals & Smart Balancing | 1/1 | Complete | 2026-02-14 |
-| 7. Notifications + Learning System | 1/3 | Core complete, gap closure pending | 2026-02-14 |
+| 7. Notifications + Learning System | 3/3 | Complete | 2026-02-15 |
 | 8. Owner Data Panel | 1/1 | Complete | 2026-02-14 |
 
-## Remaining Gaps (Phase 7 only)
+## Remaining Gaps
 
-| Gap | Severity | Description |
-|-----|----------|-------------|
-| SmartHabitPrompt not wired | Moderate | Component exists (88 lines, production-ready) but not rendered in Dashboard |
-| Notification preferences UI | Moderate | No settings UI for sound, quiet hours, frequency |
-| Scheduled Reminders | Moderate | No time-based check-in reminders |
+None — all gaps closed.
 
-## Resolved (Previously Identified Gaps)
+## Resolved (All Gaps)
 
 | Gap | Resolution |
 |-----|-----------|
+| ~~SmartHabitPrompt not wired~~ | RESOLVED: 07-02 — integrated into Dashboard after QuickCheckins |
+| ~~Notification preferences UI~~ | RESOLVED: 07-03 — Preferenze Notifiche card in Settings |
+| ~~Scheduled Reminders~~ | RESOLVED: 07-02 — checkin-reminders.ts with pattern-based setTimeout scheduling |
 | ~~Habit Intelligence skeleton~~ | RESOLVED: habit-intelligence.ts is fully implemented (344 lines), was mislabeled |
 | ~~Goal Auto-Completion~~ | RESOLVED: linked check-in types auto-track progress |
 | ~~Data Export~~ | Deferred to v2 (EXPORT-01..02) |
@@ -191,4 +186,4 @@ Vector is an energy tracking PWA built in 8 phases, each delivering a working in
 
 ---
 *Roadmap defined: 2026-02-11*
-*Last updated: 2026-02-14 -- all phases updated with current vision (Sahha, Supabase, WOOP, habit intelligence, scientific model, cross-cutting features)*
+*Last updated: 2026-02-15 -- all Phase 7 gaps closed (07-02, 07-03), milestone v1 100% complete*

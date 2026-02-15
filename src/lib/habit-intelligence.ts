@@ -181,7 +181,7 @@ export async function analyzeHabitPatterns(
 // Generazione notifiche intelligenti
 // ---------------------------------------------------------------------------
 
-const TYPE_LABELS: Record<string, string> = {
+export const TYPE_LABELS: Record<string, string> = {
   caffeine: 'caffe', water: 'acqua', supplement: 'integratore',
   screen_break: 'pausa schermo', sleep_quality: 'qualita sonno',
   mood: 'umore', stress: 'stress', meal_time: 'pasto',
