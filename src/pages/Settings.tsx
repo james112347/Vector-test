@@ -658,7 +658,7 @@ function HowItWorksSection() {
               </div>
               <div>
                 <CardTitle className="text-base">Come funziona Vector</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Dati, calcolo scientifico e intelligenza artificiale</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Dati, modello scientifico, ML on-device e IA generativa</p>
               </div>
             </div>
             <svg
@@ -749,13 +749,13 @@ function HowItWorksSection() {
             </p>
           </div>
 
-          {/* 3. Curva Predittiva */}
+          {/* 3. Curva Predittiva + Prospettiva Giornata */}
           <div className="rounded-lg border border-border p-3 space-y-2">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
                 <span className="text-xs font-bold text-green-600 dark:text-green-400">3</span>
               </div>
-              <p className="text-sm font-semibold">Curva predittiva (12 ore)</p>
+              <p className="text-sm font-semibold">Curva predittiva e prospettiva giornata</p>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               La curva energetica proietta il tuo livello di energia nelle prossime 12 ore.
@@ -763,6 +763,20 @@ function HowItWorksSection() {
               il decadimento della caffeina (emivita 5h), i cali post-prandiali previsti
               e il trascinamento del debito di sonno.
             </p>
+            <p className="text-[11px] font-semibold pt-1">Prospettiva giornata (Routine Outlook):</p>
+            <div className="space-y-0.5">
+              {[
+                'Timeline eventi: pasti, fine lavoro, esercizio, bedtime, cutoff caffeina, picchi e cali energetici previsti',
+                'Proiezione stile di vita: % idratazione a fine giornata, caffeina residua a letto, screen time, pasti e ore lavoro rimanenti',
+                'Pattern settimanale: media energia per giorno della settimana, giorno migliore/peggiore, confronto feriali vs weekend',
+                'Azione ottimale: cosa fare adesso per massimizzare la giornata, calcolata in tempo reale',
+              ].map(text => (
+                <div key={text} className="flex items-start gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                  <span className="text-[10px] text-muted-foreground">{text}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 4. Machine Learning */}
@@ -939,11 +953,67 @@ function HowItWorksSection() {
             </p>
           </div>
 
-          {/* 5. Sistema di Orientamento */}
+          {/* 5. Habit Intelligence */}
+          <div className="rounded-lg border border-border p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">5</span>
+              </div>
+              <p className="text-sm font-semibold">Apprendimento abitudini</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Analizza i tuoi check-in degli ultimi 14 giorni per imparare le tue abitudini
+              (caffe, acqua, pasti, attivita, sonno) e generare notifiche intelligenti.
+            </p>
+            <div className="space-y-0.5">
+              {[
+                'Orari tipici: rileva quando fai colazione, bevi caffe, pranzi, ceni e vai a dormire',
+                'Regolarita: classifica ogni abitudine come molto regolare, regolare o irregolare',
+                'Correlazione energia: scopre se un\'abitudine e associata a energia piu alta o piu bassa',
+                'Notifiche smart: ti ricorda check-in e azioni al momento giusto con risposte rapide (un tap)',
+                'Trend: monitora se le abitudini stanno migliorando, peggiorando o sono stabili',
+              ].map(text => (
+                <div key={text} className="flex items-start gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-cyan-500 mt-1.5 shrink-0" />
+                  <span className="text-[10px] text-muted-foreground">{text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 6. IA Generativa (Groq) */}
+          <div className="rounded-lg border border-border p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-pink-500/10 flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold text-pink-600 dark:text-pink-400">6</span>
+              </div>
+              <p className="text-sm font-semibold">IA generativa (Groq)</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Un motore ibrido combina l'analisi locale (veloce, offline) con l'IA generativa
+              (Llama via Groq) per consigli personalizzati in italiano:
+            </p>
+            <div className="space-y-0.5">
+              {[
+                'Analisi Energy Card: l\'IA interpreta il tuo punteggio e spiega cosa sta influenzando la tua energia',
+                'Consigli azionabili: suggerimenti concreti basati su dati reali, non generici',
+                'Obiettivi WOOP: wizard IA per creare obiettivi con ostacoli e piani (3 modalita)',
+                'Feedback chat: conversazione multi-turno per approfondire i tuoi dati e chiedere consigli',
+                'Qualita dati: il sistema valuta quanto sono completi i tuoi dati e suggerisce cosa migliorare',
+              ].map(text => (
+                <div key={text} className="flex items-start gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-pink-500 mt-1.5 shrink-0" />
+                  <span className="text-[10px] text-muted-foreground">{text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 7. Sistema di Orientamento */}
           <div className="rounded-lg border border-border p-3 space-y-2">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">5</span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">7</span>
               </div>
               <p className="text-sm font-semibold">Sistema di orientamento</p>
             </div>
@@ -955,30 +1025,33 @@ function HowItWorksSection() {
             </p>
           </div>
 
-          {/* 6. Bottleneck */}
+          {/* 8. Bottleneck */}
           <div className="rounded-lg border border-border p-3 space-y-2">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-red-600 dark:text-red-400">6</span>
+                <span className="text-xs font-bold text-red-600 dark:text-red-400">8</span>
               </div>
               <p className="text-sm font-semibold">Identificazione colli di bottiglia</p>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Il sistema analizza tutti i fattori e identifica il punto debole piu critico:
+              Il sistema analizza tutti i fattori e identifica il punto debole piu critico tra 15 possibili:
               sonno, idratazione, nutrizione, stress, sovraccarico lavorativo, sedentarieta,
-              caffeina tardiva, affaticamento da schermo, rischio burnout o debito di sonno.
+              caffeina tardiva, affaticamento da schermo, rischio burnout, debito di sonno,
+              disallineamento circadiano, HRV basso, frequenza cardiaca elevata o affaticamento emotivo.
               Per ogni collo di bottiglia fornisce un consiglio azionabile specifico.
             </p>
           </div>
 
-          {/* 7. Privacy */}
+          {/* 9. Privacy */}
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
             <p className="text-sm font-semibold">Privacy e dati</p>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Tutti i calcoli avvengono in locale sul tuo dispositivo (offline-first).
-              I dati sono salvati in IndexedDB e sincronizzati con il cloud solo per
-              backup e accesso multi-device. Nessun dato viene condiviso con terze parti.
-              L'IA (Groq) riceve solo dati aggregati e anonimi per generare consigli.
+              Tutti i calcoli (Energy Score, ML, previsioni, abitudini) avvengono in locale
+              sul tuo dispositivo (offline-first). I dati sono salvati in IndexedDB (18 tabelle)
+              e sincronizzati con il cloud solo per backup e accesso multi-device.
+              Nessun dato viene condiviso con terze parti.
+              L'IA generativa (Groq) riceve solo dati aggregati per la sessione corrente
+              e non li conserva.
             </p>
           </div>
         </CardContent>
